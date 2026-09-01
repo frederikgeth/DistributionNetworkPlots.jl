@@ -118,3 +118,12 @@ h2 { margin-bottom: 0; font-size: 15px; }
 pre.raw { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 9px; border-radius: 5px; background: #f1eee7; font-size: 11px; white-space: pre-wrap; word-break: break-word; }
 @media (max-width: 880px) { .layout { grid-template-columns: 1fr; } .sidebar { padding: 0 20px 20px; } .workspace { padding-bottom: 8px; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; } }
+@media print {
+  body { background: white; }
+  .topbar .file-actions, .drop-zone, .view-tabs, .camera-controls, .multi-hop-controls, .sidebar { display: none !important; }
+  .layout { display: block; min-height: 0; }
+  .workspace { padding: 0; }
+  .view-status { min-height: 0; color: #25231f; }
+  .canvas { border: 0; }
+  .canvas svg { height: auto; max-height: none; }
+}

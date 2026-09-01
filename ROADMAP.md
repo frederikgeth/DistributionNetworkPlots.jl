@@ -42,6 +42,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Single-line view uses a deterministic source-to-load layered layout, heavy busbars, orthogonal branch routing, explicit device labels, and IEEE/IEC-inspired symbols.
 - [x] Inventory search ranks exact/prefix asset matches and can jump by keyboard; help panel documents views, symbols, and result cues.
 - [x] Export the active overview view as a standalone SVG.
+- [x] Export the active overview view as a 2× PNG and provide print-oriented styling.
 - [x] Persist versioned single-line bus adjustments per case, with nudge, lock/unlock, and reset-to-computed controls.
 - [x] Publish an explicit overview SVG budget and switch oversized geospatial/single-line cases to a focused one-hop fallback.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
@@ -409,7 +410,6 @@ A slice is done only when:
 - Asset property aggregates and richer class overviews.
 - Search result highlighting and keyboard shortcuts.
 - Large-case profiling and targeted renderer upgrades.
-- PNG export and print-oriented styling.
 - Theme and print stylesheet.
 
 ### Results-aware visualisation: next vertical slices

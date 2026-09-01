@@ -589,13 +589,14 @@
     controls.hidden = false;
     const layoutControls = state.view === "single"
       ? `<span class="layout-label">Layout:</span><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
-    controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export">Export SVG</button>${layoutControls}`;
+    controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export-svg">Export SVG</button><button data-camera="export-png">Export PNG</button>${layoutControls}`;
     controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
       const camera = state.cameras[state.view];
       if (button.dataset.camera === "zoom-in") camera.scale = Math.min(3, camera.scale * 1.25);
       else if (button.dataset.camera === "zoom-out") camera.scale = Math.max(.5, camera.scale / 1.25);
       else if (button.dataset.camera === "focus") { focusSelection(); return; }
-      else if (button.dataset.camera === "export") { exportCurrentSvg(); return; }
+      else if (button.dataset.camera === "export-svg") { exportCurrentSvg(); return; }
+      else if (button.dataset.camera === "export-png") { exportCurrentPng(); return; }
       else { camera.scale = 1; camera.x = 0; camera.y = 0; }
       updateCamera();
     }));
@@ -616,6 +617,33 @@
     anchor.href = url; anchor.download = `${caseName}-${state.view}.svg`; anchor.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
     setStatus(`${state.view} view exported as SVG.`);
+  }
+
+  function exportCurrentPng() {
+    const svg = $("canvas")?.querySelector("svg");
+    if (!svg) return;
+    const clone = svg.cloneNode(true);
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    const source = new XMLSerializer().serializeToString(clone);
+    const image = new Image();
+    const url = URL.createObjectURL(new Blob([source], { type: "image/svg+xml;charset=utf-8" }));
+    image.onload = () => {
+      const canvas = document.createElement("canvas");
+      const scale = 2; canvas.width = 760 * scale; canvas.height = 500 * scale;
+      const context = canvas.getContext("2d"); context.fillStyle = "#fbfaf7"; context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => {
+        if (!blob) { setStatus("PNG export failed in this browser."); URL.revokeObjectURL(url); return; }
+        const pngUrl = URL.createObjectURL(blob); const anchor = document.createElement("a");
+        const caseName = (state.index?.name || "bmopf-case").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "bmopf-case";
+        anchor.href = pngUrl; anchor.download = `${caseName}-${state.view}.png`; anchor.click();
+        setTimeout(() => URL.revokeObjectURL(pngUrl), 1000); URL.revokeObjectURL(url);
+        setStatus(`${state.view} view exported as PNG.`);
+      }, "image/png");
+    };
+    image.onerror = () => { URL.revokeObjectURL(url); setStatus("PNG export failed in this browser."); };
+    image.src = url;
   }
 
   function bindCamera() {
