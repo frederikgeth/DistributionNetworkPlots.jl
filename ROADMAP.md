@@ -44,6 +44,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Export the active overview view as a standalone SVG.
 - [x] Export the active overview view as a 2× PNG and provide print-oriented styling.
 - [x] Persist versioned single-line bus adjustments per case, with nudge, lock/unlock, and reset-to-computed controls.
+- [x] Class overview summarizes asset counts, support levels, and available result ranges with filter links.
 - [x] Support configurable single-line reading direction and feeder-root selection, persisted with the case layout.
 - [x] Publish an explicit overview SVG budget and switch oversized geospatial/single-line cases to a focused one-hop fallback.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
@@ -406,7 +407,6 @@ A slice is done only when:
 ### Next: candidates for 0.2–0.3
 
 - Broader transformer support.
-- Semantic zoom and collapsed conductor bundles.
 - Semantic zoom and collapsed conductor bundles.
 - Asset property aggregates and richer class overviews.
 - Search result highlighting and keyboard shortcuts.

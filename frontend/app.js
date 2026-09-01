@@ -186,6 +186,35 @@
     return { buses, assets, elements, limit, over, message };
   }
 
+  function renderClassOverview() {
+    const panel = $("class-overview");
+    if (!state.index) { panel.innerHTML = ""; return; }
+    const groups = new Map();
+    state.index.assets.forEach((item) => {
+      if (!groups.has(item.ref.kind)) groups.set(item.ref.kind, []);
+      groups.get(item.ref.kind).push(item);
+    });
+    const range = (values) => {
+      const numbers = values.filter(Number.isFinite);
+      if (!numbers.length) return "—";
+      const min = Math.min(...numbers); const max = Math.max(...numbers);
+      return min === max ? formatValue(min) : `${formatValue(min)}–${formatValue(max)}`;
+    };
+    const rows = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([kind, items]) => {
+      const support = { full: 0, focused: 0, "raw-only": 0 };
+      items.forEach((item) => { support[item.support] = (support[item.support] || 0) + 1; });
+      const loading = items.map((item) => resultScalar(item, "loading"));
+      const voltage = items.map((item) => resultVoltageDeviation(item));
+      const resultRange = state.result ? `load ${range(loading)} · ΔV ${range(voltage)}` : "—";
+      return `<tr><th><button class="class-filter ${state.activeKind === kind ? "selected" : ""}" data-kind-filter="${escapeHtml(kind)}">${escapeHtml(kind.replaceAll("_", " "))}</button></th><td>${items.length}</td><td>${support.full || 0}/${support.focused || 0}/${support["raw-only"] || 0}</td><td>${escapeHtml(resultRange)}</td></tr>`;
+    }).join("");
+    panel.innerHTML = `<div class="panel-heading"><h2>Class overview</h2><span class="muted">full / focused / raw</span></div><table class="property-table class-overview-table"><thead><tr><th>class</th><th>count</th><th>support</th><th>result ranges</th></tr></thead><tbody>${rows}</tbody></table>`;
+    panel.querySelectorAll("[data-kind-filter]").forEach((button) => button.addEventListener("click", () => {
+      state.activeKind = state.activeKind === button.dataset.kindFilter ? null : button.dataset.kindFilter;
+      state.query = ""; renderInventory(); renderClassOverview(); renderView();
+    }));
+  }
+
   function resultRoot() { return state.result ? globalThis.BMOPFModel.resultRoot(state.result) : null; }
 
   function resultMetadata() {
@@ -1015,7 +1044,7 @@
     bindCamera();
   }
 
-  function render() { renderSummary(); renderResultSummary(); renderInventory(); renderInspector(); renderView(); renderCameraControls(); renderMultiHopControls(); }
+  function render() { renderSummary(); renderClassOverview(); renderResultSummary(); renderInventory(); renderInspector(); renderView(); renderCameraControls(); renderMultiHopControls(); }
 
   function parseHash() {
     const parts = window.location.hash.slice(2).split("/");
