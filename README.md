@@ -31,6 +31,7 @@ The prototype supports:
 - Browser-side guardrails for invalid JSON and oversized case files.
 - Optional BMOPFTools-style result JSON sidecars with objective/status summary and asset-level metrics.
 - Diagnostics view for filterable result validation/profile findings, clickable linked assets, and explicit case/result pairing status.
+- Result-aware overview cues for loading, explicit bus voltage deviation, and open/out-of-service state, with non-colour legend guidance.
 
 ## Generate a static Julia report
 

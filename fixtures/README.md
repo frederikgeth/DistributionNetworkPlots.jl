@@ -16,7 +16,8 @@ solver-generated dataset.
 
 The result fixture also includes illustrative solution-profile findings so the
 Diagnostics view can exercise clickable bound-violation, near-active-bound, and
-residual records.
+residual records, plus an explicit bus voltage-deviation value for result-aware
+overview styling.
 
 `micro/micro_bmopf_multinetwork_result.json` exercises explicit selection of
 multiple `nw` result slices. The viewer refuses to guess a slice and requires

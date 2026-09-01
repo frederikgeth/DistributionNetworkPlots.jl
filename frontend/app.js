@@ -119,6 +119,43 @@
     return root?.case_fingerprint ?? root?.case_id ?? root?.meta?.case_fingerprint ?? root?.meta?.case_id ?? null;
   }
 
+  function resultRecordFor(item) {
+    return state.result ? globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id, state.resultScenario) : null;
+  }
+
+  function resultStatus(item) {
+    const record = resultRecordFor(item);
+    if (!record || typeof record !== "object" || Array.isArray(record)) return item.status;
+    if (record.open_switch === true) return "open";
+    if (record.in_service === false || record.status === 0) return "out_of_service";
+    if (typeof record.status === "string") {
+      const status = record.status.toLowerCase().replace(/[ -]+/g, "_");
+      if (["open", "out_of_service", "outofservice", "offline"].includes(status)) return ["out_of_service", "outofservice", "offline"].includes(status) ? "out_of_service" : status;
+    }
+    return item.status;
+  }
+
+  function resultVoltageDeviation(item) {
+    const record = resultRecordFor(item);
+    if (!record || typeof record !== "object" || Array.isArray(record)) return null;
+    const explicit = ["voltage_deviation", "vm_deviation", "v_deviation", "voltage_error"]
+      .map((key) => Number(record[key])).find(Number.isFinite);
+    if (explicit !== undefined) return Math.abs(explicit);
+    const values = [record.vm, record.v_magnitude, record.voltage_magnitude]
+      .flatMap((value) => Array.isArray(value) ? value : [value])
+      .map(Number).filter((value) => Number.isFinite(value) && value > 0);
+    if (!values.length || values.some((value) => value > 2.5)) return null;
+    return Math.max(...values.map((value) => Math.abs(value - 1)));
+  }
+
+  function resultVoltageVisual(item, selected, fallback) {
+    const deviation = resultVoltageDeviation(item);
+    if (deviation === null) return { colour: fallback, width: selected ? 4 : 2, dash: "", deviation: null, level: null };
+    const level = deviation >= .05 ? "high" : deviation >= .02 ? "moderate" : "nominal";
+    const colour = level === "high" ? "#b64035" : level === "moderate" ? "#c28a26" : "#4a8f5f";
+    return { colour, width: selected ? 4 : 2, dash: level === "high" ? "6 3" : level === "moderate" ? "2 3" : "", deviation, level };
+  }
+
   function resultPairingStatus() {
     const identity = resultIdentity();
     const expectedIdentity = state.index?.raw?.meta?.case_fingerprint || state.index?.raw?.meta?.case_id || state.index?.name || null;
@@ -143,16 +180,21 @@
 
   function resultTooltip(item) {
     if (!state.result) return "";
-    const record = globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id, state.resultScenario);
+    const record = resultRecordFor(item);
     if (!record || typeof record !== "object" || Array.isArray(record)) return "";
-    const keys = ["vm", "va", "p", "q", "pg", "qg", "loading", "status", "residual"];
+    const keys = ["vm", "va", "v_magnitude", "v_angle", "voltage_deviation", "vm_deviation", "v_deviation", "p", "q", "pg", "qg", "loading", "status", "in_service", "residual"];
     const values = Object.entries(record).filter(([key]) => keys.includes(key) || key.endsWith("_loading") || key.endsWith("_residual"));
-    return values.length ? ` · result ${values.slice(0, 3).map(([key, value]) => `${key}=${formatValue(value)}`).join(", ")}` : "";
+    const extras = [];
+    const deviation = resultVoltageDeviation(item);
+    if (deviation !== null && !values.some(([key]) => ["voltage_deviation", "vm_deviation", "v_deviation"].includes(key))) extras.push(`voltage deviation=${formatValue(deviation)}`);
+    const status = resultStatus(item);
+    if (status !== item.status) extras.push(`state=${status}`);
+    return values.length || extras.length ? ` · result ${values.slice(0, 3).concat(extras.map((value) => ["", value])).map(([key, value]) => key ? `${key}=${formatValue(value)}` : value).join(", ")}` : "";
   }
 
   function resultScalar(item, key) {
     if (!state.result) return null;
-    const record = globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id, state.resultScenario);
+    const record = resultRecordFor(item);
     const value = record && typeof record === "object" ? record[key] : null;
     if (Array.isArray(value)) {
       const numbers = value.map(Number).filter(Number.isFinite);
@@ -170,8 +212,14 @@
 
   function resultLegend() {
     const hasLoading = state.result && visibleAssets().some((item) => resultScalar(item, "loading") !== null);
-    if (!hasLoading) return "";
-    return `<g transform="translate(20 18)" aria-label="Result loading legend"><text x="0" y="0" fill="#70695f" font-size="11">Result loading (normalised)</text><line x1="0" y1="13" x2="28" y2="13" stroke="#4a8f5f" stroke-width="3"/><text x="36" y="17" fill="#70695f" font-size="10">&lt; 0.70</text><line x1="92" y1="13" x2="120" y2="13" stroke="#c28a26" stroke-width="5"/><text x="128" y="17" fill="#70695f" font-size="10">0.70–0.90</text><line x1="205" y1="13" x2="233" y2="13" stroke="#b64035" stroke-width="6"/><text x="241" y="17" fill="#70695f" font-size="10">&gt; 0.90</text></g>`;
+    const hasVoltage = state.result && state.index.buses.some((item) => resultVoltageDeviation(item) !== null);
+    const hasState = state.result && visibleAssets().some((item) => resultStatus(item) !== item.status || ["open", "out_of_service"].includes(item.status));
+    if (!hasLoading && !hasVoltage && !hasState) return "";
+    const rows = [];
+    if (hasLoading) rows.push(`<text x="0" y="0" fill="#70695f" font-size="11">Result loading (normalised)</text><line x1="0" y1="13" x2="28" y2="13" stroke="#4a8f5f" stroke-width="3"/><text x="36" y="17" fill="#70695f" font-size="10">&lt; 0.70</text><line x1="92" y1="13" x2="120" y2="13" stroke="#c28a26" stroke-width="5"/><text x="128" y="17" fill="#70695f" font-size="10">0.70–0.90</text><line x1="205" y1="13" x2="233" y2="13" stroke="#b64035" stroke-width="6"/><text x="241" y="17" fill="#70695f" font-size="10">&gt; 0.90</text>`);
+    if (hasVoltage) rows.push(`<text x="0" y="42" fill="#70695f" font-size="11">Bus voltage deviation</text><circle cx="9" cy="55" r="6" fill="#fffdf9" stroke="#4a8f5f" stroke-width="2"/><text x="21" y="59" fill="#70695f" font-size="10">nominal</text><circle cx="92" cy="55" r="6" fill="#fffdf9" stroke="#c28a26" stroke-width="2" stroke-dasharray="2 3"/><text x="104" y="59" fill="#70695f" font-size="10">moderate</text><circle cx="205" cy="55" r="6" fill="#fffdf9" stroke="#b64035" stroke-width="2" stroke-dasharray="6 3"/><text x="217" y="59" fill="#70695f" font-size="10">high</text>`);
+    if (hasState) rows.push(`<text x="0" y="84" fill="#70695f" font-size="11">Operating state</text><line x1="0" y1="97" x2="28" y2="97" stroke="#70695f" stroke-width="3" stroke-dasharray="8 6"/><text x="36" y="101" fill="#70695f" font-size="10">open</text><line x1="92" y1="97" x2="120" y2="97" stroke="#70695f" stroke-width="3" opacity=".35"/><text x="128" y="101" fill="#70695f" font-size="10">out of service</text>`);
+    return `<g transform="translate(20 18)" aria-label="Result visualisation legend">${rows.join("")}</g>`;
   }
 
   function renderResultSummary() {
@@ -411,15 +459,16 @@
         if (!a || !b) continue;
         const selected = sameRef(item.ref, state.selected);
         const route = geometryPointsOf(item).map(([longitude, latitude]) => project(longitude, latitude));
-        const visual = resultVisual(item, selected, colourOf(item.ref.kind)); const stroke = visual.colour; const width = visual.width; const opacity = item.status === "open" ? .35 : .85;
-        if (route.length >= 2) content += `<polyline points="${route.map(([x, y]) => `${x},${y}`).join(" ")}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · routed geometry${escapeHtml(resultTooltip(item))}</title></polyline>`;
-        else content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></line>`;
+        const visual = resultVisual(item, selected, colourOf(item.ref.kind)); const stroke = visual.colour; const width = visual.width; const status = resultStatus(item); const opacity = status === "out_of_service" ? .35 : status === "open" ? .55 : .85;
+        if (route.length >= 2) content += `<polyline points="${route.map(([x, y]) => `${x},${y}`).join(" ")}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · routed geometry${escapeHtml(resultTooltip(item))}</title></polyline>`;
+        else content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></line>`;
       }
     }
     for (const bus of state.index.buses) {
       const p = positions.get(bus.ref.id); const selected = sameRef(bus.ref, state.selected);
       if (!p) continue;
-      content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><circle cx="${p[0]}" cy="${p[1]}" r="${selected ? 12 : 8}" fill="${selected ? "#2f6fb3" : "#fffdf9"}" stroke="#2f6fb3" stroke-width="${selected ? 4 : 2}"><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(resultTooltip(bus))}</title></circle><text x="${p[0] + 12}" y="${p[1] + 4}" fill="#37332c" font-size="12">${escapeHtml(bus.ref.id)}</text></g>`;
+      const voltage = resultVoltageVisual(bus, selected, "#2f6fb3"); const voltageDash = voltage.dash ? ` stroke-dasharray="${voltage.dash}"` : ""; const voltageGlyph = voltage.level === "high" ? "!" : voltage.level === "moderate" ? "~" : "";
+      content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><circle cx="${p[0]}" cy="${p[1]}" r="${selected ? 12 : 8}" fill="${selected ? "#e8f0f8" : "#fffdf9"}" stroke="${voltage.colour}" stroke-width="${selected ? 4 : 2}"${voltageDash}><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(resultTooltip(bus))}</title></circle>${voltageGlyph ? `<text x="${p[0]}" y="${p[1] + 4}" text-anchor="middle" fill="${voltage.colour}" font-size="10" font-weight="700">${voltageGlyph}</text>` : ""}<text x="${p[0] + 12}" y="${p[1] + 4}" fill="#37332c" font-size="12">${escapeHtml(bus.ref.id)}</text></g>`;
     }
     content += resultLegend();
     if (geographic && unmapped.length) content += `<text x="380" y="478" text-anchor="middle" fill="#8a4d20" font-size="12">Not placed geographically (missing coordinates): ${escapeHtml(unmapped.map((bus) => bus.ref.id).join(", "))}</text>`;
@@ -430,8 +479,8 @@
 
   function singleSymbol(item, x, y) {
     const colour = colourOf(item.ref.kind); const selected = sameRef(item.ref, state.selected);
-    const opacity = item.status === "out_of_service" ? .35 : 1; const width = selected ? 3 : 2;
-    const dash = item.status === "open" ? ` stroke-dasharray="4 3"` : "";
+    const status = resultStatus(item); const opacity = status === "out_of_service" ? .35 : 1; const width = selected ? 3 : 2;
+    const dash = status === "open" ? ` stroke-dasharray="4 3"` : "";
     let shape;
     switch (item.ref.kind) {
       case "switch": shape = `<path d="M-12 0h6l10-7" fill="none" stroke="${colour}" stroke-width="${width}"${dash}/>`; break;
@@ -444,7 +493,7 @@
       case "shunt": shape = `<path d="M0-11v22M-8 7h16" stroke="${colour}" stroke-width="${width}"/>`; break;
       default: shape = `<rect x="-10" y="-7" width="20" height="14" rx="3" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"${dash}/>`;
     }
-    return `<g transform="translate(${x} ${y})" opacity="${opacity}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · ${escapeHtml(item.status)}${escapeHtml(resultTooltip(item))}</title>${shape}</g>`;
+    return `<g transform="translate(${x} ${y})" opacity="${opacity}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · ${escapeHtml(status)}${escapeHtml(resultTooltip(item))}</title>${shape}</g>`;
   }
 
   function drawSingle() {
@@ -454,7 +503,8 @@
       for (const connection of item.connections) {
         const a = positions.get(connection.from.busId); const b = positions.get(connection.to.busId); if (!a || !b) continue;
         const selected = sameRef(item.ref, state.selected); const visual = resultVisual(item, selected, colourOf(item.ref.kind));
-        content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${visual.colour}" stroke-width="${visual.width}" stroke-opacity=".85" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></line>`;
+        const status = resultStatus(item); const opacity = status === "out_of_service" ? .35 : .85;
+        content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${visual.colour}" stroke-width="${visual.width}" stroke-opacity="${opacity}" ${status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></line>`;
         content += singleSymbol(item, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
       }
     }
@@ -466,7 +516,8 @@
     }
     for (const bus of state.index.buses) {
       const p = positions.get(bus.ref.id); const selected = sameRef(bus.ref, state.selected);
-      content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><rect x="${p[0] - 25}" y="${p[1] - 14}" width="50" height="28" rx="4" fill="${selected ? "#e8f0f8" : "#fffdf9"}" stroke="#2f6fb3" stroke-width="${selected ? 3 : 1.5}"><title>bus ${escapeHtml(bus.ref.id)}</title></rect><text x="${p[0]}" y="${p[1] + 4}" text-anchor="middle" fill="#37332c" font-size="12">${escapeHtml(bus.ref.id)}</text></g>`;
+      const voltage = resultVoltageVisual(bus, selected, "#2f6fb3"); const voltageDash = voltage.dash ? ` stroke-dasharray="${voltage.dash}"` : ""; const voltageGlyph = voltage.level === "high" ? "!" : voltage.level === "moderate" ? "~" : "";
+      content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><rect x="${p[0] - 25}" y="${p[1] - 14}" width="50" height="28" rx="4" fill="${selected ? "#e8f0f8" : "#fffdf9"}" stroke="${voltage.colour}" stroke-width="${selected ? 3 : 1.5}"${voltageDash}><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(resultTooltip(bus))}</title></rect>${voltageGlyph ? `<text x="${p[0] - 17}" y="${p[1] - 4}" fill="${voltage.colour}" font-size="9" font-weight="700">${voltageGlyph}</text>` : ""}<text x="${p[0]}" y="${p[1] + 4}" text-anchor="middle" fill="#37332c" font-size="12">${escapeHtml(bus.ref.id)}</text></g>`;
     }
     content += resultLegend();
     setStatus("Single-wire projection: conductor detail is collapsed; devices remain selectable.");

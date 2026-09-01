@@ -56,6 +56,7 @@ end
     @test result["meta"]["case_id"] == "micro-bmopf"
     @test result["termination_status"] == "LOCALLY_SOLVED"
     @test result["line"]["line_main"]["loading"] == 0.42
+    @test result["bus"]["load_bus"]["voltage_deviation"] == 0.062
     @test length(result["solution_profile"]["bound_violations"]) == 1
     @test result["solution_profile"]["bound_violations"][1]["id"] == "line_main"
     multinetwork = JSON3.read(read(MULTINETWORK_RESULT_FIXTURE, String), Dict{String,Any})

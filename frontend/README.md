@@ -41,8 +41,11 @@ selection before asset metrics are shown; the active slice is displayed in the
 Results panel.
 
 Normalised `loading` values on lines (and supported transformer result records)
-also drive an overview colour/width cue with an explicit legend. The thresholds
-are illustrative display bands, not equipment protection limits.
+drive an overview colour/width cue. Explicit voltage-deviation fields on bus
+result records drive bus outline colour, dash pattern, and a text cue; result
+open/out-of-service states use dash and opacity. Legends explain these cues
+without relying on colour alone. The thresholds are illustrative display bands,
+not equipment protection limits.
 
 The prototype intentionally has no external basemap or runtime backend. Its layout is deterministic and is not yet the final ELK-backed renderer.
 
