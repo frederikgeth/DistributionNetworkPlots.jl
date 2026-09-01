@@ -6,6 +6,10 @@
     "shunt", "capacitor", "voltage_source", "dc_bus", "dc_branch",
     "dc_load", "dc_source", "dc_grounding"
   ]);
+  const FULLY_RENDERED_KINDS = new Set([
+    "bus", "line", "switch", "transformer", "load", "generator", "ibr",
+    "shunt", "capacitor", "voltage_source"
+  ]);
 
   function pointerEscape(value) {
     return String(value).replace(/~/g, "~0").replace(/\//g, "~1");
@@ -96,6 +100,12 @@
     return "unknown";
   }
 
+  function supportLevel(kind, record) {
+    if (kind === "transformer" && Array.isArray(record?.windings)) return "focused";
+    if (FULLY_RENDERED_KINDS.has(kind)) return "full";
+    return "raw-only";
+  }
+
   function entity(kind, id, pointer, sourceRecord) {
     const ports = portsOf(kind, id, sourceRecord);
     return {
@@ -103,6 +113,7 @@
       ports,
       connections: connectionsOf(kind, ports),
       status: statusOf(kind, sourceRecord),
+      support: supportLevel(kind, sourceRecord),
       sourceRecord
     };
   }
@@ -136,7 +147,8 @@
         sourceRecord: record.value,
         ports: [],
         connections: [],
-        status: "in_service"
+        status: "in_service",
+        support: "full"
       };
       buses.push(bus);
       addEntity(bus, true);
@@ -165,6 +177,8 @@
     else if (!String(document.$schema).toLowerCase().includes("bmopf")) {
       warnings.push(`Schema identifier is not recognised as BMOPF: ${String(document.$schema)}`);
     }
+    const supportCounts = {};
+    for (const item of entities) supportCounts[item.support] = (supportCounts[item.support] || 0) + 1;
 
     return {
       raw: document,
@@ -176,6 +190,7 @@
       byBus,
       counts,
       warnings,
+      supportCounts,
       coordinateCount,
       schema: document.$schema || null
     };

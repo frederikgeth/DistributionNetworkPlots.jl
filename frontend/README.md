@@ -20,6 +20,7 @@ Open <http://127.0.0.1:8765/> and drop `fixtures/micro/micro_bmopf.json` onto th
 - Distinct single-wire symbols for supported device classes and state styling.
 - Reusable geospatial line geometry when supplied, with deterministic endpoint fallback.
 - Diagram assets expose keyboard focus, Enter/Space selection, and accessible names.
+- The case summary and inspector expose support levels for rendered versus raw-only records.
 - Clear load errors for invalid JSON, oversized files, and oversized JSON documents.
 - Schema-identifier diagnostics when a case omits or does not identify BMOPF.
 
