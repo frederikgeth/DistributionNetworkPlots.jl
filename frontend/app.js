@@ -528,8 +528,44 @@
   }
 
   function singlePositions() {
+    const buses = state.index.buses;
+    const adjacency = new Map(buses.map((bus) => [bus.ref.id, new Set()]));
+    for (const item of state.index.assets) {
+      const ports = item.ports || [];
+      if (ports.length < 2) continue;
+      const anchor = ports[0].busId;
+      for (const port of ports.slice(1)) {
+        if (!adjacency.has(anchor)) adjacency.set(anchor, new Set());
+        if (!adjacency.has(port.busId)) adjacency.set(port.busId, new Set());
+        adjacency.get(anchor).add(port.busId);
+        adjacency.get(port.busId).add(anchor);
+      }
+    }
+    const roots = state.index.assets
+      .filter((item) => item.ref.kind === "voltage_source" && item.ports?.[0])
+      .map((item) => item.ports[0].busId)
+      .filter((id, i, all) => all.indexOf(id) === i);
+    const depth = new Map();
+    const queue = roots.length ? roots : (buses[0] ? [buses[0].ref.id] : []);
+    queue.forEach((id) => depth.set(id, 0));
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const id = queue[cursor];
+      for (const next of adjacency.get(id) || []) {
+        if (!depth.has(next)) { depth.set(next, depth.get(id) + 1); queue.push(next); }
+      }
+    }
+    let maxDepth = Math.max(0, ...depth.values());
+    buses.forEach((bus) => { if (!depth.has(bus.ref.id)) { maxDepth += 1; depth.set(bus.ref.id, maxDepth); } });
+    const xStep = Math.min(180, 650 / Math.max(maxDepth, 1));
+    const byDepth = new Map();
+    buses.forEach((bus) => { const d = depth.get(bus.ref.id) || 0; if (!byDepth.has(d)) byDepth.set(d, []); byDepth.get(d).push(bus); });
     const positions = new Map();
-    state.index.buses.forEach((bus, i) => positions.set(bus.ref.id, [90 + (i % 4) * 210, 100 + Math.floor(i / 4) * 145]));
+    for (const [d, level] of byDepth.entries()) {
+      level.sort((a, b) => a.ref.id.localeCompare(b.ref.id));
+      const spacing = Math.min(96, 360 / Math.max(level.length, 1));
+      const start = 250 - ((level.length - 1) * spacing) / 2;
+      level.forEach((bus, i) => positions.set(bus.ref.id, [70 + d * xStep, start + i * spacing]));
+    }
     return positions;
   }
 
@@ -588,44 +624,72 @@
     const dash = status === "open" ? ` stroke-dasharray="4 3"` : "";
     let shape;
     switch (item.ref.kind) {
-      case "switch": shape = `<path d="M-12 0h6l10-7" fill="none" stroke="${colour}" stroke-width="${width}"${dash}/>`; break;
-      case "transformer": shape = `<circle cx="-7" cy="0" r="7" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/><circle cx="7" cy="0" r="7" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/>`; break;
-      case "voltage_source": shape = `<polygon points="0,-11 11,9 -11,9" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/>`; break;
-      case "load": shape = `<rect x="-10" y="-10" width="20" height="20" rx="3" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/>`; break;
+      case "switch": {
+        const bladeY = status === "open" ? -10 : 0;
+        shape = `<circle cx="-13" cy="0" r="2.5" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/><circle cx="13" cy="0" r="2.5" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/><path d="M-13 0h7M6 ${bladeY}h7M-6 0L6 ${bladeY}" fill="none" stroke="${colour}" stroke-width="${width}"${dash}/>`;
+        break;
+      }
+      case "transformer": shape = `<path d="M-18 0h6M12 0h6" stroke="${colour}" stroke-width="${width}"/><circle cx="-6" cy="0" r="8" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/><circle cx="6" cy="0" r="8" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/>`; break;
+      case "voltage_source": shape = `<circle cx="0" cy="0" r="12" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/><text x="0" y="4" text-anchor="middle" font-size="13" fill="${colour}">~</text>`; break;
+      case "load": shape = `<rect x="-12" y="-9" width="24" height="18" rx="2" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/><path d="M-5 0h10M2-4l4 4-4 4" fill="none" stroke="${colour}" stroke-width="${Math.max(1.5, width - .5)}"/>`; break;
       case "generator": shape = `<circle cx="0" cy="0" r="11" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/><text x="0" y="4" text-anchor="middle" font-size="9" fill="${colour}">G</text>`; break;
       case "ibr": shape = `<circle cx="0" cy="0" r="11" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/><text x="0" y="3" text-anchor="middle" font-size="7" fill="${colour}">IBR</text>`; break;
-      case "capacitor": shape = `<path d="M-7-10v20M7-10v20" stroke="${colour}" stroke-width="${width}"/>`; break;
-      case "shunt": shape = `<path d="M0-11v22M-8 7h16" stroke="${colour}" stroke-width="${width}"/>`; break;
+      case "capacitor": shape = `<path d="M0-18v8M0 10v8M-8-10h16M-8 10h16" stroke="${colour}" stroke-width="${width}"/>`; break;
+      case "shunt": shape = `<path d="M0-15v10M-9-5h18M-6 1h12M-3 7h6" stroke="${colour}" stroke-width="${width}"/>`; break;
       default: shape = `<rect x="-10" y="-7" width="20" height="14" rx="3" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"${dash}/>`;
     }
-    return `<g transform="translate(${x} ${y})" opacity="${opacity}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · ${escapeHtml(status)}${escapeHtml(resultTooltip(item))}</title>${shape}</g>`;
+    return `<g transform="translate(${x} ${y})" opacity="${opacity}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · ${escapeHtml(status)}${escapeHtml(resultTooltip(item))}</title>${shape}<text x="0" y="27" text-anchor="middle" fill="#37332c" font-size="9">${escapeHtml(item.ref.id)}</text></g>`;
   }
 
   function drawSingle() {
     const positions = singlePositions();
-    let content = "";
+    let content = `<defs><marker id="sld-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0 0L7 3.5L0 7z" fill="#6b655c"/></marker></defs><text x="24" y="26" fill="#37332c" font-size="13" font-weight="700">Source → load one-line view</text><text x="24" y="43" fill="#70695f" font-size="10">IEC/IEEE-inspired symbols · heavy busbars · click any device for details</text>`;
+    const edgeCounts = new Map();
+    for (const item of visibleAssets().filter((e) => e.connections?.length)) {
+      for (const connection of item.connections) {
+        const key = [connection.from.busId, connection.to.busId].sort().join("|");
+        edgeCounts.set(key, (edgeCounts.get(key) || 0) + 1);
+      }
+    }
+    const edgeSeen = new Map();
     for (const item of visibleAssets().filter((e) => e.connections?.length)) {
       for (const connection of item.connections) {
         const a = positions.get(connection.from.busId); const b = positions.get(connection.to.busId); if (!a || !b) continue;
         const selected = sameRef(item.ref, state.selected); const visual = resultVisual(item, selected, colourOf(item.ref.kind));
         const status = resultStatus(item); const opacity = status === "out_of_service" ? .35 : .85;
-        content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${visual.colour}" stroke-width="${visual.width}" stroke-opacity="${opacity}" ${status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></line>`;
-        content += singleSymbol(item, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
+        const midX = a[0] + (b[0] - a[0]) / 2;
+        const key = [connection.from.busId, connection.to.busId].sort().join("|");
+        const ordinal = edgeSeen.get(key) || 0; edgeSeen.set(key, ordinal + 1);
+        const laneOffset = (ordinal - (edgeCounts.get(key) - 1) / 2) * 18;
+        const laneY = b[1] + laneOffset;
+        const path = `M${a[0]} ${a[1]}H${midX}V${laneY}H${b[0]}V${b[1]}`;
+        content += `<path d="${path}" fill="none" stroke="${visual.colour}" stroke-width="${visual.width}" stroke-opacity="${opacity}" marker-end="url(#sld-arrow)" ${status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></path>`;
+        content += singleSymbol(item, midX, laneY);
       }
     }
     const attached = new Map();
     for (const item of visibleAssets().filter((e) => !e.connections?.length && e.ports?.length === 1)) {
       const port = item.ports[0]; const p = positions.get(port.busId); if (!p) continue;
       const offset = attached.get(port.busId) || 0; attached.set(port.busId, offset + 1);
-      content += singleSymbol(item, p[0] + 38, p[1] - 28 - offset * 24);
+      const left = item.ref.kind === "voltage_source";
+      const x = p[0] + (left ? -58 : 62); const y = p[1] + (left ? 0 : -38 - offset * 38);
+      content += `<path d="M${p[0] + (left ? -38 : 38)} ${p[1]}H${x}V${y}" fill="none" stroke="${colourOf(item.ref.kind)}" stroke-width="2" marker-end="url(#sld-arrow)"/>`;
+      content += singleSymbol(item, x, y);
+    }
+    for (const item of visibleAssets().filter((e) => e.ref.kind === "transformer" && e.ports?.length > 2)) {
+      const points = item.ports.map((port) => positions.get(port.busId)).filter(Boolean); if (!points.length) continue;
+      const x = points.reduce((sum, p) => sum + p[0], 0) / points.length; const y = points.reduce((sum, p) => sum + p[1], 0) / points.length;
+      points.forEach((p) => { content += `<path d="M${p[0]} ${p[1]}L${x} ${y}" fill="none" stroke="${colourOf(item.ref.kind)}" stroke-width="2" marker-end="url(#sld-arrow)"/>`; });
+      content += singleSymbol(item, x, y);
     }
     for (const bus of state.index.buses) {
       const p = positions.get(bus.ref.id); const selected = sameRef(bus.ref, state.selected);
       const voltage = resultVoltageVisual(bus, selected, "#2f6fb3"); const voltageDash = voltage.dash ? ` stroke-dasharray="${voltage.dash}"` : ""; const voltageGlyph = voltage.level === "high" ? "!" : voltage.level === "moderate" ? "~" : "";
-      content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><rect x="${p[0] - 25}" y="${p[1] - 14}" width="50" height="28" rx="4" fill="${selected ? "#e8f0f8" : "#fffdf9"}" stroke="${voltage.colour}" stroke-width="${selected ? 3 : 1.5}"${voltageDash}><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(resultTooltip(bus))}</title></rect>${voltageGlyph ? `<text x="${p[0] - 17}" y="${p[1] - 4}" fill="${voltage.colour}" font-size="9" font-weight="700">${voltageGlyph}</text>` : ""}<text x="${p[0]}" y="${p[1] + 4}" text-anchor="middle" fill="#37332c" font-size="12">${escapeHtml(bus.ref.id)}</text></g>`;
+      content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><line x1="${p[0] - 42}" y1="${p[1]}" x2="${p[0] + 42}" y2="${p[1]}" stroke="${voltage.colour}" stroke-width="${selected ? 7 : 5}"${voltageDash}/><circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${voltage.colour}"/><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(resultTooltip(bus))}</title>${voltageGlyph ? `<text x="${p[0] - 50}" y="${p[1] - 8}" fill="${voltage.colour}" font-size="10" font-weight="700">${voltageGlyph}</text>` : ""}<text x="${p[0]}" y="${p[1] + 20}" text-anchor="middle" fill="#37332c" font-size="11">${escapeHtml(bus.ref.id)}</text></g>`;
     }
+    content += `<text x="24" y="474" fill="#70695f" font-size="10">Legend: heavy line = busbar · ○ = source/generator · paired coils = transformer · □ = load · ║ = capacitor · ⏚ = shunt · open blade = switch</text>`;
     content += resultLegend();
-    setStatus("Single-wire projection: conductor detail is collapsed; devices remain selectable.");
+    setStatus("Single-line diagram: source-to-load layered layout with conventional busbars and device symbols.");
     $("canvas").innerHTML = svgShell(content);
     bindSvgSelection();
   }

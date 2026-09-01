@@ -38,6 +38,28 @@ hover/label controls, and sliders for multinetwork, time, or scenario data.
 4. Class-aware overview summaries (counts, ranges, and warnings) before adding
    more decorative symbols.
 
+## Single-line diagram conventions
+
+The single-line renderer follows the conventions described in the following
+engineering references rather than treating the view as a generic graph:
+
+- [Control.com: Single-Line Electrical Diagrams](https://control.com/textbook/electric-power-measurement-and-control/single-line-electrical-diagrams/)
+  explains that one line represents a three-phase conductor set and that a
+  transformer is represented by a compact primary/secondary symbol.
+- [Schematex SLD documentation](https://schematex.js.org/docs/sld) documents
+  IEEE Std 315 / ANSI Y32.2-inspired symbols, heavy busbars, and distinct
+  switch and breaker marks.
+- [Anvilfield one-line guide](https://www.anvilfield.com/field-guides/electrical/electrical-one-line-diagram-reading-symbols/)
+  reinforces source-to-transformer-to-bus-to-feeder reading order and the use
+  of explicit equipment labels.
+
+The implementation consequence is a deterministic source-to-load layered
+layout, heavy horizontal busbars, orthogonal branch routing, explicit device
+labels, and a legend that states the symbols are IEEE/IEC-inspired rather than
+claiming standards certification. Multi-winding transformers retain spoke
+connections to each winding bus instead of being collapsed into a misleading
+pairwise edge.
+
 ### What we should not copy blindly
 
 - VegaLite should not become the canonical renderer: focused multi-wire views

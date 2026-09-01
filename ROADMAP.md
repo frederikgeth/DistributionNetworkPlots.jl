@@ -39,6 +39,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Viewer recognises versioned optional case fingerprints and prefers cryptographic pairing when producer metadata is available.
 - [x] Overview views encode supported loading, explicit voltage deviation, and operating-state result cues with non-colour legend guidance.
 - [x] Frontend provides built-in authored cases for complete-model and partial/raw-only support-boundary smoke tests.
+- [x] Single-line view uses a deterministic source-to-load layered layout, heavy busbars, orthogonal branch routing, explicit device labels, and IEEE/IEC-inspired symbols.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
 

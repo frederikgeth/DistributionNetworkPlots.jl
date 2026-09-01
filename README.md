@@ -35,6 +35,8 @@ The prototype supports:
 - Bus, device, and reusable-record inspection.
 - Links between devices, buses, and linecodes.
 - Geospatial schematic and single-wire projections.
+- Single-line rendering with source-to-load layering, heavy busbars, orthogonal
+  branch routing, labeled equipment, and IEEE/IEC-inspired symbols.
 - Bus- and device-focused multi-wire drill-down.
 - Local-only case loading with no runtime backend.
 - Browser-side guardrails for invalid JSON and oversized case files.
