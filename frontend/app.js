@@ -222,24 +222,37 @@
     const source = mapped.length >= 2 ? mapped : [];
     const xs = source.map((b) => b.coordinates.longitude); const ys = source.map((b) => b.coordinates.latitude);
     const minX = Math.min(...xs, 0); const maxX = Math.max(...xs, 1); const minY = Math.min(...ys, 0); const maxY = Math.max(...ys, 1);
+    const project = (longitude, latitude) => [55 + ((Number(longitude) - minX) / (maxX - minX || 1)) * 650, 440 - ((Number(latitude) - minY) / (maxY - minY || 1)) * 380];
     const positions = new Map();
     buses.forEach((bus, i) => {
-      if (source.length >= 2 && bus.coordinates) {
-        positions.set(bus.ref.id, [55 + ((bus.coordinates.longitude - minX) / (maxX - minX || 1)) * 650, 440 - ((bus.coordinates.latitude - minY) / (maxY - minY || 1)) * 380]);
-      } else positions.set(bus.ref.id, [90 + (i % 4) * 210, 110 + Math.floor(i / 4) * 140]);
+      if (source.length >= 2 && bus.coordinates) positions.set(bus.ref.id, project(bus.coordinates.longitude, bus.coordinates.latitude));
+      else positions.set(bus.ref.id, [90 + (i % 4) * 210, 110 + Math.floor(i / 4) * 140]);
     });
-    return { positions, geographic: source.length >= 2 };
+    return { positions, geographic: source.length >= 2, project };
+  }
+
+  function geometryPointsOf(item) {
+    let value = item.sourceRecord?.geometry ?? item.sourceRecord?.coordinates ?? item.sourceRecord?.line_geometry;
+    if (typeof value === "string") value = itemFor({ kind: "line_geometry", id: value })?.sourceRecord;
+    if (value && !Array.isArray(value) && Array.isArray(value.coordinates)) value = value.coordinates;
+    if (value && !Array.isArray(value) && value.geometry) value = value.geometry.coordinates;
+    if (!Array.isArray(value)) return [];
+    return value.filter((point) => Array.isArray(point) && point.length >= 2 && Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1])))
+      .map((point) => [Number(point[0]), Number(point[1])]);
   }
 
   function drawGeo() {
-    const { positions, geographic } = busCoordinates();
+    const { positions, geographic, project } = busCoordinates();
     let content = "";
     for (const item of visibleAssets().filter((e) => e.connections?.length)) {
       for (const connection of item.connections) {
         const a = positions.get(connection.from.busId); const b = positions.get(connection.to.busId);
         if (!a || !b) continue;
         const selected = sameRef(item.ref, state.selected);
-        content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${colourOf(item.ref.kind)}" stroke-width="${selected ? 6 : 3}" stroke-opacity="${item.status === "open" ? .35 : .85}" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}</title></line>`;
+        const route = geometryPointsOf(item).map(([longitude, latitude]) => project(longitude, latitude));
+        const stroke = colourOf(item.ref.kind); const width = selected ? 6 : 3; const opacity = item.status === "open" ? .35 : .85;
+        if (route.length >= 2) content += `<polyline points="${route.map(([x, y]) => `${x},${y}`).join(" ")}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · routed geometry</title></polyline>`;
+        else content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}</title></line>`;
       }
     }
     for (const bus of state.index.buses) {

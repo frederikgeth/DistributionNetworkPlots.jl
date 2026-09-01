@@ -33,4 +33,6 @@ end
     @test case["meta"]["source"] == "authored in this repository"
     @test haskey(case["transformer"]["n_winding"], "tx_three")
     @test length(case["transformer"]["n_winding"]["tx_three"]["windings"]) == 3
+    @test case["line"]["line_main"]["line_geometry"] == "route_main"
+    @test length(case["line_geometry"]["route_main"]["coordinates"]) == 3
 end

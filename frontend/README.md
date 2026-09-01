@@ -18,6 +18,7 @@ Open <http://127.0.0.1:8765/> and drop `fixtures/micro/micro_bmopf.json` onto th
 - One- and two-hop neighbourhood expansion from a selected bus.
 - Pan, zoom, and fit/reset controls for the static SVG views.
 - Distinct single-wire symbols for supported device classes and state styling.
+- Reusable geospatial line geometry when supplied, with deterministic endpoint fallback.
 - Clear load errors for invalid JSON, oversized files, and oversized JSON documents.
 - Schema-identifier diagnostics when a case omits or does not identify BMOPF.
 
