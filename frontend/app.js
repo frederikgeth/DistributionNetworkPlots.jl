@@ -251,6 +251,25 @@
     bindSvgSelection();
   }
 
+  function singleSymbol(item, x, y) {
+    const colour = colourOf(item.ref.kind); const selected = sameRef(item.ref, state.selected);
+    const opacity = item.status === "out_of_service" ? .35 : 1; const width = selected ? 3 : 2;
+    const dash = item.status === "open" ? ` stroke-dasharray="4 3"` : "";
+    let shape;
+    switch (item.ref.kind) {
+      case "switch": shape = `<path d="M-12 0h6l10-7" fill="none" stroke="${colour}" stroke-width="${width}"${dash}/>`; break;
+      case "transformer": shape = `<circle cx="-7" cy="0" r="7" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/><circle cx="7" cy="0" r="7" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/>`; break;
+      case "voltage_source": shape = `<polygon points="0,-11 11,9 -11,9" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/>`; break;
+      case "load": shape = `<rect x="-10" y="-10" width="20" height="20" rx="3" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/>`; break;
+      case "generator": shape = `<circle cx="0" cy="0" r="11" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/><text x="0" y="4" text-anchor="middle" font-size="9" fill="${colour}">G</text>`; break;
+      case "ibr": shape = `<circle cx="0" cy="0" r="11" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"/><text x="0" y="3" text-anchor="middle" font-size="7" fill="${colour}">IBR</text>`; break;
+      case "capacitor": shape = `<path d="M-7-10v20M7-10v20" stroke="${colour}" stroke-width="${width}"/>`; break;
+      case "shunt": shape = `<path d="M0-11v22M-8 7h16" stroke="${colour}" stroke-width="${width}"/>`; break;
+      default: shape = `<rect x="-10" y="-7" width="20" height="14" rx="3" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"${dash}/>`;
+    }
+    return `<g transform="translate(${x} ${y})" opacity="${opacity}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · ${escapeHtml(item.status)}</title>${shape}</g>`;
+  }
+
   function drawSingle() {
     const positions = new Map();
     state.index.buses.forEach((bus, i) => positions.set(bus.ref.id, [90 + (i % 4) * 210, 100 + Math.floor(i / 4) * 145]));
@@ -259,7 +278,14 @@
       for (const connection of item.connections) {
         const a = positions.get(connection.from.busId); const b = positions.get(connection.to.busId); if (!a || !b) continue;
         content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${colourOf(item.ref.kind)}" stroke-width="${sameRef(item.ref, state.selected) ? 6 : 3}" stroke-opacity=".85" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}</title></line>`;
+        content += singleSymbol(item, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
       }
+    }
+    const attached = new Map();
+    for (const item of visibleAssets().filter((e) => !e.connections?.length && e.ports?.length === 1)) {
+      const port = item.ports[0]; const p = positions.get(port.busId); if (!p) continue;
+      const offset = attached.get(port.busId) || 0; attached.set(port.busId, offset + 1);
+      content += singleSymbol(item, p[0] + 38, p[1] - 28 - offset * 24);
     }
     for (const bus of state.index.buses) {
       const p = positions.get(bus.ref.id); const selected = sameRef(bus.ref, state.selected);
