@@ -37,6 +37,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Diagnostics findings can be filtered by severity and text while preserving the total finding count.
 - [x] Result attachment reports matched, mismatched, or unverified case identity status.
 - [x] Overview views encode supported loading, explicit voltage deviation, and operating-state result cues with non-colour legend guidance.
+- [x] Frontend provides built-in authored cases for complete-model and partial/raw-only support-boundary smoke tests.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
 

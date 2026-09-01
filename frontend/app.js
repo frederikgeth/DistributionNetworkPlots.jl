@@ -63,6 +63,34 @@
     }
   }
 
+  function availableExamples() {
+    return Array.isArray(globalThis.BMOPFExamples) ? globalThis.BMOPFExamples : [];
+  }
+
+  function populateExamples() {
+    const select = $("example-select");
+    if (!select) return;
+    select.innerHTML = '<option value="">Choose a case</option>' + availableExamples()
+      .map((example) => `<option value="${escapeHtml(example.id)}" title="${escapeHtml(example.description || "")}">${escapeHtml(example.label || example.id)}</option>`).join("");
+    select.addEventListener("change", (event) => { if (event.target.value) loadExample(event.target.value); });
+  }
+
+  function loadExample(id) {
+    const example = availableExamples().find((candidate) => candidate.id === id);
+    if (!example) return;
+    state.selected = null;
+    state.result = null;
+    state.resultLabel = "";
+    state.resultError = "";
+    state.resultScenario = null;
+    state.query = "";
+    state.activeKind = null;
+    state.diagnosticsQuery = "";
+    state.diagnosticsSeverity = "all";
+    loadDocument(example.case, example.label || example.id);
+    setStatus(`${example.label || example.id} loaded. ${example.description || ""}`);
+  }
+
   function renderSummary() {
     const index = state.index;
     if (!index) {
@@ -693,6 +721,7 @@
         return;
       }
       loadDocument(parsed, file.name);
+      if ($("example-select")) $("example-select").value = "";
     };
     reader.onerror = () => showLoadError("The browser could not read this file. Check its permissions and try again.", file.name);
     reader.readAsText(file);
@@ -745,6 +774,7 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     parseHash();
+    populateExamples();
     $("file-input").addEventListener("change", (event) => { if (event.target.files[0]) readFile(event.target.files[0]); });
     $("result-input").addEventListener("change", (event) => { if (event.target.files[0]) readResultFile(event.target.files[0]); });
     const zone = $("drop-zone");
@@ -757,6 +787,9 @@
     const embeddedResult = globalThis.__BMOPF_RESULT__;
     if (embedded) loadDocument(embedded, embedded.name || "Embedded case");
     if (embeddedResult) loadResultDocument(embeddedResult, "Embedded results");
-    if (!embedded && !embeddedResult) render();
+    if (!embedded && !embeddedResult && availableExamples().length) {
+      $("example-select").value = availableExamples()[0].id;
+      loadExample(availableExamples()[0].id);
+    } else if (!embedded && !embeddedResult) render();
   });
 })();

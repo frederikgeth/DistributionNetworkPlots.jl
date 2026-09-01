@@ -16,11 +16,13 @@ const MULTINETWORK_RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro"
     @test occursin("globalThis.__BMOPF_CASE__", html)
     @test occursin("micro-bmopf", html)
     @test occursin("BMOPFModel", html)
+    @test occursin("BMOPFExamples", html)
     @test occursin("__BMOPF_REPORT_META__", html)
     @test occursin("case_fingerprint", html)
     @test occursin("result_fingerprint", html)
     @test occursin("__BMOPF_RESULT__", html)
     @test !occursin("href=\"styles.css\"", html)
+    @test !occursin("src=\"examples.js\"", html)
     @test !occursin("src=\"app.js\"", html)
 end
 

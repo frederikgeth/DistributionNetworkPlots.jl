@@ -55,6 +55,7 @@ The tile-free renderer also works when the file is opened directly from disk.
 """
 function render_case(case::AbstractDict, output::AbstractString; title::AbstractString="BMOPF case", result=nothing)
     template = read(joinpath(FRONTEND_DIR, "index.html"), String)
+    examples = read(joinpath(FRONTEND_DIR, "examples.js"), String)
     model = read(joinpath(FRONTEND_DIR, "model.js"), String)
     app = read(joinpath(FRONTEND_DIR, "app.js"), String)
     css = read(joinpath(FRONTEND_DIR, "styles.css"), String)
@@ -66,6 +67,7 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
     html = replace(template,
         "<title>BMOPF Explorer</title>" => "<title>$(html_title)</title>",
         "<link rel=\"stylesheet\" href=\"styles.css\">" => "<style>$(css)</style>",
+        "<script src=\"examples.js\"></script>" => "<script>$(examples)</script>",
         "<script src=\"model.js\"></script>" => "<script>$(model)</script>",
         "<script src=\"app.js\"></script>" => "<script>globalThis.__BMOPF_REPORT_META__ = $(report_metadata); globalThis.__BMOPF_CASE__ = $(embedded);$(result_script)</script><script>$(app)</script>",
     )

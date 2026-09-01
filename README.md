@@ -14,6 +14,10 @@ python3 -m http.server 8765 --directory frontend
 
 Open <http://127.0.0.1:8765/> and drop [`fixtures/micro/micro_bmopf.json`](fixtures/micro/micro_bmopf.json) onto the page.
 
+The browser also starts with two built-in authored examples: a complete AC
+feeder covering the supported device classes, and a sparse/DC case that
+exercises missing coordinates, terminal diagnostics, and raw-only records.
+
 To inspect solved values, use **Attach results JSON** and choose
 [`fixtures/micro/micro_bmopf_result.json`](fixtures/micro/micro_bmopf_result.json)
 after opening the case. Raw BMOPFTools-style result dictionaries are accepted;
@@ -32,6 +36,7 @@ The prototype supports:
 - Optional BMOPFTools-style result JSON sidecars with objective/status summary and asset-level metrics.
 - Diagnostics view for filterable result validation/profile findings, clickable linked assets, and explicit case/result pairing status.
 - Result-aware overview cues for loading, explicit bus voltage deviation, and open/out-of-service state, with non-colour legend guidance.
+- Built-in example cases that can be loaded directly from the frontend for repeatable demonstrations and semantic smoke tests.
 
 ## Generate a static Julia report
 
