@@ -496,15 +496,32 @@
     const controls = $("camera-controls");
     if (!state.index || state.view === "diagnostics") { controls.hidden = true; controls.innerHTML = ""; return; }
     controls.hidden = false;
-    controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button>`;
+    controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export">Export SVG</button>`;
     controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
       const camera = state.cameras[state.view];
       if (button.dataset.camera === "zoom-in") camera.scale = Math.min(3, camera.scale * 1.25);
       else if (button.dataset.camera === "zoom-out") camera.scale = Math.max(.5, camera.scale / 1.25);
       else if (button.dataset.camera === "focus") { focusSelection(); return; }
+      else if (button.dataset.camera === "export") { exportCurrentSvg(); return; }
       else { camera.scale = 1; camera.x = 0; camera.y = 0; }
       updateCamera();
     }));
+  }
+
+  function exportCurrentSvg() {
+    const svg = $("canvas")?.querySelector("svg");
+    if (!svg) return;
+    const clone = svg.cloneNode(true);
+    clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+    clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
+    const source = `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(clone)}`;
+    const blob = new Blob([source], { type: "image/svg+xml;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const caseName = (state.index?.name || "bmopf-case").replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "bmopf-case";
+    anchor.href = url; anchor.download = `${caseName}-${state.view}.svg`; anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setStatus(`${state.view} view exported as SVG.`);
   }
 
   function bindCamera() {

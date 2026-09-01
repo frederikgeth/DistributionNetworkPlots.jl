@@ -47,6 +47,7 @@ The prototype supports:
 - Side-by-side comparison of two result sidecars while retaining stable source-asset identity.
 - Ranked inventory search across asset IDs, bus links, and result field names, with keyboard jump-to-match.
 - Built-in accessible help panel explaining view semantics, symbols, conductor cues, and result encodings.
+- Export of the active geospatial or single-line SVG for reports and issue attachments.
 
 ## Generate a static Julia report
 

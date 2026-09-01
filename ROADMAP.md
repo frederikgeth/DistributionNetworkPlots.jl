@@ -41,6 +41,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Frontend provides built-in authored cases for complete-model and partial/raw-only support-boundary smoke tests.
 - [x] Single-line view uses a deterministic source-to-load layered layout, heavy busbars, orthogonal branch routing, explicit device labels, and IEEE/IEC-inspired symbols.
 - [x] Inventory search ranks exact/prefix asset matches and can jump by keyboard; help panel documents views, symbols, and result cues.
+- [x] Export the active overview view as a standalone SVG.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
 
@@ -406,7 +407,7 @@ A slice is done only when:
 - Asset property aggregates and richer class overviews.
 - Search result highlighting and keyboard shortcuts.
 - Large-case profiling and targeted renderer upgrades.
-- Export current view as SVG or PNG.
+- PNG export and print-oriented styling.
 - Theme and print stylesheet.
 
 ### Results-aware visualisation: next vertical slices
