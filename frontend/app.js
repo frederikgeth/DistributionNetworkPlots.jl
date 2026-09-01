@@ -42,6 +42,7 @@
     state.activeKind = null;
     if (ref) window.location.hash = `#/${state.view}/${ref.kind}/${encodeURIComponent(ref.id)}`;
     render();
+    focusSelection();
   }
 
   function itemFor(ref) {
@@ -197,11 +198,12 @@
     const controls = $("camera-controls");
     if (!state.index) { controls.hidden = true; controls.innerHTML = ""; return; }
     controls.hidden = false;
-    controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button>`;
+    controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button>`;
     controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
       const camera = state.cameras[state.view];
       if (button.dataset.camera === "zoom-in") camera.scale = Math.min(3, camera.scale * 1.25);
       else if (button.dataset.camera === "zoom-out") camera.scale = Math.max(.5, camera.scale / 1.25);
+      else if (button.dataset.camera === "focus") { focusSelection(); return; }
       else { camera.scale = 1; camera.x = 0; camera.y = 0; }
       updateCamera();
     }));
@@ -246,6 +248,24 @@
       else positions.set(bus.ref.id, [90 + (i % 4) * 210, 110 + Math.floor(i / 4) * 140]);
     });
     return { positions, geographic: source.length >= 2, project };
+  }
+
+  function singlePositions() {
+    const positions = new Map();
+    state.index.buses.forEach((bus, i) => positions.set(bus.ref.id, [90 + (i % 4) * 210, 100 + Math.floor(i / 4) * 145]));
+    return positions;
+  }
+
+  function focusSelection() {
+    const item = itemFor(state.selected); if (!item || !state.index || state.view === "multi") return;
+    const positions = state.view === "geo" ? busCoordinates().positions : singlePositions();
+    const points = item.ref.kind === "bus" ? [positions.get(item.ref.id)] : (item.ports || []).map((port) => positions.get(port.busId));
+    const valid = points.filter(Boolean); if (!valid.length) return;
+    const target = [valid.reduce((sum, point) => sum + point[0], 0) / valid.length, valid.reduce((sum, point) => sum + point[1], 0) / valid.length];
+    const camera = state.cameras[state.view];
+    camera.x = 380 - target[0] * camera.scale;
+    camera.y = 250 - target[1] * camera.scale;
+    updateCamera();
   }
 
   function geometryPointsOf(item) {
@@ -301,8 +321,7 @@
   }
 
   function drawSingle() {
-    const positions = new Map();
-    state.index.buses.forEach((bus, i) => positions.set(bus.ref.id, [90 + (i % 4) * 210, 100 + Math.floor(i / 4) * 145]));
+    const positions = singlePositions();
     let content = "";
     for (const item of visibleAssets().filter((e) => e.connections?.length)) {
       for (const connection of item.connections) {
