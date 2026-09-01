@@ -32,6 +32,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Multi-wire phase, neutral, and ground cues use both line patterns and visible labels.
 - [x] Terminal-map length mismatches are surfaced as case and focused-view diagnostics.
 - [x] Results JSON can be attached as a sidecar and selected asset metrics are visible in the inspector.
+- [x] Normalised line-loading results are visible in overview stroke colour/width, legend, and tooltips.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
 

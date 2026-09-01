@@ -38,6 +38,10 @@ Multinetwork `nw` results are identified and require an explicit scenario
 selection before asset metrics are shown; the active slice is displayed in the
 Results panel.
 
+Normalised `loading` values on lines (and supported transformer result records)
+also drive an overview colour/width cue with an explicit legend. The thresholds
+are illustrative display bands, not equipment protection limits.
+
 The prototype intentionally has no external basemap or runtime backend. Its layout is deterministic and is not yet the final ELK-backed renderer.
 
 Julia-generated reports display reproducibility metadata for the embedded case and renderer.

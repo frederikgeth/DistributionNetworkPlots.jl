@@ -113,6 +113,30 @@
     return values.length ? ` · result ${values.slice(0, 3).map(([key, value]) => `${key}=${formatValue(value)}`).join(", ")}` : "";
   }
 
+  function resultScalar(item, key) {
+    if (!state.result) return null;
+    const record = globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id, state.resultScenario);
+    const value = record && typeof record === "object" ? record[key] : null;
+    if (Array.isArray(value)) {
+      const numbers = value.map(Number).filter(Number.isFinite);
+      return numbers.length ? Math.max(...numbers) : null;
+    }
+    return Number.isFinite(Number(value)) ? Number(value) : null;
+  }
+
+  function resultVisual(item, selected, fallback) {
+    const loading = ["line", "transformer"].includes(item.ref.kind) ? resultScalar(item, "loading") : null;
+    if (loading === null || loading < 0 || loading > 1) return { colour: fallback, width: selected ? 6 : 3, loading: null };
+    const colour = loading >= .9 ? "#b64035" : loading >= .7 ? "#c28a26" : "#4a8f5f";
+    return { colour, width: selected ? 7 : 3 + loading * 3, loading };
+  }
+
+  function resultLegend() {
+    const hasLoading = state.result && visibleAssets().some((item) => resultScalar(item, "loading") !== null);
+    if (!hasLoading) return "";
+    return `<g transform="translate(20 18)" aria-label="Result loading legend"><text x="0" y="0" fill="#70695f" font-size="11">Result loading (normalised)</text><line x1="0" y1="13" x2="28" y2="13" stroke="#4a8f5f" stroke-width="3"/><text x="36" y="17" fill="#70695f" font-size="10">&lt; 0.70</text><line x1="92" y1="13" x2="120" y2="13" stroke="#c28a26" stroke-width="5"/><text x="128" y="17" fill="#70695f" font-size="10">0.70–0.90</text><line x1="205" y1="13" x2="233" y2="13" stroke="#b64035" stroke-width="6"/><text x="241" y="17" fill="#70695f" font-size="10">&gt; 0.90</text></g>`;
+  }
+
   function renderResultSummary() {
     const panel = $("result-summary");
     if (!state.result) {
@@ -351,7 +375,7 @@
         if (!a || !b) continue;
         const selected = sameRef(item.ref, state.selected);
         const route = geometryPointsOf(item).map(([longitude, latitude]) => project(longitude, latitude));
-        const stroke = colourOf(item.ref.kind); const width = selected ? 6 : 3; const opacity = item.status === "open" ? .35 : .85;
+        const visual = resultVisual(item, selected, colourOf(item.ref.kind)); const stroke = visual.colour; const width = visual.width; const opacity = item.status === "open" ? .35 : .85;
         if (route.length >= 2) content += `<polyline points="${route.map(([x, y]) => `${x},${y}`).join(" ")}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · routed geometry${escapeHtml(resultTooltip(item))}</title></polyline>`;
         else content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></line>`;
       }
@@ -361,6 +385,7 @@
       if (!p) continue;
       content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><circle cx="${p[0]}" cy="${p[1]}" r="${selected ? 12 : 8}" fill="${selected ? "#2f6fb3" : "#fffdf9"}" stroke="#2f6fb3" stroke-width="${selected ? 4 : 2}"><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(resultTooltip(bus))}</title></circle><text x="${p[0] + 12}" y="${p[1] + 4}" fill="#37332c" font-size="12">${escapeHtml(bus.ref.id)}</text></g>`;
     }
+    content += resultLegend();
     if (geographic && unmapped.length) content += `<text x="380" y="478" text-anchor="middle" fill="#8a4d20" font-size="12">Not placed geographically (missing coordinates): ${escapeHtml(unmapped.map((bus) => bus.ref.id).join(", "))}</text>`;
     setStatus(geographic ? `Geographic coordinates used for ${state.index.buses.length - unmapped.length}/${state.index.buses.length} buses${unmapped.length ? ` · ${unmapped.length} omitted` : ""}.` : "No geographic coordinates: showing a schematic placement.");
     $("canvas").innerHTML = svgShell(content);
@@ -392,7 +417,8 @@
     for (const item of visibleAssets().filter((e) => e.connections?.length)) {
       for (const connection of item.connections) {
         const a = positions.get(connection.from.busId); const b = positions.get(connection.to.busId); if (!a || !b) continue;
-        content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${colourOf(item.ref.kind)}" stroke-width="${sameRef(item.ref, state.selected) ? 6 : 3}" stroke-opacity=".85" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></line>`;
+        const selected = sameRef(item.ref, state.selected); const visual = resultVisual(item, selected, colourOf(item.ref.kind));
+        content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${visual.colour}" stroke-width="${visual.width}" stroke-opacity=".85" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></line>`;
         content += singleSymbol(item, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
       }
     }
@@ -406,6 +432,7 @@
       const p = positions.get(bus.ref.id); const selected = sameRef(bus.ref, state.selected);
       content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><rect x="${p[0] - 25}" y="${p[1] - 14}" width="50" height="28" rx="4" fill="${selected ? "#e8f0f8" : "#fffdf9"}" stroke="#2f6fb3" stroke-width="${selected ? 3 : 1.5}"><title>bus ${escapeHtml(bus.ref.id)}</title></rect><text x="${p[0]}" y="${p[1] + 4}" text-anchor="middle" fill="#37332c" font-size="12">${escapeHtml(bus.ref.id)}</text></g>`;
     }
+    content += resultLegend();
     setStatus("Single-wire projection: conductor detail is collapsed; devices remain selectable.");
     $("canvas").innerHTML = svgShell(content);
     bindSvgSelection();
