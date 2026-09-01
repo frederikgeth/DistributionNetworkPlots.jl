@@ -1,0 +1,19 @@
+Creative Commons Attribution 4.0 International (CC BY 4.0)
+
+Copyright (c) 2026, DistributionNetworkPlots.jl contributors
+
+Unless a fixture carries a different source license, original BMOPF case files
+authored for this repository are licensed under the Creative Commons Attribution
+4.0 International License:
+
+https://creativecommons.org/licenses/by/4.0/
+
+The legal code is available at:
+
+https://creativecommons.org/licenses/by/4.0/legalcode
+
+Attribution: DistributionNetworkPlots.jl contributors
+
+This notice does not replace or override the license of a case reused from
+another initiative. Reused cases retain their source license, attribution, and
+provenance as documented in `fixtures/README.md` and in each case's metadata.

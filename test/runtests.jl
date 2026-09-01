@@ -25,3 +25,12 @@ end
     @test !occursin("</script><script>alert(1)", html)
     @test occursin("\\u003c/script\\u003e", html)
 end
+
+@testset "fixture provenance" begin
+    case = JSON3.read(read(FIXTURE, String), Dict{String,Any})
+    @test case["meta"]["license"] == "CC-BY-4.0"
+    @test case["meta"]["attribution"] == "DistributionNetworkPlots.jl contributors"
+    @test case["meta"]["source"] == "authored in this repository"
+    @test haskey(case["transformer"]["n_winding"], "tx_three")
+    @test length(case["transformer"]["n_winding"]["tx_three"]["windings"]) == 3
+end

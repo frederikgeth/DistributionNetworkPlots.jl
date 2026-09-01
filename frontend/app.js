@@ -193,6 +193,19 @@
       bindSvgSelection();
       return;
     }
+    if (item.ref.kind === "transformer" && item.ports?.length > 2) {
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))}</text><rect x="280" y="175" width="200" height="120" rx="10" fill="#e8f0f8" stroke="#4f789f" stroke-width="3"/><text x="380" y="242" text-anchor="middle" font-size="15">transformer body</text>`;
+      item.ports.forEach((winding, i) => {
+        const angle = -Math.PI / 2 + i * (Math.PI / Math.max(item.ports.length - 1, 1));
+        const x = 380 + Math.cos(angle) * 250; const y = 235 + Math.sin(angle) * 150;
+        content += `<g data-kind="bus" data-id="${escapeHtml(winding.busId)}"><line x1="380" y1="235" x2="${x}" y2="${y}" stroke="#4f789f" stroke-width="3"/><circle cx="${x}" cy="${y}" r="9" fill="#fffdf9" stroke="#4f789f" stroke-width="2"/><title>bus ${escapeHtml(winding.busId)}</title><text x="${x}" y="${y - 16}" text-anchor="middle" fill="#37332c" font-size="12">${escapeHtml(winding.role)}</text><text x="${x}" y="${y + 26}" text-anchor="middle" fill="#70695f" font-size="12">${escapeHtml(winding.busId)} · [${winding.terminals.map(escapeHtml).join(", ")}]</text></g>`;
+      });
+      content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Winding ports remain explicit; no false direct bus-to-bus edges are drawn</text>`;
+      setStatus(`${item.ports.length} winding ports · ${item.status}`);
+      $("canvas").innerHTML = svgShell(content);
+      bindSvgSelection();
+      return;
+    }
     if (!item.connections?.length) {
       const attachment = item.ports?.[0];
       if (!attachment) {

@@ -410,6 +410,18 @@ A static artifact can still contact external tile or font services. Supported po
 - `basemap=:online`: use a configured map style with attribution and disclose network access.
 - Offline tile packaging is deferred until a concrete use case justifies its size and licensing complexity.
 
+### 9.4 Licensing and provenance
+
+- Repository source code is distributed under the BSD 3-Clause License in
+  `LICENSE`.
+- Original case files authored for this repository are distributed under CC BY
+  4.0 in `LICENSE-DATA`.
+- Reused cases retain their source initiative's license, attribution, and
+  provenance. A fixture directory must carry those notices explicitly; the
+  repository code license never relicenses case data.
+- Every case should expose its applicable `meta.license`, `meta.attribution`,
+  and `meta.source` values when the BMOPF schema permits them.
+
 ## 10. Repository structure
 
 The initial repository should keep the Julia API and frontend visibly separated:

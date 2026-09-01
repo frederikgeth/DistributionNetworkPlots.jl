@@ -54,6 +54,9 @@
 
   function portsOf(kind, id, record) {
     if (!isObject(record)) return [];
+    if (kind === "transformer" && Array.isArray(record.windings)) {
+      return record.windings.map((winding, i) => port(`${id}:winding:${i + 1}`, `winding ${i + 1}`, winding.bus, terminalsOf(winding)));
+    }
     if (record.bus !== undefined) {
       return [port(`${id}:connection`, "connection", record.bus, terminalsOf(record))];
     }
@@ -72,8 +75,12 @@
     return [];
   }
 
-  function connectionsOf(ports) {
+  function connectionsOf(kind, ports) {
     if (ports.length < 2) return [];
+    // An n-winding transformer is a device with several winding ports, not a
+    // set of direct bus-to-bus branches. Keep the ports explicit until a
+    // renderer can draw the transformer body and its spokes faithfully.
+    if (kind === "transformer" && ports.length > 2) return [];
     const from = ports[0];
     return ports.slice(1).map((to) => ({
       from,
@@ -94,7 +101,7 @@
     return {
       ref: { kind, id: String(id), pointer },
       ports,
-      connections: connectionsOf(ports),
+      connections: connectionsOf(kind, ports),
       status: statusOf(kind, sourceRecord),
       sourceRecord
     };

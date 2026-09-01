@@ -14,10 +14,11 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 ## Current implementation status
 
 - [x] Repository, Julia package, static browser shell, and CI-ready test entry points scaffolded.
-- [x] Permissively licensed micro-fixture covering buses, terminal maps, line, switch, transformer, source, load, generator, IBR, shunt, capacitor, and a reusable linecode.
+- [x] CC BY 4.0 micro-fixture covering buses, terminal maps, line, switch, two- and multi-winding transformers, source, load, generator, IBR, shunt, capacitor, and a reusable linecode.
 - [x] Canonical browser index with stable JSON-pointer identities, ports, connections, reverse bus indexes, class counts, and diagnostics.
 - [x] Walking-skeleton geospatial, single-wire, and focused multi-wire views with shared selection and inspector navigation.
 - [x] Bus-focused multi-wire drill-down and reusable-record links in the inspector.
+- [x] Multi-winding transformer ports remain explicit in the canonical index and focused multi-wire view.
 - [x] Julia-generated self-contained report with safe JSON embedding.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.

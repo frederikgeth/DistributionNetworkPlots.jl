@@ -1,0 +1,23 @@
+# Case fixture provenance
+
+Case files are data artifacts, not source code. Their licenses are tracked per
+case and must never be inferred from the repository's BSD 3-Clause code license.
+
+## Original cases
+
+`micro/micro_bmopf.json` is authored in this repository and is licensed under
+CC BY 4.0. Its attribution and source are recorded in the JSON `meta` object.
+
+## Reused cases
+
+Cases reused from another initiative must remain under their source license.
+Keep each reused case in its own directory and include:
+
+- the exact source license text or a checked-in license file;
+- the source URL, citation, or repository and the retrieval/version details;
+- required attribution and any notices from the source project; and
+- `meta.license`, `meta.attribution`, and `meta.source` fields in the case when
+  the schema permits them.
+
+Do not copy a case into `fixtures/micro/` unless it is authored here or its
+provenance has been reviewed and documented.

@@ -4,7 +4,9 @@
   "base_frequency": 50.0,
   "meta": {
     "case_study_generator": "DistributionNetworkPlots.jl micro fixture",
-    "license": "CC0-1.0"
+    "license": "CC-BY-4.0",
+    "attribution": "DistributionNetworkPlots.jl contributors",
+    "source": "authored in this repository"
   },
   "bus": {
     "source": {
@@ -24,6 +26,12 @@
       "perfectly_grounded_terminals": ["n"],
       "longitude": 153.0400,
       "latitude": -27.4600
+    },
+    "aux_bus": {
+      "terminal_names": ["1", "2", "3", "n"],
+      "perfectly_grounded_terminals": ["n"],
+      "longitude": 153.0500,
+      "latitude": -27.4550
     }
   },
   "voltage_source": {
@@ -62,6 +70,17 @@
         "s_rating": 100000.0,
         "v_nom_from": 11000.0,
         "v_nom_to": 433.0
+      }
+    },
+    "n_winding": {
+      "tx_three": {
+        "windings": [
+          {"bus": "feeder", "terminal_map": ["1", "2", "3"], "v_nom": 11000.0, "configuration": "WYE"},
+          {"bus": "load_bus", "terminal_map": ["1", "2", "3", "n"], "v_nom": 433.0, "configuration": "WYE"},
+          {"bus": "aux_bus", "terminal_map": ["1", "2", "3"], "v_nom": 433.0, "configuration": "DELTA"}
+        ],
+        "x_sc": {"1_2": 0.01, "1_3": 0.02, "2_3": 0.015},
+        "s_rating": 150000.0
       }
     }
   },

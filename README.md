@@ -32,6 +32,12 @@ render_case("fixtures/micro/micro_bmopf.json", "micro-report.html")
 
 The generated report embeds the case and frontend runtime. It does not require Node.js or an application server.
 
+## Licensing and case provenance
+
+The library source code is released under the [BSD 3-Clause License](LICENSE). Original BMOPF case files authored in this repository, including the micro fixture, are released under [CC BY 4.0](LICENSE-DATA). Their `meta.license`, `meta.attribution`, and `meta.source` fields are part of the case provenance.
+
+Cases reused from another initiative are not relicensed by this project. Keep each reused case in an isolated fixture directory with its exact source license, attribution, citation or URL, and a provenance note as described in [`fixtures/README.md`](fixtures/README.md).
+
 ## Test
 
 ```sh
