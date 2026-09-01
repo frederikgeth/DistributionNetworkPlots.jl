@@ -3,11 +3,13 @@ using JSON3
 using DistributionNetworkPlots
 
 const FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro", "micro_bmopf.json")
+const RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro", "micro_bmopf_result.json")
 
 @testset "self-contained report" begin
     case = JSON3.read(read(FIXTURE, String), Dict{String,Any})
+    result = JSON3.read(read(RESULT_FIXTURE, String), Dict{String,Any})
     output = joinpath(mktempdir(), "micro.html")
-    render_case(case, output; title="Micro BMOPF")
+    render_case(case, output; title="Micro BMOPF", result)
     html = read(output, String)
     @test occursin("<title>Micro BMOPF</title>", html)
     @test occursin("globalThis.__BMOPF_CASE__", html)
@@ -15,6 +17,8 @@ const FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro", "micro_bmopf.json"
     @test occursin("BMOPFModel", html)
     @test occursin("__BMOPF_REPORT_META__", html)
     @test occursin("case_fingerprint", html)
+    @test occursin("result_fingerprint", html)
+    @test occursin("__BMOPF_RESULT__", html)
     @test !occursin("href=\"styles.css\"", html)
     @test !occursin("src=\"app.js\"", html)
 end
@@ -46,4 +50,9 @@ end
     @test length(case["transformer"]["n_winding"]["tx_three"]["windings"]) == 3
     @test case["line"]["line_main"]["line_geometry"] == "route_main"
     @test length(case["line_geometry"]["route_main"]["coordinates"]) == 3
+    result = JSON3.read(read(RESULT_FIXTURE, String), Dict{String,Any})
+    @test result["meta"]["license"] == "CC-BY-4.0"
+    @test result["meta"]["case_id"] == "micro-bmopf"
+    @test result["termination_status"] == "LOCALLY_SOLVED"
+    @test result["line"]["line_main"]["loading"] == 0.42
 end

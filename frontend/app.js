@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, view: "geo", query: "", activeKind: null, multiHops: 1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", view: "geo", query: "", activeKind: null, multiHops: 1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -83,6 +83,44 @@
     const supportHtml = `<p class="support-meta">Support: ${support.full || 0} full · ${support.focused || 0} focused · ${support["raw-only"] || 0} raw-only</p>`;
     $("case-summary").className = "panel";
     $("case-summary").innerHTML = `<div class="panel-heading"><h2>${escapeHtml(index.name)}</h2><span class="muted">${index.schema ? "schema" : "JSON"}</span></div><div class="stats">${stats.map(([n, label]) => `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`).join("")}</div>${supportHtml}${reportHtml}${warningHtml}`;
+  }
+
+  function resultRoot() { return state.result ? globalThis.BMOPFModel.resultRoot(state.result) : null; }
+
+  function resultMetadata() {
+    const root = resultRoot();
+    if (!root) return {};
+    const info = root.solution_info || root.solution || root.profile || {};
+    return {
+      objective: root.objective ?? root.objective_value ?? info.objective,
+      status: root.termination_status ?? root.status ?? info.termination_status ?? info.status,
+      solver: root.solver ?? info.solver,
+      scenarios: globalThis.BMOPFModel.resultScenarios(state.result)
+    };
+  }
+
+  function renderResultSummary() {
+    const panel = $("result-summary");
+    if (!state.result) {
+      panel.className = "panel empty-panel";
+      panel.textContent = "No simulation or optimisation results attached.";
+      return;
+    }
+    const meta = resultMetadata();
+    const root = resultRoot();
+    const caseInResult = globalThis.BMOPFModel.resultCase(state.result);
+    const fields = [];
+    if (meta.status !== undefined) fields.push(["status", meta.status]);
+    if (meta.objective !== undefined) fields.push(["objective", meta.objective]);
+    if (meta.solver !== undefined) fields.push(["solver", meta.solver]);
+    if (meta.scenarios.length) fields.push(["scenarios", meta.scenarios.length]);
+    if (caseInResult) fields.push(["embedded case", "yes"]);
+    const warning = state.resultError ? `<p class="result-warning">${escapeHtml(state.resultError)}</p>` : "";
+    const scenarioNote = meta.scenarios.length > 1 ? `<p class="result-warning">Multinetwork result detected (${meta.scenarios.length} slices); scenario selection is planned and no slice is silently chosen.</p>` : "";
+    const identity = root?.case_fingerprint || root?.case_id || root?.meta?.case_fingerprint;
+    const identityHtml = identity ? `<p class="report-meta">case identity <code>${escapeHtml(String(identity))}</code></p>` : "";
+    panel.className = "panel";
+    panel.innerHTML = `<div class="panel-heading"><h2>Results</h2><span class="muted">${escapeHtml(state.resultLabel || "JSON")}</span></div>${fields.length ? `<table class="property-table result-table">${fields.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("")}</table>` : `<p class="muted result-empty">Result records attached; no run summary fields were found.</p>`}${identityHtml}${scenarioNote}${warning}`;
   }
 
   function renderInventory() {
@@ -173,8 +211,14 @@
     const uniqueRelated = related.filter((ref, i, all) => all.findIndex((candidate) => candidate.kind === ref.kind && candidate.id === ref.id) === i && itemFor(ref));
     const relatedHtml = uniqueRelated.length ? `<h3>Related</h3><div class="related">${uniqueRelated.map((r) => `<button class="link-button" data-related-kind="${escapeHtml(r.kind)}" data-related-id="${escapeHtml(r.id)}">${escapeHtml(r.kind)} ${escapeHtml(r.id)}</button>`).join("")}</div>` : "";
     const portHtml = item.ports?.length ? `<h3>Ports</h3><table class="property-table">${item.ports.map((p) => `<tr><th>${escapeHtml(p.role || p.id)}</th><td>${escapeHtml(p.busId)} · [${p.terminals.map(escapeHtml).join(", ")}]</td></tr>`).join("")}</table>` : "";
-    $("inspector").innerHTML = `<h3>${escapeHtml(titleOf(item))}</h3><p class="muted">status: ${escapeHtml(item.status)} · support: ${escapeHtml(item.support || "raw-only")}</p><p class="support-note">${escapeHtml(supportNote)}</p>${relatedHtml}${portHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${keys.map((key) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(record[key]))}</td></tr>`).join("")}</table><details><summary>Raw record</summary><pre class="raw"></pre></details>`;
+    const result = state.result ? globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id) : null;
+    const resultKeys = ["vm", "va", "v_magnitude", "v_angle", "p", "q", "pg", "qg", "loading", "status", "in_service", "residual"];
+    const resultEntries = result && typeof result === "object" ? Object.entries(result).filter(([key]) => resultKeys.includes(key) || key.endsWith("_loading") || key.endsWith("_residual")) : [];
+    const resultHtml = state.result ? (result ? `<h3 class="result-heading">Simulation / optimisation result</h3><table class="property-table result-table">${resultEntries.length ? resultEntries.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("") : `<tr><td colspan="2" class="muted">A result file is attached, but no recognised metrics were found for this record.</td></tr>`}</table><details><summary>Raw result record</summary><pre class="raw result-raw"></pre></details>` : `<p class="muted result-missing">No result record found for this asset.</p>`) : "";
+    $("inspector").innerHTML = `<h3>${escapeHtml(titleOf(item))}</h3><p class="muted">status: ${escapeHtml(item.status)} · support: ${escapeHtml(item.support || "raw-only")}</p><p class="support-note">${escapeHtml(supportNote)}</p>${relatedHtml}${portHtml}${resultHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${keys.map((key) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(record[key]))}</td></tr>`).join("")}</table><details><summary>Raw record</summary><pre class="raw"></pre></details>`;
     $("inspector").querySelector(".raw").textContent = JSON.stringify(record, null, 2);
+    const resultRaw = $("inspector").querySelector(".result-raw");
+    if (resultRaw) resultRaw.textContent = JSON.stringify(result, null, 2);
     $("inspector").querySelectorAll("[data-related-kind]").forEach((button) => button.addEventListener("click", () => select({ kind: button.dataset.relatedKind, id: button.dataset.relatedId })));
   }
 
@@ -443,7 +487,7 @@
     bindCamera();
   }
 
-  function render() { renderSummary(); renderInventory(); renderInspector(); renderView(); renderCameraControls(); renderMultiHopControls(); }
+  function render() { renderSummary(); renderResultSummary(); renderInventory(); renderInspector(); renderView(); renderCameraControls(); renderMultiHopControls(); }
 
   function parseHash() {
     const parts = window.location.hash.slice(2).split("/");
@@ -474,9 +518,51 @@
     reader.readAsText(file);
   }
 
+  function showResultError(message, label) {
+    state.resultError = message;
+    renderResultSummary();
+    setStatus(label ? `${label} was not attached.` : "Results were not attached.");
+  }
+
+  function loadResultDocument(resultDocument, label) {
+    try {
+      const embeddedCase = globalThis.BMOPFModel.resultCase(resultDocument);
+      if (embeddedCase) loadDocument(embeddedCase, `${label || "Results"} · embedded case`);
+      globalThis.BMOPFModel.resultRoot(resultDocument);
+      state.result = resultDocument;
+      state.resultLabel = label || "Results JSON";
+      state.resultError = "";
+      render();
+      setStatus(embeddedCase ? "Results attached with embedded case." : "Results attached to the current case.");
+    } catch (error) {
+      showResultError(error.message, label);
+    }
+  }
+
+  function readResultFile(file) {
+    if (file.size > MAX_FILE_BYTES) {
+      showResultError(`The selected results file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`, file.name);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      let parsed;
+      try { parsed = JSON.parse(reader.result); }
+      catch (error) { showResultError("This file is not valid JSON. Check the file syntax and try again.", file.name); return; }
+      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
+        showResultError(`These results contain more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`, file.name);
+        return;
+      }
+      loadResultDocument(parsed, file.name);
+    };
+    reader.onerror = () => showResultError("The browser could not read this file. Check its permissions and try again.", file.name);
+    reader.readAsText(file);
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     parseHash();
     $("file-input").addEventListener("change", (event) => { if (event.target.files[0]) readFile(event.target.files[0]); });
+    $("result-input").addEventListener("change", (event) => { if (event.target.files[0]) readResultFile(event.target.files[0]); });
     const zone = $("drop-zone");
     zone.addEventListener("dragover", (event) => { event.preventDefault(); zone.classList.add("dragging"); });
     zone.addEventListener("dragleave", () => zone.classList.remove("dragging"));
@@ -484,6 +570,9 @@
     document.querySelectorAll(".view-tab").forEach((button) => button.addEventListener("click", () => { state.view = button.dataset.view; render(); }));
     window.addEventListener("hashchange", () => { parseHash(); render(); });
     const embedded = globalThis.__BMOPF_CASE__;
-    if (embedded) loadDocument(embedded, embedded.name || "Embedded case"); else render();
+    const embeddedResult = globalThis.__BMOPF_RESULT__;
+    if (embedded) loadDocument(embedded, embedded.name || "Embedded case");
+    if (embeddedResult) loadResultDocument(embeddedResult, "Embedded results");
+    if (!embedded && !embeddedResult) render();
   });
 })();

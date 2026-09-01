@@ -8,6 +8,12 @@ case and must never be inferred from the repository's BSD 3-Clause code license.
 `micro/micro_bmopf.json` is authored in this repository and is licensed under
 CC BY 4.0. Its attribution and source are recorded in the JSON `meta` object.
 
+`micro/micro_bmopf_result.json` is an authored, BMOPFTools-compatible result
+sidecar for the micro case. It uses the same CC BY 4.0 attribution and includes
+illustrative objective, termination, bus voltage, device loading, and dispatch
+fields so the browser result adapter can be exercised without redistributing a
+solver-generated dataset.
+
 ## Reused cases
 
 Cases reused from another initiative must remain under their source license.

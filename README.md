@@ -14,6 +14,12 @@ python3 -m http.server 8765 --directory frontend
 
 Open <http://127.0.0.1:8765/> and drop [`fixtures/micro/micro_bmopf.json`](fixtures/micro/micro_bmopf.json) onto the page.
 
+To inspect solved values, use **Attach results JSON** and choose
+[`fixtures/micro/micro_bmopf_result.json`](fixtures/micro/micro_bmopf_result.json)
+after opening the case. Raw BMOPFTools-style result dictionaries are accepted;
+the current adapter shows run metadata and recognised metrics for the selected
+asset while preserving the complete result record for inspection.
+
 The prototype supports:
 
 - Asset-class inventory and search.
@@ -23,6 +29,7 @@ The prototype supports:
 - Bus- and device-focused multi-wire drill-down.
 - Local-only case loading with no runtime backend.
 - Browser-side guardrails for invalid JSON and oversized case files.
+- Optional BMOPFTools-style result JSON sidecars with objective/status summary and asset-level metrics.
 
 ## Generate a static Julia report
 

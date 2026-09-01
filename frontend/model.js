@@ -201,5 +201,37 @@
     };
   }
 
-  globalThis.BMOPFModel = { buildCaseIndex };
+  function resultRoot(document) {
+    if (!isObject(document)) throw new Error("The result must be a JSON object.");
+    if (isObject(document.result)) return document.result;
+    if (isObject(document.results)) return document.results;
+    return document;
+  }
+
+  function resultCase(document) {
+    if (!isObject(document)) return null;
+    return isObject(document.case) ? document.case : isObject(document.network) ? document.network : null;
+  }
+
+  function resultRecord(document, kind, id, scenario) {
+    const root = resultRoot(document);
+    const candidates = [];
+    if (scenario && isObject(root.nw?.[scenario])) candidates.push(root.nw[scenario]);
+    if (isObject(root.nw)) {
+      for (const value of Object.values(root.nw)) if (isObject(value)) candidates.push(value);
+    }
+    candidates.push(root);
+    for (const candidate of candidates) {
+      const table = candidate?.[kind];
+      if (isObject(table) && table[id] !== undefined) return table[id];
+    }
+    return null;
+  }
+
+  function resultScenarios(document) {
+    const root = resultRoot(document);
+    return isObject(root.nw) ? Object.keys(root.nw) : [];
+  }
+
+  globalThis.BMOPFModel = { buildCaseIndex, resultRoot, resultCase, resultRecord, resultScenarios };
 })();

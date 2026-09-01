@@ -18,7 +18,9 @@ button, input { font: inherit; }
 h1, h2, h3, p { margin-top: 0; }
 h1 { margin-bottom: 0; font-size: 22px; }
 h2 { margin-bottom: 0; font-size: 15px; }
+.file-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .file-button { display: inline-block; padding: 8px 13px; color: white; background: var(--accent); border-radius: 6px; cursor: pointer; font-weight: 600; }
+.file-button.secondary { color: var(--accent); background: var(--accent-soft); border: 1px solid #b9cfe5; }
 .file-button input { display: none; }
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; min-height: calc(100vh - 83px); }
 .workspace { min-width: 0; padding: 20px; }
@@ -52,6 +54,11 @@ h2 { margin-bottom: 0; font-size: 15px; }
 .report-meta { margin: 0; padding: 0 14px 12px; color: var(--muted); font-size: 11px; }
 .support-meta, .support-note { margin: 0; padding: 0 14px 12px; color: var(--muted); font-size: 11px; }
 .support-note { padding: 0; }
+.result-table { margin: 0 14px 10px; width: calc(100% - 28px); }
+.result-empty, .result-missing { margin: 0; padding: 10px 14px 12px; }
+.result-heading { margin-top: 14px !important; }
+.result-warning { margin: 0; padding: 0 14px 10px; color: #8a4d20; font-size: 12px; }
+.result-raw { margin-top: 8px !important; }
 .inventory-list { max-height: 240px; overflow: auto; padding: 5px 0; }
 .inventory-row { display: flex; width: 100%; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid #eee9e1; padding: 7px 14px; color: var(--ink); background: transparent; cursor: pointer; text-align: left; }
 .inventory-row:hover, .inventory-row.selected { background: var(--accent-soft); }

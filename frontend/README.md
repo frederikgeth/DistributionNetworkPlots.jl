@@ -10,6 +10,13 @@ python3 -m http.server 8765 --directory frontend
 
 Open <http://127.0.0.1:8765/> and drop `fixtures/micro/micro_bmopf.json` onto the page. The prototype supports:
 
+Attach a BMOPFTools-style result JSON with the secondary file control after
+opening a case. Raw result dictionaries and wrappers with an embedded
+`case`/`network` are accepted. Run status/objective metadata appears in the
+Results panel; recognised values for the selected asset appear in the
+inspector, alongside a raw result-record view. Multinetwork `nw` results are
+identified and deliberately left for the planned scenario selector.
+
 - Asset inventory and search.
 - Source-property inspection and raw-record display.
 - Endpoint links from devices to buses.

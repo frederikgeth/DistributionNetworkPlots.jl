@@ -12,7 +12,10 @@
       <p class="eyebrow">DistributionNetworkPlots.jl</p>
       <h1>BMOPF Explorer</h1>
     </div>
-    <label class="file-button">Open JSON<input id="file-input" type="file" accept=".json,application/json"></label>
+    <div class="file-actions">
+      <label class="file-button">Open case JSON<input id="file-input" type="file" accept=".json,application/json"></label>
+      <label class="file-button secondary">Attach results JSON<input id="result-input" type="file" accept=".json,application/json"></label>
+    </div>
   </header>
 
   <main class="layout">
@@ -31,6 +34,7 @@
 
     <aside class="sidebar" aria-label="Case details">
       <div id="case-summary" class="panel empty-panel">Open a case to begin exploring it.</div>
+      <div id="result-summary" class="panel empty-panel">No simulation or optimisation results attached.</div>
       <div id="inventory" class="panel"></div>
       <div class="panel inspector-panel">
         <div class="panel-heading"><h2>Inspector</h2><span id="selection-label" class="muted">Nothing selected</span></div>
