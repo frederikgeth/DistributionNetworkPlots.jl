@@ -47,8 +47,9 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Class overview summarizes asset counts, support levels, and available result ranges with filter links.
 - [x] Support configurable single-line reading direction and feeder-root selection, persisted with the case layout.
 - [x] Optional ELK Layered layout can be applied from the browser and persisted, with deterministic offline fallback.
+- [x] Run optional ELK layout computation in a Web Worker so the browser UI remains responsive during layout.
 - [x] Publish an explicit overview SVG budget and switch oversized geospatial/single-line cases to a focused one-hop fallback.
-- [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
+- [ ] Replace prototype renderer packages and vendor the ELK bundle for fully offline production reports.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
 
 Time boxes below are indicative for one primary developer. Scope is fixed within a slice; time is not a promise.
@@ -192,7 +193,7 @@ Small realistic cases are legible and explorable in the two overview views.
 - Optional online basemap configuration and attribution.
 - Coordinate-space and coordinate-coverage diagnostics.
 - Device routes when supplied; straight endpoint paths otherwise.
-- ELK layered layout in a Web Worker.
+- ELK layered layout in a Web Worker (prototype delivered; production bundle and cache remain open).
 - Single-wire symbols for bus, line, switch, transformer, source, load, generator, IBR, shunt, and capacitor.
 - Open/out-of-service styling.
 - Pan, zoom, fit-all, and focus-selection behaviour.
@@ -400,7 +401,7 @@ A slice is done only when:
 - Shared selection and hash navigation.
 - Walking skeleton of all three views.
 - MapLibre geospatial view with tile-free mode.
-- ELK single-wire layout.
+- [x] ELK single-wire layout.
 - Focused multi-wire view.
 - Julia static report generation.
 - End-to-end critical workflow test.
@@ -412,7 +413,7 @@ A slice is done only when:
 - Asset property aggregates and richer class overviews.
 - Search result highlighting and keyboard shortcuts.
 - Large-case profiling and targeted renderer upgrades.
-- Theme and print stylesheet.
+- [x] Theme and print stylesheet.
 
 ### Results-aware visualisation: next vertical slices
 

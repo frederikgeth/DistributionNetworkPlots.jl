@@ -51,7 +51,7 @@ The prototype supports:
 - Export of the active view as a 2× PNG, plus a print stylesheet for clean diagram output.
 - Locally persisted single-line bus adjustments with per-bus nudge, lock/unlock, and reset controls.
 - Configurable single-line direction and feeder-root selection, also persisted per case.
-- Optional ELK Layered layout enhancement with deterministic offline fallback; generated reports remain usable without the bundle.
+- Optional worker-backed ELK Layered layout enhancement with deterministic offline fallback; generated reports remain usable without the bundle.
 - Class overview with asset counts, support-level breakdowns, and result ranges; class links filter the explorer.
 - Explicit overview SVG budgets with a focused one-hop fallback for oversized cases.
 

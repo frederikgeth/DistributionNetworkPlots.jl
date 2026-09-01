@@ -83,28 +83,42 @@
     try { localStorage.setItem(`bmopf-layout-v1:${state.layout.key}`, JSON.stringify(state.layout)); } catch (_) { /* ignore unavailable storage */ }
   }
 
-  let elkPromise = null;
-  function ensureElk() {
-    if (typeof globalThis.ELK === "function") return Promise.resolve(globalThis.ELK);
-    if (elkPromise) return elkPromise;
-    elkPromise = new Promise((resolve, reject) => {
-      const existing = document.querySelector("script[data-elk-bundle]");
-      if (existing) { existing.addEventListener("load", () => resolve(globalThis.ELK)); existing.addEventListener("error", () => reject(new Error("The ELK browser bundle could not be loaded."))); return; }
-      const script = document.createElement("script");
-      script.dataset.elkBundle = "true";
-      script.src = "https://cdn.jsdelivr.net/npm/elkjs@0.10.2/lib/elk.bundled.js";
-      script.onload = () => typeof globalThis.ELK === "function" ? resolve(globalThis.ELK) : reject(new Error("The ELK browser bundle loaded without exposing its layout engine."));
-      script.onerror = () => reject(new Error("The ELK browser bundle could not be loaded. The deterministic layout remains available offline."));
-      document.head.appendChild(script);
+  let elkWorker = null;
+  let elkBusy = false;
+  function elkErrorMessage(error) {
+    const message = error && error.message ? String(error.message) : String(error || "unknown error");
+    return /worker.*not a constructor|_worker/i.test(message) ? "Web Workers are not available in this browser." : message;
+  }
+  function ensureElkWorker() {
+    const WorkerCtor = typeof globalThis.Worker === "function" ? globalThis.Worker : null;
+    const createObjectURL = globalThis.URL && typeof globalThis.URL.createObjectURL === "function" ? globalThis.URL.createObjectURL.bind(globalThis.URL) : null;
+    if (!WorkerCtor || !createObjectURL) throw new Error("Web Workers are not available in this browser.");
+    if (elkWorker) return elkWorker;
+    const source = 'importScripts("https://cdn.jsdelivr.net/npm/elkjs@0.10.2/lib/elk.bundled.js"); self.onmessage = async function(event) { try { const result = await new self.ELK().layout(event.data); self.postMessage({ ok: true, result: result }); } catch (error) { self.postMessage({ ok: false, error: error && error.message ? error.message : String(error) }); } };';
+    const blobUrl = createObjectURL(new Blob([source], { type: "text/javascript" }));
+    elkWorker = new WorkerCtor(blobUrl); setTimeout(() => globalThis.URL.revokeObjectURL(blobUrl), 1000);
+    return elkWorker;
+  }
+
+  function layoutWithElkWorker(graph) {
+    const worker = ensureElkWorker();
+    return new Promise((resolve, reject) => {
+      const cleanup = () => { worker.removeEventListener("message", receive); worker.removeEventListener("error", fail); worker.removeEventListener("messageerror", fail); };
+      const receive = (event) => { cleanup(); event.data?.ok ? resolve(event.data.result) : reject(new Error(event.data?.error || "ELK worker layout failed.")); };
+      const fail = (event) => { cleanup(); elkWorker = null; reject(new Error(elkErrorMessage(event))); };
+      worker.addEventListener("message", receive);
+      worker.addEventListener("error", fail);
+      worker.addEventListener("messageerror", fail);
+      try { worker.postMessage(graph); } catch (error) { fail(error); }
     });
-    return elkPromise;
   }
 
   async function applyElkLayout() {
     if (!state.index || state.view !== "single") return;
+    if (elkBusy) return;
+    elkBusy = true;
     setStatus("Loading ELK layered layout…");
     try {
-      const Elk = await ensureElk();
       const graph = { id: "bmopf-root", layoutOptions: { "elk.algorithm": "layered", "elk.direction": state.layout.direction === "load-to-source" ? "LEFT" : "RIGHT", "elk.edgeRouting": "ORTHOGONAL", "elk.spacing.nodeNode": "36", "elk.layered.spacing.nodeNodeBetweenLayers": "100" }, children: state.index.buses.map((bus) => ({ id: `bus:${bus.ref.id}`, width: 84, height: 24, ports: [{ id: `port:${bus.ref.id}`, width: 4, height: 4, layoutOptions: { "elk.port.side": state.layout.direction === "load-to-source" ? "EAST" : "WEST" } }] })), edges: [] };
       const busIds = new Set(state.index.buses.map((bus) => bus.ref.id));
       state.index.assets.forEach((item) => {
@@ -112,7 +126,7 @@
         const from = ports[0].busId; if (!busIds.has(from)) return;
         ports.slice(1).forEach((port) => { if (busIds.has(port.busId)) graph.edges.push({ id: `edge:${item.ref.kind}:${item.ref.id}:${from}:${port.busId}`, sources: [`port:${from}`], targets: [`port:${port.busId}`] }); });
       });
-      const result = await new Elk().layout(graph);
+      const result = await layoutWithElkWorker(graph);
       const children = result.children || [];
       const xs = children.map((node) => Number(node.x) || 0); const ys = children.map((node) => Number(node.y) || 0);
       const minX = Math.min(...xs, 0); const maxX = Math.max(...xs, 1); const minY = Math.min(...ys, 0); const maxY = Math.max(...ys, 1);
@@ -123,10 +137,12 @@
         nextLocked[id] = [70 + ((Number(node.x) - minX + 42) * scale), 70 + ((Number(node.y) - minY + 12) * scale)];
       });
       state.layout.locked = nextLocked; state.layout.engine = "elk"; saveLayout(); renderView(); renderCameraControls();
-      setStatus(`ELK layered layout applied to ${children.length} buses; positions are now locally persisted.`);
+      setStatus(`ELK layered layout applied in a worker to ${children.length} buses; positions are now locally persisted.`);
     } catch (error) {
-      setStatus(`ELK layout unavailable: ${error.message}`);
+      setStatus(`ELK layout unavailable: ${elkErrorMessage(error)}`);
       state.layout.engine = "deterministic";
+    } finally {
+      elkBusy = false;
     }
   }
 
