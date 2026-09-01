@@ -46,6 +46,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Persist versioned single-line bus adjustments per case, with nudge, lock/unlock, and reset-to-computed controls.
 - [x] Class overview summarizes asset counts, support levels, and available result ranges with filter links.
 - [x] Support configurable single-line reading direction and feeder-root selection, persisted with the case layout.
+- [x] Optional ELK Layered layout can be applied from the browser and persisted, with deterministic offline fallback.
 - [x] Publish an explicit overview SVG budget and switch oversized geospatial/single-line cases to a focused one-hop fallback.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.

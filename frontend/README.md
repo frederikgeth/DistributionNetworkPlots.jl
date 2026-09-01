@@ -49,7 +49,7 @@ open/out-of-service states use dash and opacity. Legends explain these cues
 without relying on colour alone. The thresholds are illustrative display bands,
 not equipment protection limits.
 
-The prototype intentionally has no external basemap or runtime backend. Its layout is deterministic and is not yet the final ELK-backed renderer.
+The prototype intentionally has no external basemap or runtime backend. Its layout is deterministic by default. The Single-wire controls can optionally load the pinned ELK Layered browser bundle (`elkjs@0.10.2`) and persist the resulting positions; if the bundle is unavailable, the deterministic layout remains usable offline.
 
 Julia-generated reports display reproducibility metadata for the embedded case and renderer.
 The report metadata uses the versioned `sha256-json3-v1` fingerprint convention.

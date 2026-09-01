@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { key: null, locked: {}, direction: "source-to-load", root: "auto" }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { key: null, locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic" }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -73,14 +73,61 @@
     const key = layoutKey();
     try {
       const stored = JSON.parse(localStorage.getItem(`bmopf-layout-v1:${key}`) || "null");
-      if (stored && stored.version === 1 && stored.key === key && stored.locked && typeof stored.locked === "object") return { ...stored, direction: stored.direction === "load-to-source" ? stored.direction : "source-to-load", root: typeof stored.root === "string" ? stored.root : "auto" };
+      if (stored && stored.version === 1 && stored.key === key && stored.locked && typeof stored.locked === "object") return { ...stored, direction: stored.direction === "load-to-source" ? stored.direction : "source-to-load", root: typeof stored.root === "string" ? stored.root : "auto", engine: stored.engine === "elk" ? "elk" : "deterministic" };
     } catch (_) { /* localStorage is optional in static reports */ }
-    return { version: 1, key, locked: {}, direction: "source-to-load", root: "auto" };
+    return { version: 1, key, locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic" };
   }
 
   function saveLayout() {
     if (!state.layout?.key) return;
     try { localStorage.setItem(`bmopf-layout-v1:${state.layout.key}`, JSON.stringify(state.layout)); } catch (_) { /* ignore unavailable storage */ }
+  }
+
+  let elkPromise = null;
+  function ensureElk() {
+    if (typeof globalThis.ELK === "function") return Promise.resolve(globalThis.ELK);
+    if (elkPromise) return elkPromise;
+    elkPromise = new Promise((resolve, reject) => {
+      const existing = document.querySelector("script[data-elk-bundle]");
+      if (existing) { existing.addEventListener("load", () => resolve(globalThis.ELK)); existing.addEventListener("error", () => reject(new Error("The ELK browser bundle could not be loaded."))); return; }
+      const script = document.createElement("script");
+      script.dataset.elkBundle = "true";
+      script.src = "https://cdn.jsdelivr.net/npm/elkjs@0.10.2/lib/elk.bundled.js";
+      script.onload = () => typeof globalThis.ELK === "function" ? resolve(globalThis.ELK) : reject(new Error("The ELK browser bundle loaded without exposing its layout engine."));
+      script.onerror = () => reject(new Error("The ELK browser bundle could not be loaded. The deterministic layout remains available offline."));
+      document.head.appendChild(script);
+    });
+    return elkPromise;
+  }
+
+  async function applyElkLayout() {
+    if (!state.index || state.view !== "single") return;
+    setStatus("Loading ELK layered layout…");
+    try {
+      const Elk = await ensureElk();
+      const graph = { id: "bmopf-root", layoutOptions: { "elk.algorithm": "layered", "elk.direction": state.layout.direction === "load-to-source" ? "LEFT" : "RIGHT", "elk.edgeRouting": "ORTHOGONAL", "elk.spacing.nodeNode": "36", "elk.layered.spacing.nodeNodeBetweenLayers": "100" }, children: state.index.buses.map((bus) => ({ id: `bus:${bus.ref.id}`, width: 84, height: 24, ports: [{ id: `port:${bus.ref.id}`, width: 4, height: 4, layoutOptions: { "elk.port.side": state.layout.direction === "load-to-source" ? "EAST" : "WEST" } }] })), edges: [] };
+      const busIds = new Set(state.index.buses.map((bus) => bus.ref.id));
+      state.index.assets.forEach((item) => {
+        const ports = item.ports || []; if (ports.length < 2) return;
+        const from = ports[0].busId; if (!busIds.has(from)) return;
+        ports.slice(1).forEach((port) => { if (busIds.has(port.busId)) graph.edges.push({ id: `edge:${item.ref.kind}:${item.ref.id}:${from}:${port.busId}`, sources: [`port:${from}`], targets: [`port:${port.busId}`] }); });
+      });
+      const result = await new Elk().layout(graph);
+      const children = result.children || [];
+      const xs = children.map((node) => Number(node.x) || 0); const ys = children.map((node) => Number(node.y) || 0);
+      const minX = Math.min(...xs, 0); const maxX = Math.max(...xs, 1); const minY = Math.min(...ys, 0); const maxY = Math.max(...ys, 1);
+      const scale = Math.min(1, 650 / Math.max(maxX - minX + 84, 1), 360 / Math.max(maxY - minY + 24, 1));
+      const nextLocked = {};
+      children.forEach((node) => {
+        const id = String(node.id).replace(/^bus:/, "");
+        nextLocked[id] = [70 + ((Number(node.x) - minX + 42) * scale), 70 + ((Number(node.y) - minY + 12) * scale)];
+      });
+      state.layout.locked = nextLocked; state.layout.engine = "elk"; saveLayout(); renderView(); renderCameraControls();
+      setStatus(`ELK layered layout applied to ${children.length} buses; positions are now locally persisted.`);
+    } catch (error) {
+      setStatus(`ELK layout unavailable: ${error.message}`);
+      state.layout.engine = "deterministic";
+    }
   }
 
   function layoutLocked(id) { return Array.isArray(state.layout?.locked?.[id]); }
@@ -94,7 +141,7 @@
   }
 
   function resetLayout() {
-    state.layout = { version: 1, key: layoutKey(), locked: {}, direction: "source-to-load", root: "auto" };
+    state.layout = { version: 1, key: layoutKey(), locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic" };
     saveLayout();
     renderView(); renderCameraControls();
     setStatus("Single-line layout reset to the computed source-to-load arrangement.");
@@ -104,6 +151,7 @@
     document.querySelectorAll("[data-layout]").forEach((button) => button.addEventListener("click", () => {
       const item = itemFor(state.selected);
       if (button.dataset.layout === "reset") { resetLayout(); return; }
+      if (button.dataset.layout === "elk") { applyElkLayout(); return; }
       if (!item || item.ref.kind !== "bus") return;
       if (button.dataset.layout === "lock") {
         const point = singlePositions().get(item.ref.id); if (point) state.layout.locked[item.ref.id] = [...point];
@@ -619,6 +667,10 @@
     const layoutControls = state.view === "single"
       ? `<span class="layout-label">Layout:</span><label class="layout-select">Direction<select id="sld-direction" aria-label="Single-line direction"><option value="source-to-load" ${state.layout.direction === "source-to-load" ? "selected" : ""}>Source → load</option><option value="load-to-source" ${state.layout.direction === "load-to-source" ? "selected" : ""}>Load → source</option></select></label><label class="layout-select">Root<select id="sld-root" aria-label="Single-line root bus"><option value="auto" ${state.layout.root === "auto" ? "selected" : ""}>Automatic</option>${state.index.buses.map((bus) => `<option value="${escapeHtml(bus.ref.id)}" ${state.layout.root === bus.ref.id ? "selected" : ""}>${escapeHtml(bus.ref.id)}</option>`).join("")}</select></label><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
     controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export-svg">Export SVG</button><button data-camera="export-png">Export PNG</button>${layoutControls}`;
+    if (state.view === "single") {
+      const elkButton = document.createElement("button"); elkButton.dataset.layout = "elk"; elkButton.textContent = "Apply ELK layout";
+      controls.querySelector('[data-layout="left"]')?.before(elkButton);
+    }
     controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
       const camera = state.cameras[state.view];
       if (button.dataset.camera === "zoom-in") camera.scale = Math.min(3, camera.scale * 1.25);
@@ -890,7 +942,8 @@
     content += resultLegend();
     const directionLabel = state.layout?.direction === "load-to-source" ? "load-to-source" : "source-to-load";
     const rootLabel = state.layout?.root && state.layout.root !== "auto" ? ` · root ${state.layout.root}` : " · automatic feeder root";
-    setStatus(`Single-line diagram: ${directionLabel} layered layout${rootLabel} with conventional busbars and device symbols.`);
+    const engineLabel = state.layout?.engine === "elk" ? " · ELK" : " · deterministic";
+    setStatus(`Single-line diagram: ${directionLabel} layered layout${rootLabel}${engineLabel} with conventional busbars and device symbols.`);
     $("canvas").innerHTML = svgShell(content);
     bindSvgSelection();
   }
