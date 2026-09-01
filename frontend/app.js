@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { key: null, locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic" }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { version: 2, key: null, locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -69,18 +69,58 @@
     return String(meta.case_fingerprint || meta.case_id || state.index?.name || "unnamed-case");
   }
 
+  function layoutProfileKey(direction, root) {
+    const safeDirection = direction === "load-to-source" ? "load-to-source" : "source-to-load";
+    const safeRoot = typeof root === "string" && root ? root : "auto";
+    return `direction=${safeDirection};root=${safeRoot}`;
+  }
+
+  function normaliseLayoutProfile(profile) {
+    if (!profile || typeof profile !== "object") return { locked: {}, engine: "deterministic" };
+    const locked = profile.locked && typeof profile.locked === "object" ? profile.locked : {};
+    return { locked, engine: profile.engine === "elk" ? "elk" : "deterministic" };
+  }
+
   function loadLayout() {
     const key = layoutKey();
     try {
-      const stored = JSON.parse(localStorage.getItem(`bmopf-layout-v1:${key}`) || "null");
-      if (stored && stored.version === 1 && stored.key === key && stored.locked && typeof stored.locked === "object") return { ...stored, direction: stored.direction === "load-to-source" ? stored.direction : "source-to-load", root: typeof stored.root === "string" ? stored.root : "auto", engine: stored.engine === "elk" ? "elk" : "deterministic" };
+      const stored = JSON.parse(localStorage.getItem(`bmopf-layout-v2:${key}`) || "null");
+      if (stored && stored.version === 2 && stored.key === key && stored.profiles && typeof stored.profiles === "object") {
+        const direction = stored.direction === "load-to-source" ? stored.direction : "source-to-load";
+        const root = typeof stored.root === "string" ? stored.root : "auto";
+        const profile = normaliseLayoutProfile(stored.profiles[layoutProfileKey(direction, root)]);
+        return { version: 2, key, locked: profile.locked, direction, root, engine: profile.engine, profiles: stored.profiles };
+      }
+      const legacy = JSON.parse(localStorage.getItem(`bmopf-layout-v1:${key}`) || "null");
+      if (legacy && legacy.version === 1 && legacy.key === key && legacy.locked && typeof legacy.locked === "object") {
+        const direction = legacy.direction === "load-to-source" ? legacy.direction : "source-to-load";
+        const root = typeof legacy.root === "string" ? legacy.root : "auto";
+        const profileKey = layoutProfileKey(direction, root);
+        return { version: 2, key, locked: legacy.locked, direction, root, engine: legacy.engine === "elk" ? "elk" : "deterministic", profiles: { [profileKey]: { locked: legacy.locked, engine: legacy.engine === "elk" ? "elk" : "deterministic" } } };
+      }
     } catch (_) { /* localStorage is optional in static reports */ }
-    return { version: 1, key, locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic" };
+    return { version: 2, key, locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} };
   }
 
   function saveLayout() {
     if (!state.layout?.key) return;
-    try { localStorage.setItem(`bmopf-layout-v1:${state.layout.key}`, JSON.stringify(state.layout)); } catch (_) { /* ignore unavailable storage */ }
+    try {
+      const profileKey = layoutProfileKey(state.layout.direction, state.layout.root);
+      const profiles = { ...(state.layout.profiles || {}), [profileKey]: { locked: state.layout.locked || {}, engine: state.layout.engine === "elk" ? "elk" : "deterministic" } };
+      state.layout.profiles = profiles;
+      localStorage.setItem(`bmopf-layout-v2:${state.layout.key}`, JSON.stringify({ version: 2, key: state.layout.key, direction: state.layout.direction, root: state.layout.root, profiles }));
+    } catch (_) { /* ignore unavailable storage */ }
+  }
+
+  function switchLayoutProfile(direction, root) {
+    const nextDirection = direction === "load-to-source" ? direction : "source-to-load";
+    const nextRoot = typeof root === "string" && root ? root : "auto";
+    const profile = normaliseLayoutProfile(state.layout.profiles?.[layoutProfileKey(nextDirection, nextRoot)]);
+    state.layout.direction = nextDirection;
+    state.layout.root = nextRoot;
+    state.layout.locked = profile.locked;
+    state.layout.engine = profile.engine;
+    saveLayout();
   }
 
   let elkWorker = null;
@@ -94,7 +134,10 @@
     const createObjectURL = globalThis.URL && typeof globalThis.URL.createObjectURL === "function" ? globalThis.URL.createObjectURL.bind(globalThis.URL) : null;
     if (!WorkerCtor || !createObjectURL) throw new Error("Web Workers are not available in this browser.");
     if (elkWorker) return elkWorker;
-    const source = 'importScripts("https://cdn.jsdelivr.net/npm/elkjs@0.10.2/lib/elk.bundled.js"); self.onmessage = async function(event) { try { const result = await new self.ELK().layout(event.data); self.postMessage({ ok: true, result: result }); } catch (error) { self.postMessage({ ok: false, error: error && error.message ? error.message : String(error) }); } };';
+    const handler = 'self.onmessage = async function(event) { try { const result = await new self.ELK().layout(event.data); self.postMessage({ ok: true, result: result }); } catch (error) { self.postMessage({ ok: false, error: error && error.message ? error.message : String(error) }); } };';
+    const embeddedBundle = typeof globalThis.__BMOPF_ELK_BUNDLE_SOURCE__ === "string" ? globalThis.__BMOPF_ELK_BUNDLE_SOURCE__ : null;
+    const bundleUrl = (() => { try { return new URL("vendor/elk.bundled.js", document.baseURI).href; } catch (_) { return "vendor/elk.bundled.js"; } })();
+    const source = embeddedBundle ? `${embeddedBundle}\n${handler}` : `importScripts(${JSON.stringify(bundleUrl)});${handler}`;
     const blobUrl = createObjectURL(new Blob([source], { type: "text/javascript" }));
     elkWorker = new WorkerCtor(blobUrl); setTimeout(() => globalThis.URL.revokeObjectURL(blobUrl), 1000);
     return elkWorker;
@@ -157,7 +200,7 @@
   }
 
   function resetLayout() {
-    state.layout = { version: 1, key: layoutKey(), locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic" };
+    state.layout = { version: 2, key: layoutKey(), locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} };
     saveLayout();
     renderView(); renderCameraControls();
     setStatus("Single-line layout reset to the computed source-to-load arrangement.");
@@ -698,9 +741,9 @@
       updateCamera();
     }));
     const direction = $("sld-direction");
-    if (direction) direction.addEventListener("change", (event) => { state.layout.direction = event.target.value; saveLayout(); renderView(); renderCameraControls(); });
+    if (direction) direction.addEventListener("change", (event) => { switchLayoutProfile(event.target.value, state.layout.root); renderView(); renderCameraControls(); });
     const root = $("sld-root");
-    if (root) root.addEventListener("change", (event) => { state.layout.root = event.target.value; saveLayout(); renderView(); renderCameraControls(); });
+    if (root) root.addEventListener("change", (event) => { switchLayoutProfile(state.layout.direction, event.target.value); renderView(); renderCameraControls(); });
     bindLayoutControls();
   }
 

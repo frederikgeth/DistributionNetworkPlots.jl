@@ -61,8 +61,10 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
     model = read(joinpath(FRONTEND_DIR, "model.js"), String)
     app = read(joinpath(FRONTEND_DIR, "app.js"), String)
     css = read(joinpath(FRONTEND_DIR, "styles.css"), String)
+    elk_bundle = read(joinpath(FRONTEND_DIR, "vendor", "elk.bundled.js"), String)
     embedded = _safe_json(case)
     report_metadata = _safe_json(_report_metadata(case, result))
+    elk_script = _safe_json(elk_bundle)
     html_title = _html_escape(title)
     result_script = result === nothing ? "" : " globalThis.__BMOPF_RESULT__ = $(_safe_json(result));"
 
@@ -71,7 +73,7 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
         "<link rel=\"stylesheet\" href=\"styles.css\">" => "<style>$(css)</style>",
         "<script src=\"examples.js\"></script>" => "<script>$(examples)</script>",
         "<script src=\"model.js\"></script>" => "<script>$(model)</script>",
-        "<script src=\"app.js\"></script>" => "<script>globalThis.__BMOPF_REPORT_META__ = $(report_metadata); globalThis.__BMOPF_CASE__ = $(embedded);$(result_script)</script><script>$(app)</script>",
+        "<script src=\"app.js\"></script>" => "<script>globalThis.__BMOPF_REPORT_META__ = $(report_metadata); globalThis.__BMOPF_CASE__ = $(embedded); globalThis.__BMOPF_ELK_BUNDLE_SOURCE__ = $(elk_script);$(result_script)</script><script>$(app)</script>",
     )
 
     mkpath(dirname(abspath(output)))

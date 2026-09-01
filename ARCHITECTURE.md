@@ -305,7 +305,7 @@ Projection rules:
 - Attachments remain addressable even when drawn as badges or compact symbols.
 - Voltage levels, feeder roots, and containment may influence layout without changing topology.
 
-ELK layered layout is the default candidate because it supports explicit ports and orthogonal routing. The prototype now exposes an optional pinned `elkjs` enhancement from the Single-wire controls; its computed bus positions are calculated in a Web Worker and persisted by case identity, while deterministic layout remains the offline fallback. Production integration still needs a vendored bundle, production renderer packages, and cache entries keyed by case fingerprint plus layout options. Layout never mutates the source case.
+ELK layered layout is the default candidate because it supports explicit ports and orthogonal routing. The prototype now exposes an optional pinned, vendored `elkjs` enhancement from the Single-wire controls; its computed bus positions are calculated in a Web Worker and cached by case identity, direction, and root bus, while deterministic layout remains the offline fallback. Julia-generated reports embed the bundle so the option remains available offline. Production integration still needs production renderer packages and a more formal layout-cache invalidation policy. Layout never mutates the source case.
 
 ### 7.3 Multi-wire projection
 

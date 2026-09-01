@@ -1,0 +1,11 @@
+{
+  "name": "distribution-network-plots",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:browser": "node --test test/browser_smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.52.0"
+  }
+}

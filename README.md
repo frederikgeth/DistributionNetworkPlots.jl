@@ -51,7 +51,7 @@ The prototype supports:
 - Export of the active view as a 2× PNG, plus a print stylesheet for clean diagram output.
 - Locally persisted single-line bus adjustments with per-bus nudge, lock/unlock, and reset controls.
 - Configurable single-line direction and feeder-root selection, also persisted per case.
-- Optional worker-backed ELK Layered layout enhancement with deterministic offline fallback; generated reports remain usable without the bundle.
+- Optional worker-backed, vendored ELK Layered layout enhancement with deterministic offline fallback; generated reports embed the pinned bundle for offline use.
 - Class overview with asset counts, support-level breakdowns, and result ranges; class links filter the explorer.
 - Explicit overview SVG budgets with a focused one-hop fallback for oversized cases.
 
@@ -79,6 +79,14 @@ Cases reused from another initiative are not relicensed by this project. Keep ea
 
 ```sh
 julia --project=. -e 'using Pkg; Pkg.test()'
+```
+
+Optional browser end-to-end smoke test (requires Node.js and Playwright):
+
+```bash
+npm install
+npx playwright install chromium
+npm run test:browser
 ```
 
 ## Project references

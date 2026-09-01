@@ -1,0 +1,60 @@
+import assert from "node:assert/strict";
+import { createServer } from "node:http";
+import { readFile } from "node:fs/promises";
+import { extname, normalize, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+import { chromium } from "playwright";
+
+const frontendRoot = resolve(fileURLToPath(new URL("../frontend/", import.meta.url)));
+const contentTypes = { ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".html": "text/html" };
+
+function startStaticServer() {
+  const server = createServer(async (request, response) => {
+    try {
+      const pathname = decodeURIComponent((request.url || "/").split("?", 1)[0]);
+      const relative = pathname === "/" ? "/index.html" : pathname;
+      const candidate = resolve(frontendRoot, `.${normalize(relative)}`);
+      if (!candidate.startsWith(frontendRoot)) throw new Error("Invalid path");
+      const body = await readFile(candidate);
+      response.writeHead(200, { "content-type": contentTypes[extname(candidate)] || "application/octet-stream" });
+      response.end(body);
+    } catch (_) {
+      response.writeHead(404);
+      response.end("Not found");
+    }
+  });
+  return new Promise((resolveServer) => server.listen(0, "127.0.0.1", () => resolveServer(server)));
+}
+
+const server = await startStaticServer();
+const address = server.address();
+const baseUrl = `http://127.0.0.1:${address.port}/`;
+
+try {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage();
+    const consoleErrors = [];
+    page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
+    await page.goto(baseUrl, { waitUntil: "networkidle" });
+    await page.getByRole("tab", { name: "Single-wire" }).click();
+    await page.getByRole("button", { name: "Apply ELK layout" }).click();
+    await page.locator("#view-status").waitFor({ state: "visible" });
+    await page.waitForFunction(() => document.querySelector("#view-status")?.textContent.includes("ELK layered layout applied"), null, { timeout: 15000 });
+    const cache = await page.evaluate(() => Object.entries(localStorage).find(([key]) => key.startsWith("bmopf-layout-v2:"))?.[1] || "");
+    const parsedCache = JSON.parse(cache);
+    assert.equal(parsedCache.version, 2);
+    assert.ok(Object.keys(parsedCache.profiles).some((key) => key.includes("direction=source-to-load")));
+    await page.locator("#sld-direction").selectOption("load-to-source");
+    await page.locator("#sld-direction").selectOption("source-to-load");
+    const profilesAfterSwitch = await page.evaluate(() => Object.values(localStorage).map((value) => { try { return JSON.parse(value); } catch (_) { return null; } }).find((value) => value?.version === 2)?.profiles || {});
+    assert.ok(Object.keys(profilesAfterSwitch).some((key) => key.includes("direction=load-to-source")));
+    const profileCount = await page.evaluate(() => Object.values(localStorage).filter((value) => value.includes('"version":2')).length);
+    assert.equal(profileCount, 1);
+    assert.deepEqual(consoleErrors, []);
+  } finally {
+    await browser.close();
+  }
+} finally {
+  await new Promise((resolveServer) => server.close(resolveServer));
+}

@@ -48,9 +48,10 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Support configurable single-line reading direction and feeder-root selection, persisted with the case layout.
 - [x] Optional ELK Layered layout can be applied from the browser and persisted, with deterministic offline fallback.
 - [x] Run optional ELK layout computation in a Web Worker so the browser UI remains responsive during layout.
+- [x] Vendor the pinned ELK browser bundle, embed it in Julia reports, and cache layout profiles by case and layout options.
 - [x] Publish an explicit overview SVG budget and switch oversized geospatial/single-line cases to a focused one-hop fallback.
-- [ ] Replace prototype renderer packages and vendor the ELK bundle for fully offline production reports.
-- [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
+- [ ] Replace prototype renderer packages and define formal layout-cache invalidation/versioning.
+- [x] Add an automated browser end-to-end smoke test (CI wiring remains open when the JavaScript toolchain is provisioned).
 
 Time boxes below are indicative for one primary developer. Scope is fixed within a slice; time is not a promise.
 
@@ -198,7 +199,7 @@ Small realistic cases are legible and explorable in the two overview views.
 - Open/out-of-service styling.
 - Pan, zoom, fit-all, and focus-selection behaviour.
 - Lightweight tooltips and persistent inspector coordination.
-- Layout caching keyed by case fingerprint and layout options.
+- Layout caching keyed by case identity and layout options (prototype delivered; formal invalidation policy remains open).
 
 ### Acceptance criteria
 
