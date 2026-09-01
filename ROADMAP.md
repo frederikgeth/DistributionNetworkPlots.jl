@@ -17,6 +17,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Permissively licensed micro-fixture covering buses, terminal maps, line, switch, transformer, source, load, generator, IBR, shunt, capacitor, and a reusable linecode.
 - [x] Canonical browser index with stable JSON-pointer identities, ports, connections, reverse bus indexes, class counts, and diagnostics.
 - [x] Walking-skeleton geospatial, single-wire, and focused multi-wire views with shared selection and inspector navigation.
+- [x] Bus-focused multi-wire drill-down and reusable-record links in the inspector.
 - [x] Julia-generated self-contained report with safe JSON embedding.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.

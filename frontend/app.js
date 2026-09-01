@@ -89,10 +89,16 @@
     const keys = Object.keys(record).sort();
     const related = [];
     for (const p of item.ports || []) related.push({ kind: "bus", id: p.busId });
-    for (const relatedItem of related) {
-      if (!state.index.buses.some((bus) => bus.ref.id === relatedItem.id)) continue;
+    if (item.ref.kind === "bus") {
+      for (const incident of state.index.byBus.get(item.ref.id) || []) {
+        related.push({ kind: incident.ref.kind, id: incident.ref.id });
+      }
     }
-    const relatedHtml = related.length ? `<div class="related">${related.map((r) => `<button class="link-button" data-related-kind="${escapeHtml(r.kind)}" data-related-id="${escapeHtml(r.id)}">${escapeHtml(r.kind)} ${escapeHtml(r.id)}</button>`).join("")}</div>` : "";
+    for (const key of ["linecode", "line_geometry", "control_profile", "time_series", "wire_data"]) {
+      if (typeof record[key] === "string") related.push({ kind: key, id: record[key] });
+    }
+    const uniqueRelated = related.filter((ref, i, all) => all.findIndex((candidate) => candidate.kind === ref.kind && candidate.id === ref.id) === i && itemFor(ref));
+    const relatedHtml = uniqueRelated.length ? `<h3>Related</h3><div class="related">${uniqueRelated.map((r) => `<button class="link-button" data-related-kind="${escapeHtml(r.kind)}" data-related-id="${escapeHtml(r.id)}">${escapeHtml(r.kind)} ${escapeHtml(r.id)}</button>`).join("")}</div>` : "";
     const portHtml = item.ports?.length ? `<h3>Ports</h3><table class="property-table">${item.ports.map((p) => `<tr><th>${escapeHtml(p.role || p.id)}</th><td>${escapeHtml(p.busId)} · [${p.terminals.map(escapeHtml).join(", ")}]</td></tr>`).join("")}</table>` : "";
     $("inspector").innerHTML = `<h3>${escapeHtml(titleOf(item))}</h3><p class="muted">status: ${escapeHtml(item.status)}</p>${relatedHtml}${portHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${keys.map((key) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(record[key]))}</td></tr>`).join("")}</table><details><summary>Raw record</summary><pre class="raw"></pre></details>`;
     $("inspector").querySelector(".raw").textContent = JSON.stringify(record, null, 2);
@@ -162,9 +168,44 @@
 
   function drawMulti() {
     const item = itemFor(state.selected);
-    if (!item || !item.connections?.length) {
+    if (!item) {
       setStatus("Select a line, switch, or transformer to expand its terminal-level neighbourhood.");
       $("canvas").innerHTML = `<div class="message">Multi-wire focus mode starts from a selected multi-terminal device.</div>`;
+      return;
+    }
+    if (item.ref.kind === "bus") {
+      const incident = state.index.byBus.get(item.ref.id) || [];
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">bus ${escapeHtml(item.ref.id)}</text><rect x="35" y="70" width="220" height="350" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><text x="145" y="102" text-anchor="middle" font-size="15">terminals</text>`;
+      item.terminals.forEach((terminal, i) => {
+        const y = 140 + i * 38;
+        const grounded = item.groundedTerminals.includes(terminal) ? " · grounded" : "";
+        content += `<text x="60" y="${y}" fill="#37332c" font-size="13">${escapeHtml(terminal)}${escapeHtml(grounded)}</text><line x1="95" y1="${y - 4}" x2="225" y2="${y - 4}" stroke="#9a9388" stroke-width="2"/>`;
+      });
+      content += `<rect x="300" y="70" width="425" height="350" rx="8" fill="#fffdf9" stroke="#ded8cc"/><text x="512" y="102" text-anchor="middle" font-size="15">incident assets</text>`;
+      incident.slice(0, 7).forEach((device, i) => {
+        const y = 140 + i * 38;
+        content += `<g data-kind="${escapeHtml(device.ref.kind)}" data-id="${escapeHtml(device.ref.id)}"><circle cx="335" cy="${y - 4}" r="6" fill="${colourOf(device.ref.kind)}"/><text x="352" y="${y}" fill="#37332c" font-size="13">${escapeHtml(titleOf(device))}</text><title>${escapeHtml(titleOf(device))}</title></g>`;
+      });
+      if (incident.length > 7) content += `<text x="512" y="405" text-anchor="middle" fill="#70695f" font-size="12">+ ${incident.length - 7} more in the inspector</text>`;
+      content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Select an incident device to expand its conductor pairing</text>`;
+      setStatus(`${item.terminals.length} terminals · ${incident.length} incident assets`);
+      $("canvas").innerHTML = svgShell(content);
+      bindSvgSelection();
+      return;
+    }
+    if (!item.connections?.length) {
+      const attachment = item.ports?.[0];
+      if (!attachment) {
+        setStatus("This record has no renderable terminal connection.");
+        $("canvas").innerHTML = `<div class="message">The selected record is inspectable but has no terminal connection to draw.</div>`;
+        return;
+      }
+      const terminals = attachment.terminals.length ? attachment.terminals : ["(no terminal map)"];
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))}</text><rect x="180" y="85" width="400" height="300" rx="8" fill="#fffdf9" stroke="${colourOf(item.ref.kind)}" stroke-width="3"/><text x="380" y="125" text-anchor="middle" font-size="15">bus ${escapeHtml(attachment.busId)}</text>`;
+      terminals.forEach((terminal, i) => { const y = 170 + i * 42; content += `<line x1="250" y1="${y}" x2="510" y2="${y}" stroke="#9a9388" stroke-width="2"/><text x="230" y="${y + 4}" text-anchor="end" fill="#37332c" font-size="13">${escapeHtml(terminal)}</text>`; });
+      content += `<text x="380" y="430" text-anchor="middle" fill="#70695f" font-size="12">Single-bus attachment · inspect properties for device details</text>`;
+      setStatus(`${terminals.length} attached terminals · ${item.status}`);
+      $("canvas").innerHTML = svgShell(content);
       return;
     }
     const connection = item.connections[0];
