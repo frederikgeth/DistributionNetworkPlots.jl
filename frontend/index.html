@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BMOPF Explorer</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">DistributionNetworkPlots.jl</p>
+      <h1>BMOPF Explorer</h1>
+    </div>
+    <label class="file-button">Open JSON<input id="file-input" type="file" accept=".json,application/json"></label>
+  </header>
+
+  <main class="layout">
+    <section class="workspace" aria-label="Network visualisation">
+      <div id="drop-zone" class="drop-zone">Drop a BMOPF JSON case here, or use Open JSON.</div>
+      <div class="view-tabs" role="tablist" aria-label="Views">
+        <button class="view-tab active" data-view="geo" role="tab">Geospatial</button>
+        <button class="view-tab" data-view="single" role="tab">Single-wire</button>
+        <button class="view-tab" data-view="multi" role="tab">Multi-wire</button>
+      </div>
+      <div id="view-status" class="view-status"></div>
+      <div id="canvas" class="canvas" aria-live="polite"></div>
+    </section>
+
+    <aside class="sidebar" aria-label="Case details">
+      <div id="case-summary" class="panel empty-panel">Open a case to begin exploring it.</div>
+      <div id="inventory" class="panel"></div>
+      <div class="panel inspector-panel">
+        <div class="panel-heading"><h2>Inspector</h2><span id="selection-label" class="muted">Nothing selected</span></div>
+        <div id="inspector" class="inspector-content"><p class="muted">Select a bus or asset in a view or in the inventory.</p></div>
+      </div>
+    </aside>
+  </main>
+  <script src="model.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

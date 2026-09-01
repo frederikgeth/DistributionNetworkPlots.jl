@@ -11,6 +11,16 @@ The first useful release must prove the riskiest architectural claim: one source
 
 The durable system boundaries and domain invariants are defined in [ARCHITECTURE.md](ARCHITECTURE.md). This roadmap may change delivery order without weakening those invariants unless an explicit architectural decision supersedes them.
 
+## Current implementation status
+
+- [x] Repository, Julia package, static browser shell, and CI-ready test entry points scaffolded.
+- [x] Permissively licensed micro-fixture covering buses, terminal maps, line, switch, transformer, source, load, generator, IBR, shunt, capacitor, and a reusable linecode.
+- [x] Canonical browser index with stable JSON-pointer identities, ports, connections, reverse bus indexes, class counts, and diagnostics.
+- [x] Walking-skeleton geospatial, single-wire, and focused multi-wire views with shared selection and inspector navigation.
+- [x] Julia-generated self-contained report with safe JSON embedding.
+- [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
+- [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
+
 Time boxes below are indicative for one primary developer. Scope is fixed within a slice; time is not a promise.
 
 ## 2. Delivery principles
