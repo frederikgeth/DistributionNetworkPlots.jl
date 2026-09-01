@@ -94,9 +94,16 @@ h2 { margin-bottom: 0; font-size: 15px; }
 .result-raw { margin-top: 8px !important; }
 .inventory-list { max-height: 240px; overflow: auto; padding: 5px 0; }
 .inventory-row { display: flex; width: 100%; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid #eee9e1; padding: 7px 14px; color: var(--ink); background: transparent; cursor: pointer; text-align: left; }
-.inventory-row:hover, .inventory-row.selected { background: var(--accent-soft); }
+.inventory-row:hover, .inventory-row.selected, .inventory-row.focused { background: var(--accent-soft); }
+.inventory-row.focused { outline: 2px solid var(--accent); outline-offset: -2px; }
 .inventory-row .kind { color: var(--muted); text-transform: capitalize; }
 .inventory-row .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.search-meta { margin: 0; padding: 7px 14px 2px; color: var(--muted); font-size: 11px; }
+.help-panel summary { padding: 12px 14px; color: var(--ink); cursor: pointer; font-weight: 600; }
+.help-panel summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.help-content { padding: 0 14px 12px; color: var(--muted); font-size: 12px; }
+.help-content p { margin: 8px 0 0; }
+.help-content strong { color: var(--ink); }
 .inspector-panel { flex: 1; min-height: 220px; }
 .inspector-content { padding: 13px 14px; }
 .inspector-content h3 { margin-bottom: 4px; font-size: 16px; }

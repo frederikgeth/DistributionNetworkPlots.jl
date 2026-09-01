@@ -40,6 +40,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Overview views encode supported loading, explicit voltage deviation, and operating-state result cues with non-colour legend guidance.
 - [x] Frontend provides built-in authored cases for complete-model and partial/raw-only support-boundary smoke tests.
 - [x] Single-line view uses a deterministic source-to-load layered layout, heavy busbars, orthogonal branch routing, explicit device labels, and IEEE/IEC-inspired symbols.
+- [x] Inventory search ranks exact/prefix asset matches and can jump by keyboard; help panel documents views, symbols, and result cues.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
 
@@ -418,9 +419,9 @@ A slice is done only when:
 - [x] Compare two operating points or result sidecars while keeping source asset identity stable.
 - [x] Add a validation/diagnostic view that focuses assets with BMOPFTools solution-profile violations, residuals, and near-active bounds.
 - [ ] Persist versioned layouts keyed by case fingerprint, including per-bus lock/unlock and reset-to-computed controls.
-- [ ] Add ranked search suggestions across buses, devices, diagnostics, and result metrics.
+- [x] Add ranked search suggestions across buses, devices, diagnostics, and result metrics.
 - [ ] Publish measured SVG/interaction budgets and an explicit focused-neighbourhood fallback for cases above them.
-- [ ] Add an accessible help/legend panel for symbols, conductor cues, and result encodings.
+- [x] Add an accessible help/legend panel for symbols, conductor cues, and result encodings.
 
 ### Later: explicitly outside the alpha
 

@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -87,6 +87,7 @@
     state.resultCompareError = "";
     state.resultScenario = null;
     state.query = "";
+    state.searchFocus = -1;
     state.activeKind = null;
     state.diagnosticsQuery = "";
     state.diagnosticsSeverity = "all";
@@ -349,14 +350,34 @@
     const index = state.index;
     if (!index) { $("inventory").innerHTML = ""; return; }
     const rows = Object.entries(index.counts).sort(([a], [b]) => a.localeCompare(b));
-    const filtered = state.query
-      ? index.assets.filter((item) => `${item.ref.kind} ${item.ref.id}`.toLowerCase().includes(state.query.toLowerCase()))
-      : null;
+    const query = state.query.trim().toLowerCase();
+    const ranked = query ? index.assets.map((item) => {
+      const id = item.ref.id.toLowerCase(); const kind = item.ref.kind.replaceAll("_", " ").toLowerCase();
+      const buses = (item.ports || []).map((port) => port.busId.toLowerCase()).join(" ");
+      const result = resultRecordFor(item); const resultKeys = result && typeof result === "object" ? Object.keys(result).join(" ").toLowerCase() : "";
+      const text = `${kind} ${id} ${buses} ${resultKeys}`;
+      let score = 99;
+      if (id === query) score = 0;
+      else if (id.startsWith(query)) score = 1;
+      else if (kind === query) score = 2;
+      else if (buses.split(" ").some((bus) => bus.startsWith(query))) score = 3;
+      else if (text.includes(query)) score = 4;
+      return { item, score };
+    }).filter((entry) => entry.score < 99).sort((a, b) => a.score - b.score || a.item.ref.id.localeCompare(b.item.ref.id)).map((entry) => entry.item) : null;
+    const filtered = ranked;
     const body = filtered
-      ? filtered.map((item) => `<button class="inventory-row ${sameRef(item.ref, state.selected) ? "selected" : ""}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><span>${escapeHtml(titleOf(item))}</span><span class="count">›</span></button>`).join("")
+      ? filtered.map((item, i) => `<button class="inventory-row ${sameRef(item.ref, state.selected) ? "selected" : ""} ${state.searchFocus === i ? "focused" : ""}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}" role="option" aria-selected="${sameRef(item.ref, state.selected)}" aria-posinset="${i + 1}" aria-setsize="${filtered.length}"><span>${escapeHtml(titleOf(item))}</span><span class="count">›</span></button>`).join("")
       : rows.map(([kind, count]) => `<button class="inventory-row ${state.activeKind === kind ? "selected" : ""}" data-kind-filter="${escapeHtml(kind)}"><span class="kind">${escapeHtml(kind.replaceAll("_", " "))}</span><span class="count">${count}</span></button>`).join("");
-    $("inventory").innerHTML = `<div class="panel-heading"><h2>Inventory</h2><input id="search" type="search" placeholder="Search assets" value="${escapeHtml(state.query)}" aria-label="Search assets"></div><div class="inventory-list">${body || `<p class="muted" style="padding:12px 14px">No matching assets.</p>`}</div>`;
-    $("search").addEventListener("input", (event) => { state.query = event.target.value; renderInventory(); });
+    const resultNote = filtered ? `<p class="search-meta" role="status">${filtered.length} ranked match${filtered.length === 1 ? "" : "es"} · Enter opens the first result</p>` : "";
+    $("inventory").innerHTML = `<div class="panel-heading"><h2>Inventory</h2><input id="search" type="search" placeholder="Search assets, buses, or result fields" value="${escapeHtml(state.query)}" aria-label="Search assets, buses, or result fields" aria-controls="inventory-list" aria-autocomplete="list"></div>${resultNote}<div id="inventory-list" class="inventory-list" role="listbox">${body || `<p class="muted" style="padding:12px 14px">No matching assets.</p>`}</div>`;
+    const search = $("search");
+    search.addEventListener("input", (event) => { state.query = event.target.value; state.searchFocus = -1; renderInventory(); $("search")?.focus(); });
+    search.addEventListener("keydown", (event) => {
+      if (!filtered?.length) return;
+      if (event.key === "ArrowDown") { event.preventDefault(); state.searchFocus = Math.min(filtered.length - 1, state.searchFocus + 1); renderInventory(); $("search")?.focus(); }
+      else if (event.key === "ArrowUp") { event.preventDefault(); state.searchFocus = Math.max(0, state.searchFocus - 1); renderInventory(); $("search")?.focus(); }
+      else if (event.key === "Enter") { event.preventDefault(); select(filtered[state.searchFocus >= 0 ? state.searchFocus : 0].ref); }
+    });
     $("inventory").querySelectorAll("[data-kind-filter]").forEach((button) => button.addEventListener("click", () => {
       state.activeKind = state.activeKind === button.dataset.kindFilter ? null : button.dataset.kindFilter;
       state.query = "";
