@@ -31,6 +31,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Explicit support-level badges for fully rendered, focused, and raw-inspector-only records.
 - [x] Multi-wire phase, neutral, and ground cues use both line patterns and visible labels.
 - [x] Terminal-map length mismatches are surfaced as case and focused-view diagnostics.
+- [x] Results JSON can be attached as a sidecar and selected asset metrics are visible in the inspector.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
 
@@ -399,11 +400,20 @@ A slice is done only when:
 - Export current view as SVG or PNG.
 - Theme and print stylesheet.
 
+### Results-aware visualisation: next vertical slices
+
+- [x] Attach a raw BMOPFTools-compatible result JSON sidecar to an indexed case, show objective/termination metadata, and expose selected asset metrics with safe raw-record access.
+- [ ] Pair a case and result by case fingerprint/provenance, with an explicit mismatch diagnostic.
+- [ ] Add a multinetwork/time/scenario selector; never silently choose the first `nw` slice.
+- [ ] Add result-driven visual encodings for voltage deviation, line/transformer loading, and open/out-of-service state, with legends and accessible non-colour cues.
+- [ ] Surface BMOPFTools solution-profile findings (bound violations, near-active bounds, residuals, and quality) as filterable diagnostics.
+- [ ] Compare two operating points or result sidecars while keeping source asset identity stable.
+
 ### Later: explicitly outside the alpha
 
 - Case editing and round-trip write-back.
-- Power-flow or OPF result overlays.
-- Time-series controls and animation.
+- Full result-derived styling before the metric adapter and scenario semantics are stable.
+- Time-series animation (a selector and static snapshot export come first).
 - Comparison of two cases or operating points.
 - Saved annotations.
 - Offline basemap packages.
