@@ -20,6 +20,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Bus-focused multi-wire drill-down and reusable-record links in the inspector.
 - [x] Multi-winding transformer ports remain explicit in the canonical index and focused multi-wire view.
 - [x] One- and two-hop neighbourhood control for bus-focused multi-wire drill-down.
+- [x] Static-view pan, zoom, and fit/reset controls across all projections.
 - [x] Julia-generated self-contained report with safe JSON embedding.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.

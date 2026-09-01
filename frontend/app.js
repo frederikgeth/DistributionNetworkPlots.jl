@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, view: "geo", query: "", activeKind: null, multiHops: 1 };
+  const state = { index: null, selected: null, view: "geo", query: "", activeKind: null, multiHops: 1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -167,7 +167,55 @@
     return String(value);
   }
 
-  function svgShell(content) { return `<svg viewBox="0 0 760 500" role="img" aria-label="${escapeHtml(state.view)} view">${content}</svg>`; }
+  function svgShell(content) { const camera = state.cameras[state.view]; return `<svg viewBox="0 0 760 500" role="img" aria-label="${escapeHtml(state.view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`; }
+
+  function updateCamera() {
+    const viewport = $("canvas").querySelector("#viewport");
+    if (!viewport) return;
+    const camera = state.cameras[state.view];
+    viewport.setAttribute("transform", `translate(${camera.x} ${camera.y}) scale(${camera.scale})`);
+  }
+
+  function renderCameraControls() {
+    const controls = $("camera-controls");
+    if (!state.index) { controls.hidden = true; controls.innerHTML = ""; return; }
+    controls.hidden = false;
+    controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button>`;
+    controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
+      const camera = state.cameras[state.view];
+      if (button.dataset.camera === "zoom-in") camera.scale = Math.min(3, camera.scale * 1.25);
+      else if (button.dataset.camera === "zoom-out") camera.scale = Math.max(.5, camera.scale / 1.25);
+      else { camera.scale = 1; camera.x = 0; camera.y = 0; }
+      updateCamera();
+    }));
+  }
+
+  function bindCamera() {
+    const canvas = $("canvas");
+    const svg = canvas.querySelector("svg");
+    if (!svg) return;
+    svg.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      const camera = state.cameras[state.view];
+      camera.scale = Math.max(.5, Math.min(3, camera.scale * (event.deltaY < 0 ? 1.1 : .9)));
+      updateCamera();
+    }, { passive: false });
+    let drag = null;
+    svg.addEventListener("pointerdown", (event) => {
+      if (event.target.closest("[data-kind]")) return;
+      drag = { x: event.clientX, y: event.clientY, camera: { ...state.cameras[state.view] } };
+      svg.setPointerCapture(event.pointerId);
+    });
+    svg.addEventListener("pointermove", (event) => {
+      if (!drag) return;
+      const camera = state.cameras[state.view];
+      camera.x = drag.camera.x + event.clientX - drag.x;
+      camera.y = drag.camera.y + event.clientY - drag.y;
+      updateCamera();
+    });
+    svg.addEventListener("pointerup", () => { drag = null; });
+    svg.addEventListener("pointercancel", () => { drag = null; });
+  }
   function busCoordinates() {
     const buses = state.index.buses;
     const mapped = buses.filter((b) => b.coordinates);
@@ -301,9 +349,10 @@
     else if (state.view === "single") drawSingle();
     else drawMulti();
     document.querySelectorAll(".view-tab").forEach((button) => button.classList.toggle("active", button.dataset.view === state.view));
+    bindCamera();
   }
 
-  function render() { renderSummary(); renderInventory(); renderInspector(); renderView(); renderMultiHopControls(); }
+  function render() { renderSummary(); renderInventory(); renderInspector(); renderView(); renderCameraControls(); renderMultiHopControls(); }
 
   function parseHash() {
     const parts = window.location.hash.slice(2).split("/");
