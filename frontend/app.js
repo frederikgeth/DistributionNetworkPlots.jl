@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -82,6 +82,9 @@
     state.result = null;
     state.resultLabel = "";
     state.resultError = "";
+    state.resultCompare = null;
+    state.resultCompareLabel = "";
+    state.resultCompareError = "";
     state.resultScenario = null;
     state.query = "";
     state.activeKind = null;
@@ -160,6 +163,23 @@
     return state.result ? globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id, state.resultScenario) : null;
   }
 
+  function comparisonRecordFor(item) {
+    return state.resultCompare ? globalThis.BMOPFModel.resultRecord(state.resultCompare, item.ref.kind, item.ref.id, state.resultScenario) : null;
+  }
+
+  function scalarResultValue(value) {
+    if (Array.isArray(value)) {
+      const numbers = value.map(Number).filter(Number.isFinite);
+      return numbers.length === 1 ? numbers[0] : null;
+    }
+    return Number.isFinite(Number(value)) ? Number(value) : null;
+  }
+
+  function comparisonDelta(current, comparison) {
+    const a = scalarResultValue(current); const b = scalarResultValue(comparison);
+    return a === null || b === null ? null : a - b;
+  }
+
   function resultStatus(item) {
     const record = resultRecordFor(item);
     if (!record || typeof record !== "object" || Array.isArray(record)) return item.status;
@@ -231,6 +251,21 @@
     };
   }
 
+  function comparisonPairingStatus() {
+    const root = state.resultCompare ? globalThis.BMOPFModel.resultRoot(state.resultCompare) : null;
+    const fingerprint = root?.case_fingerprint ?? root?.meta?.case_fingerprint ?? null;
+    const expectedFingerprint = openCaseFingerprint() || resultFingerprint();
+    if (fingerprint && expectedFingerprint) return String(fingerprint) === String(expectedFingerprint)
+      ? { kind: "matched", label: "matched", message: "Comparison uses the same case fingerprint." }
+      : { kind: "mismatch", label: "mismatch", message: "Comparison case fingerprint differs from the primary result/open case." };
+    const identity = root?.case_id ?? root?.meta?.case_id ?? null;
+    const expectedIdentity = state.index?.raw?.meta?.case_id || state.index?.name || resultIdentity();
+    if (identity && expectedIdentity) return String(identity) === String(expectedIdentity)
+      ? { kind: "matched", label: "matched", message: "Comparison case identity matches the primary result/open case." }
+      : { kind: "mismatch", label: "mismatch", message: "Comparison case identity differs from the primary result/open case." };
+    return { kind: "unverified", label: "unverified", message: "Comparison does not provide a comparable case identity." };
+  }
+
   function resultTooltip(item) {
     if (!state.result) return "";
     const record = resultRecordFor(item);
@@ -291,6 +326,7 @@
     if (meta.solver !== undefined) fields.push(["solver", meta.solver]);
     if (meta.scenarios.length) fields.push(["scenarios", meta.scenarios.length]);
     if (state.result) fields.push(["diagnostics", allDiagnosticsForView().length]);
+    if (state.resultCompare) fields.push(["comparison", state.resultCompareLabel || "attached"]);
     if (caseInResult) fields.push(["embedded case", "yes"]);
     const warning = state.resultError ? `<p class="result-warning">${escapeHtml(state.resultError)}</p>` : "";
     const scenarioNote = meta.scenarios.length > 1 && !state.resultScenario ? `<p class="result-warning">Choose a scenario before inspecting result metrics. No slice is silently chosen.</p>` : "";
@@ -299,8 +335,12 @@
     const pairing = resultPairingStatus();
     const identityHtml = pairing.identity ? `<p class="report-meta">case identity <code>${escapeHtml(String(pairing.identity))}</code></p>` : "";
     const pairingHtml = `<p class="pairing-status ${pairing.kind}"><strong>Pairing ${escapeHtml(pairing.label)}</strong> · ${escapeHtml(pairing.message)}</p>`;
+    const comparison = state.resultCompare ? comparisonPairingStatus() : null;
+    const comparisonHtml = state.resultCompare
+      ? `<p class="comparison-note">Comparing selected metrics against <strong>${escapeHtml(state.resultCompareLabel || "comparison result")}</strong>. Numeric scalar deltas are shown as current − comparison.<br><span class="comparison-pairing ${comparison.kind}">Pairing ${escapeHtml(comparison.label)} · ${escapeHtml(comparison.message)}</span></p>${state.resultCompareError ? `<p class="result-warning">${escapeHtml(state.resultCompareError)}</p>` : ""}`
+      : "";
     panel.className = "panel";
-    panel.innerHTML = `<div class="panel-heading"><h2>Results</h2><span class="muted">${escapeHtml(state.resultLabel || "JSON")}</span></div>${scenarioControl}${selectedScenario}${fields.length ? `<table class="property-table result-table">${fields.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("")}</table>` : `<p class="muted result-empty">Result records attached; no run summary fields were found.</p>`}${identityHtml}${pairingHtml}${scenarioNote}${warning}`;
+    panel.innerHTML = `<div class="panel-heading"><h2>Results</h2><span class="muted">${escapeHtml(state.resultLabel || "JSON")}</span></div>${scenarioControl}${selectedScenario}${fields.length ? `<table class="property-table result-table">${fields.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("")}</table>` : `<p class="muted result-empty">Result records attached; no run summary fields were found.</p>`}${identityHtml}${pairingHtml}${comparisonHtml}${scenarioNote}${warning}`;
     const scenarioSelect = $("result-scenario");
     if (scenarioSelect) scenarioSelect.addEventListener("change", (event) => { state.resultScenario = event.target.value || null; render(); });
   }
@@ -393,14 +433,26 @@
     const uniqueRelated = related.filter((ref, i, all) => all.findIndex((candidate) => candidate.kind === ref.kind && candidate.id === ref.id) === i && itemFor(ref));
     const relatedHtml = uniqueRelated.length ? `<h3>Related</h3><div class="related">${uniqueRelated.map((r) => `<button class="link-button" data-related-kind="${escapeHtml(r.kind)}" data-related-id="${escapeHtml(r.id)}">${escapeHtml(r.kind)} ${escapeHtml(r.id)}</button>`).join("")}</div>` : "";
     const portHtml = item.ports?.length ? `<h3>Ports</h3><table class="property-table">${item.ports.map((p) => `<tr><th>${escapeHtml(p.role || p.id)}</th><td>${escapeHtml(p.busId)} · [${p.terminals.map(escapeHtml).join(", ")}]</td></tr>`).join("")}</table>` : "";
-    const result = state.result ? globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id, state.resultScenario) : null;
-    const resultKeys = ["vm", "va", "v_magnitude", "v_angle", "p", "q", "pg", "qg", "loading", "status", "in_service", "residual"];
+    const result = state.result ? resultRecordFor(item) : null;
+    const comparison = state.resultCompare ? comparisonRecordFor(item) : null;
+    const resultKeys = ["vm", "va", "v_magnitude", "v_angle", "voltage_deviation", "vm_deviation", "v_deviation", "p", "q", "pg", "qg", "loading", "status", "in_service", "residual"];
     const resultEntries = result && typeof result === "object" ? Object.entries(result).filter(([key]) => resultKeys.includes(key) || key.endsWith("_loading") || key.endsWith("_residual")) : [];
-    const resultHtml = state.result ? (result ? `<h3 class="result-heading">Simulation / optimisation result</h3><table class="property-table result-table">${resultEntries.length ? resultEntries.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("") : `<tr><td colspan="2" class="muted">A result file is attached, but no recognised metrics were found for this record.</td></tr>`}</table><details><summary>Raw result record</summary><pre class="raw result-raw"></pre></details>` : `<p class="muted result-missing">No result record found for this asset.</p>`) : "";
+    const comparisonEntries = comparison && typeof comparison === "object" ? Object.entries(comparison).filter(([key]) => resultKeys.includes(key) || key.endsWith("_loading") || key.endsWith("_residual")) : [];
+    const metricKeys = [...new Set([...resultEntries.map(([key]) => key), ...comparisonEntries.map(([key]) => key)])];
+    const comparisonHeader = state.resultCompare ? `<tr><th>metric</th><th>current</th><th>comparison</th><th>Δ</th></tr>` : "";
+    const metricRows = metricKeys.map((key) => {
+      const current = result?.[key]; const other = comparison?.[key]; const delta = comparisonDelta(current, other);
+      return `<tr><th>${escapeHtml(key)}</th><td>${current === undefined ? "—" : escapeHtml(formatValue(current))}</td>${state.resultCompare ? `<td>${other === undefined ? "—" : escapeHtml(formatValue(other))}</td><td>${delta === null ? "—" : escapeHtml(formatValue(delta))}</td>` : ""}</tr>`;
+    }).join("");
+    const resultColspan = state.resultCompare ? 4 : 2;
+    const comparisonRaw = state.resultCompare ? `<details><summary>Raw comparison record</summary><pre class="raw comparison-raw"></pre></details>` : "";
+    const resultHtml = state.result ? (result ? `<h3 class="result-heading">Simulation / optimisation result${state.resultCompare ? " · comparison" : ""}</h3><table class="property-table result-table">${comparisonHeader}${metricRows || `<tr><td colspan="${resultColspan}" class="muted">No recognised metrics were found for this record.</td></tr>`}</table><details><summary>Raw result record</summary><pre class="raw result-raw"></pre></details>${comparisonRaw}` : `<p class="muted result-missing">No result record found for this asset.</p>`) : "";
     $("inspector").innerHTML = `<h3>${escapeHtml(titleOf(item))}</h3><p class="muted">status: ${escapeHtml(item.status)} · support: ${escapeHtml(item.support || "raw-only")}</p><p class="support-note">${escapeHtml(supportNote)}</p>${relatedHtml}${portHtml}${resultHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${keys.map((key) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(record[key]))}</td></tr>`).join("")}</table><details><summary>Raw record</summary><pre class="raw"></pre></details>`;
     $("inspector").querySelector(".raw").textContent = JSON.stringify(record, null, 2);
     const resultRaw = $("inspector").querySelector(".result-raw");
     if (resultRaw) resultRaw.textContent = JSON.stringify(result, null, 2);
+    const comparisonRawNode = $("inspector").querySelector(".comparison-raw");
+    if (comparisonRawNode) comparisonRawNode.textContent = JSON.stringify(comparison, null, 2);
     $("inspector").querySelectorAll("[data-related-kind]").forEach((button) => button.addEventListener("click", () => select({ kind: button.dataset.relatedKind, id: button.dataset.relatedId })));
   }
 
@@ -797,11 +849,51 @@
     reader.readAsText(file);
   }
 
+  function showComparisonError(message, label) {
+    state.resultCompareError = message;
+    renderResultSummary();
+    setStatus(label ? `${label} was not attached as a comparison.` : "Comparison results were not attached.");
+  }
+
+  function loadComparisonResultDocument(resultDocument, label) {
+    try {
+      globalThis.BMOPFModel.resultRoot(resultDocument);
+      state.resultCompare = resultDocument;
+      state.resultCompareLabel = label || "Comparison results JSON";
+      state.resultCompareError = "";
+      render();
+      setStatus(state.result ? "Comparison results attached." : "Comparison results attached; attach a primary result file to inspect deltas.");
+    } catch (error) {
+      showComparisonError(error.message, label);
+    }
+  }
+
+  function readComparisonResultFile(file) {
+    if (file.size > MAX_FILE_BYTES) {
+      showComparisonError(`The comparison results file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`, file.name);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      let parsed;
+      try { parsed = JSON.parse(reader.result); }
+      catch (error) { showComparisonError("This comparison file is not valid JSON. Check the file syntax and try again.", file.name); return; }
+      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
+        showComparisonError(`These comparison results contain more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`, file.name);
+        return;
+      }
+      loadComparisonResultDocument(parsed, file.name);
+    };
+    reader.onerror = () => showComparisonError("The browser could not read this comparison file. Check its permissions and try again.", file.name);
+    reader.readAsText(file);
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     parseHash();
     populateExamples();
     $("file-input").addEventListener("change", (event) => { if (event.target.files[0]) readFile(event.target.files[0]); });
     $("result-input").addEventListener("change", (event) => { if (event.target.files[0]) readResultFile(event.target.files[0]); });
+    $("comparison-input").addEventListener("change", (event) => { if (event.target.files[0]) readComparisonResultFile(event.target.files[0]); });
     const zone = $("drop-zone");
     zone.addEventListener("dragover", (event) => { event.preventDefault(); zone.classList.add("dragging"); });
     zone.addEventListener("dragleave", () => zone.classList.remove("dragging"));

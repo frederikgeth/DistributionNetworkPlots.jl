@@ -4,6 +4,7 @@ using DistributionNetworkPlots
 
 const FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro", "micro_bmopf.json")
 const RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro", "micro_bmopf_result.json")
+const COMPARISON_RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro", "micro_bmopf_result_comparison.json")
 const MULTINETWORK_RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro", "micro_bmopf_multinetwork_result.json")
 
 @testset "self-contained report" begin
@@ -63,6 +64,10 @@ end
     @test result["bus"]["load_bus"]["voltage_deviation"] == 0.062
     @test length(result["solution_profile"]["bound_violations"]) == 1
     @test result["solution_profile"]["bound_violations"][1]["id"] == "line_main"
+    comparison = JSON3.read(read(COMPARISON_RESULT_FIXTURE, String), Dict{String,Any})
+    @test comparison["objective"] == 11890.2
+    @test comparison["meta"]["case_fingerprint"] == result["meta"]["case_fingerprint"]
+    @test comparison["line"]["line_main"]["loading"] == 0.78
     multinetwork = JSON3.read(read(MULTINETWORK_RESULT_FIXTURE, String), Dict{String,Any})
     @test length(multinetwork["nw"]) == 2
     @test multinetwork["nw"]["snapshot_01"]["line"]["line_main"]["loading"] == 0.78

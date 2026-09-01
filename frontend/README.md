@@ -56,3 +56,10 @@ The report metadata uses the versioned `sha256-json3-v1` fingerprint convention.
 Results may provide the same `case_fingerprint` and algorithm in `meta`; when
 both sides are present the Results panel reports a cryptographic match or
 mismatch. Older results continue through the case-ID/name fallback.
+
+Attach a second result with **Compare results** to inspect current and
+comparison metrics for the same selected asset. Numeric scalar deltas are
+reported as current minus comparison; arrays and non-numeric values remain
+visible without an invented delta. The comparison case identity is checked
+against the primary result/open case and shown as matched, mismatched, or
+unverified.

@@ -24,6 +24,11 @@ after opening the case. Raw BMOPFTools-style result dictionaries are accepted;
 the current adapter shows run metadata and recognised metrics for the selected
 asset while preserving the complete result record for inspection.
 
+Use **Compare results** to attach a second operating point. The inspector then
+shows current, comparison, and numeric delta values for the selected asset;
+[`fixtures/micro/micro_bmopf_result_comparison.json`](fixtures/micro/micro_bmopf_result_comparison.json)
+provides an authored example.
+
 The prototype supports:
 
 - Asset-class inventory and search.
@@ -37,6 +42,7 @@ The prototype supports:
 - Diagnostics view for filterable result validation/profile findings, clickable linked assets, and explicit case/result pairing status.
 - Result-aware overview cues for loading, explicit bus voltage deviation, and open/out-of-service state, with non-colour legend guidance.
 - Built-in example cases that can be loaded directly from the frontend for repeatable demonstrations and semantic smoke tests.
+- Side-by-side comparison of two result sidecars while retaining stable source-asset identity.
 
 ## Generate a static Julia report
 

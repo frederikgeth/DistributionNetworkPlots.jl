@@ -414,7 +414,7 @@ A slice is done only when:
 - [x] Add a multinetwork/time/scenario selector; never silently choose the first `nw` slice.
 - [x] Add result-driven visual encodings for voltage deviation, line/transformer loading, and open/out-of-service state, with legends and accessible non-colour cues.
 - [x] Surface BMOPFTools solution-profile findings (bound violations, near-active bounds, and residuals) as filterable diagnostics.
-- [ ] Compare two operating points or result sidecars while keeping source asset identity stable.
+- [x] Compare two operating points or result sidecars while keeping source asset identity stable.
 - [x] Add a validation/diagnostic view that focuses assets with BMOPFTools solution-profile violations, residuals, and near-active bounds.
 - [ ] Persist versioned layouts keyed by case fingerprint, including per-bus lock/unlock and reset-to-computed controls.
 - [ ] Add ranked search suggestions across buses, devices, diagnostics, and result metrics.

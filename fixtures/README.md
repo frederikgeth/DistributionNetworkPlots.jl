@@ -21,6 +21,10 @@ overview styling.
 Its `meta.case_fingerprint` demonstrates the optional producer metadata used for
 cryptographic case/result pairing.
 
+`micro/micro_bmopf_result_comparison.json` is a second authored operating point
+for exercising side-by-side metric deltas while retaining the same case
+identity.
+
 `micro/micro_bmopf_multinetwork_result.json` exercises explicit selection of
 multiple `nw` result slices. The viewer refuses to guess a slice and requires
 the user to choose one before showing asset metrics.
