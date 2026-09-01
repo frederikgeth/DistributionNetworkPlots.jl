@@ -166,8 +166,24 @@
     const reportHtml = report ? `<p class="report-meta">Report ${escapeHtml(report.app_version || "unknown")} · layout ${escapeHtml(report.layout_engine || "unknown")} · fingerprint <code>${escapeHtml(String(report.case_fingerprint || "").slice(0, 12))}</code></p>` : "";
     const support = index.supportCounts || {};
     const supportHtml = `<p class="support-meta">Support: ${support.full || 0} full · ${support.focused || 0} focused · ${support["raw-only"] || 0} raw-only</p>`;
+    const budget = overviewBudget();
+    const budgetHtml = budget.over
+      ? `<p class="budget-warning"><strong>Focused overview mode</strong> · ${escapeHtml(budget.message)} Select an asset to render its one-hop context.</p>`
+      : `<p class="budget-meta">Overview budget: ${budget.elements.toLocaleString()} estimated SVG elements of ${budget.limit.toLocaleString()}.</p>`;
     $("case-summary").className = "panel";
-    $("case-summary").innerHTML = `<div class="panel-heading"><h2>${escapeHtml(index.name)}</h2><span class="muted">${index.schema ? "schema" : "JSON"}</span></div><div class="stats">${stats.map(([n, label]) => `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`).join("")}</div>${supportHtml}${reportHtml}${warningHtml}`;
+    $("case-summary").innerHTML = `<div class="panel-heading"><h2>${escapeHtml(index.name)}</h2><span class="muted">${index.schema ? "schema" : "JSON"}</span></div><div class="stats">${stats.map(([n, label]) => `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`).join("")}</div>${supportHtml}${budgetHtml}${reportHtml}${warningHtml}`;
+  }
+
+  function overviewBudget() {
+    const buses = state.index?.buses.length || 0;
+    const assets = state.index?.assets.length || 0;
+    const elements = buses * 3 + assets * 5;
+    const limit = 5000;
+    const over = buses > 500 || elements > limit;
+    const message = buses > 500
+      ? `${buses.toLocaleString()} buses exceed the 500-bus overview guidance.`
+      : `${elements.toLocaleString()} estimated SVG elements exceed the ${limit.toLocaleString()}-element guidance.`;
+    return { buses, assets, elements, limit, over, message };
   }
 
   function resultRoot() { return state.result ? globalThis.BMOPFModel.resultRoot(state.result) : null; }
@@ -443,6 +459,28 @@
   function sameRef(a, b) { return Boolean(a && b && a.kind === b.kind && a.id === b.id); }
   function visibleAssets() { return state.index.assets.filter((item) => !state.activeKind || item.ref.kind === state.activeKind); }
 
+  function overviewScope() {
+    const budget = overviewBudget();
+    if (!budget.over || !state.selected) return null;
+    const selected = itemFor(state.selected);
+    if (!selected) return null;
+    const buses = new Set(selected.ref.kind === "bus" ? [selected.ref.id] : (selected.ports || []).map((port) => port.busId));
+    for (const busId of [...buses]) {
+      for (const asset of state.index.byBus.get(busId) || []) for (const port of asset.ports || []) buses.add(port.busId);
+    }
+    return buses;
+  }
+
+  function overviewAssets() {
+    const scope = overviewScope();
+    return visibleAssets().filter((item) => !scope || sameRef(item.ref, state.selected) || (item.ports || []).some((port) => scope.has(port.busId)));
+  }
+
+  function overviewBuses() {
+    const scope = overviewScope();
+    return state.index.buses.filter((bus) => !scope || scope.has(bus.ref.id));
+  }
+
   function neighbourhoodForBus(busId, hops) {
     const assets = []; const seenAssets = new Set(); const seenBuses = new Set([busId]);
     let frontier = new Set([busId]);
@@ -691,7 +729,7 @@
   function drawGeo() {
     const { positions, geographic, project, unmapped } = busCoordinates();
     let content = "";
-    for (const item of visibleAssets().filter((e) => e.connections?.length)) {
+    for (const item of overviewAssets().filter((e) => e.connections?.length)) {
       for (const connection of item.connections) {
         const a = positions.get(connection.from.busId); const b = positions.get(connection.to.busId);
         if (!a || !b) continue;
@@ -702,7 +740,7 @@
         else content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></line>`;
       }
     }
-    for (const bus of state.index.buses) {
+    for (const bus of overviewBuses()) {
       const p = positions.get(bus.ref.id); const selected = sameRef(bus.ref, state.selected);
       if (!p) continue;
       const voltage = resultVoltageVisual(bus, selected, "#2f6fb3"); const voltageDash = voltage.dash ? ` stroke-dasharray="${voltage.dash}"` : ""; const voltageGlyph = voltage.level === "high" ? "!" : voltage.level === "moderate" ? "~" : "";
@@ -742,14 +780,14 @@
     const positions = singlePositions();
     let content = `<defs><marker id="sld-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0 0L7 3.5L0 7z" fill="#6b655c"/></marker></defs><text x="24" y="26" fill="#37332c" font-size="13" font-weight="700">Source → load one-line view</text><text x="24" y="43" fill="#70695f" font-size="10">IEC/IEEE-inspired symbols · heavy busbars · click any device for details</text>`;
     const edgeCounts = new Map();
-    for (const item of visibleAssets().filter((e) => e.connections?.length)) {
+    for (const item of overviewAssets().filter((e) => e.connections?.length)) {
       for (const connection of item.connections) {
         const key = [connection.from.busId, connection.to.busId].sort().join("|");
         edgeCounts.set(key, (edgeCounts.get(key) || 0) + 1);
       }
     }
     const edgeSeen = new Map();
-    for (const item of visibleAssets().filter((e) => e.connections?.length)) {
+    for (const item of overviewAssets().filter((e) => e.connections?.length)) {
       for (const connection of item.connections) {
         const a = positions.get(connection.from.busId); const b = positions.get(connection.to.busId); if (!a || !b) continue;
         const selected = sameRef(item.ref, state.selected); const visual = resultVisual(item, selected, colourOf(item.ref.kind));
@@ -765,7 +803,7 @@
       }
     }
     const attached = new Map();
-    for (const item of visibleAssets().filter((e) => !e.connections?.length && e.ports?.length === 1)) {
+    for (const item of overviewAssets().filter((e) => !e.connections?.length && e.ports?.length === 1)) {
       const port = item.ports[0]; const p = positions.get(port.busId); if (!p) continue;
       const offset = attached.get(port.busId) || 0; attached.set(port.busId, offset + 1);
       const left = item.ref.kind === "voltage_source";
@@ -773,13 +811,13 @@
       content += `<path d="M${p[0] + (left ? -38 : 38)} ${p[1]}H${x}V${y}" fill="none" stroke="${colourOf(item.ref.kind)}" stroke-width="2" marker-end="url(#sld-arrow)"/>`;
       content += singleSymbol(item, x, y);
     }
-    for (const item of visibleAssets().filter((e) => e.ref.kind === "transformer" && e.ports?.length > 2)) {
+    for (const item of overviewAssets().filter((e) => e.ref.kind === "transformer" && e.ports?.length > 2)) {
       const points = item.ports.map((port) => positions.get(port.busId)).filter(Boolean); if (!points.length) continue;
       const x = points.reduce((sum, p) => sum + p[0], 0) / points.length; const y = points.reduce((sum, p) => sum + p[1], 0) / points.length;
       points.forEach((p) => { content += `<path d="M${p[0]} ${p[1]}L${x} ${y}" fill="none" stroke="${colourOf(item.ref.kind)}" stroke-width="2" marker-end="url(#sld-arrow)"/>`; });
       content += singleSymbol(item, x, y);
     }
-    for (const bus of state.index.buses) {
+    for (const bus of overviewBuses()) {
       const p = positions.get(bus.ref.id); const selected = sameRef(bus.ref, state.selected);
       const voltage = resultVoltageVisual(bus, selected, "#2f6fb3"); const voltageDash = voltage.dash ? ` stroke-dasharray="${voltage.dash}"` : ""; const voltageGlyph = voltage.level === "high" ? "!" : voltage.level === "moderate" ? "~" : "";
       const lockMark = layoutLocked(bus.ref.id) ? " · locked" : "";
@@ -921,6 +959,13 @@
 
   function renderView() {
     if (!state.index) { $("canvas").innerHTML = `<div class="message">Open a BMOPF JSON case to see its views.</div>`; return; }
+    const budget = overviewBudget();
+    if (budget.over && ["geo", "single"].includes(state.view) && !state.selected) {
+      setStatus(`Focused overview mode: ${budget.message} Select a bus or device from the inventory to render nearby topology.`);
+      $("canvas").innerHTML = `<div class="message"><strong>This case is larger than the overview budget.</strong><p>${escapeHtml(budget.message)}</p><p>Select an asset in the inventory to render its focused one-hop context. The full index and Diagnostics remain available.</p></div>`;
+      document.querySelectorAll(".view-tab").forEach((button) => { const active = button.dataset.view === state.view; button.classList.toggle("active", active); button.setAttribute("aria-selected", String(active)); button.setAttribute("tabindex", active ? "0" : "-1"); });
+      return;
+    }
     if (state.view === "geo") drawGeo();
     else if (state.view === "single") drawSingle();
     else if (state.view === "multi") drawMulti();

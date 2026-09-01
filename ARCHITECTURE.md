@@ -305,7 +305,7 @@ Projection rules:
 - Attachments remain addressable even when drawn as badges or compact symbols.
 - Voltage levels, feeder roots, and containment may influence layout without changing topology.
 
-ELK layered layout is the default candidate because it supports explicit ports and orthogonal routing. Layout is computed in a Web Worker and cached by case fingerprint plus layout options.
+ELK layered layout is the default candidate because it supports explicit ports and orthogonal routing. Layout is computed in a Web Worker and cached by case fingerprint plus layout options. The current prototype persists only user-adjusted single-wire bus positions, versioned under a case identity in browser-local storage; it never mutates the source case.
 
 ### 7.3 Multi-wire projection
 
@@ -470,7 +470,11 @@ If the browser core later becomes useful outside Julia, it may move to a publish
 - Multi-wire rendering is neighbourhood- and zoom-aware.
 - A simple initial renderer is preferred until measured data demonstrates the need for WebGL acceleration.
 
-Concrete performance budgets will be set after baseline measurements on the micro, small-real, and large fixtures.
+The browser prototype publishes a conservative initial budget of 500 buses or
+5,000 estimated SVG elements. Cases above either threshold keep the indexed
+inventory available but switch geospatial and single-wire views to a selected
+asset's one-hop context. Final budgets should be recalibrated from measured
+micro, small-real, and large fixtures before a production renderer is chosen.
 
 ### 11.3 Accessibility
 

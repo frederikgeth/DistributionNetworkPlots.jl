@@ -74,6 +74,9 @@ h2 { margin-bottom: 0; font-size: 15px; }
 .report-meta { margin: 0; padding: 0 14px 12px; color: var(--muted); font-size: 11px; }
 .support-meta, .support-note { margin: 0; padding: 0 14px 12px; color: var(--muted); font-size: 11px; }
 .support-note { padding: 0; }
+.budget-meta, .budget-warning { margin: 0; padding: 0 14px 10px; font-size: 11px; }
+.budget-meta { color: var(--muted); }
+.budget-warning { color: #8a4d20; }
 .result-table { margin: 0 14px 10px; width: calc(100% - 28px); }
 .result-table th, .result-table td { font-variant-numeric: tabular-nums; }
 .result-table tr:first-child th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
