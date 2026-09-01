@@ -44,6 +44,17 @@ h2 { margin-bottom: 0; font-size: 15px; }
 .canvas svg { display: block; width: 100%; height: 500px; }
 .canvas [data-kind]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .canvas .message { padding: 80px 24px; color: var(--muted); text-align: center; }
+.diagnostics-view { min-height: 500px; padding: 16px; background: #fbfaf7; }
+.diagnostics-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
+.diagnostics-heading h2 { font-size: 17px; }
+.diagnostic-card { margin-bottom: 10px; padding: 11px 13px; border: 1px solid var(--line); border-left: 5px solid #9a9388; border-radius: 6px; background: var(--panel); }
+.diagnostic-card.error { border-left-color: #b64035; }
+.diagnostic-card.warning { border-left-color: #c28a26; }
+.diagnostic-card.info { border-left-color: var(--accent); }
+.diagnostic-card p { margin: 8px 0; }
+.diagnostic-heading { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.diagnostic-severity, .diagnostic-category { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+.diagnostic-target { border: 1px solid var(--line); border-radius: 5px; padding: 3px 6px; color: var(--accent); background: var(--panel); cursor: pointer; font-size: 12px; }
 .panel-heading { display: flex; justify-content: space-between; gap: 8px; padding: 13px 14px; border-bottom: 1px solid var(--line); }
 .muted { color: var(--muted); }
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding: 12px 14px; }

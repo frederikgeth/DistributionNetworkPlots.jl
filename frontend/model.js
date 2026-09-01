@@ -238,5 +238,29 @@
     return isObject(root.nw) ? Object.keys(root.nw) : [];
   }
 
-  globalThis.BMOPFModel = { buildCaseIndex, resultRoot, resultCase, resultRecord, resultScenarios };
+  function resultDiagnostics(document, scenario) {
+    const root = resultRoot(document);
+    const sources = [];
+    const scoped = scenario && isObject(root.nw?.[scenario]) ? root.nw[scenario] : root;
+    for (const source of [scoped.diagnostics, scoped.validation, scoped.errors, scoped.warnings]) {
+      if (Array.isArray(source)) sources.push(...source);
+    }
+    const profile = scoped.solution_profile || scoped.profile;
+    if (isObject(profile)) {
+      for (const [field, severity] of [["bound_violations", "error"], ["near_active_bounds", "warning"], ["residuals", "warning"], ["violations", "error"]]) {
+        const values = profile[field];
+        if (Array.isArray(values)) sources.push(...values.map((value) => ({ ...value, severity, category: field })));
+      }
+    }
+    return sources.map((entry) => {
+      if (typeof entry === "string") return { severity: "warning", message: entry, raw: entry };
+      if (!isObject(entry)) return { severity: "warning", message: String(entry), raw: entry };
+      const kind = entry.kind || entry.asset_kind || entry.component || entry.type;
+      const id = entry.id || entry.asset_id || entry.name;
+      const message = entry.message || entry.description || entry.reason || entry.metric || "Result diagnostic";
+      return { severity: String(entry.severity || "warning").toLowerCase(), category: entry.category, kind: kind ? String(kind) : null, id: id ? String(id) : null, message: String(message), raw: entry };
+    });
+  }
+
+  globalThis.BMOPFModel = { buildCaseIndex, resultRoot, resultCase, resultRecord, resultScenarios, resultDiagnostics };
 })();

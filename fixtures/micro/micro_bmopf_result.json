@@ -9,6 +9,17 @@
   "termination_status": "LOCALLY_SOLVED",
   "objective": 12345.6,
   "solver": "illustrative-fixture",
+  "solution_profile": {
+    "bound_violations": [
+      {"kind": "line", "id": "line_main", "metric": "loading", "value": 1.04, "limit": 1.0, "message": "Line loading exceeds its limit."}
+    ],
+    "near_active_bounds": [
+      {"kind": "ibr", "id": "rooftop_ibr", "metric": "qg", "value": -1200.0, "message": "Reactive-power operating point is near a bound."}
+    ],
+    "residuals": [
+      {"kind": "bus", "id": "load_bus", "metric": "power_balance", "value": 0.02, "message": "Power-balance residual is non-zero."}
+    ]
+  },
   "bus": {
     "source": {"vm": [6350.0, 6349.8, 6350.2, 0.0], "va": [0.0, -120.0, 120.0, 0.0]},
     "feeder": {"vm": [6328.0, 6319.5, 6334.2, 0.0], "va": [-0.2, -120.4, 119.7, 0.0]},

@@ -33,6 +33,7 @@ inspector, alongside a raw result-record view.
 - Terminal-map length mismatches are reported instead of silently padded in focused views.
 - Clear load errors for invalid JSON, oversized files, and oversized JSON documents.
 - Schema-identifier diagnostics when a case omits or does not identify BMOPF.
+- A Diagnostics view normalises result validation/profile findings and links each linked finding back to its asset.
 
 Multinetwork `nw` results are identified and require an explicit scenario
 selection before asset metrics are shown; the active slice is displayed in the

@@ -33,6 +33,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Terminal-map length mismatches are surfaced as case and focused-view diagnostics.
 - [x] Results JSON can be attached as a sidecar and selected asset metrics are visible in the inspector.
 - [x] Normalised line-loading results are visible in overview stroke colour/width, legend, and tooltips.
+- [x] Diagnostics view normalises result validation/profile findings and links linked findings back to assets.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
 

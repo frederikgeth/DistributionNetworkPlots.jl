@@ -99,6 +99,10 @@
     };
   }
 
+  function diagnosticsForView() {
+    return state.result ? globalThis.BMOPFModel.resultDiagnostics(state.result, state.resultScenario) : [];
+  }
+
   function resultIdentity() {
     const root = resultRoot();
     return root?.case_fingerprint ?? root?.case_id ?? root?.meta?.case_fingerprint ?? root?.meta?.case_id ?? null;
@@ -152,6 +156,7 @@
     if (meta.objective !== undefined) fields.push(["objective", meta.objective]);
     if (meta.solver !== undefined) fields.push(["solver", meta.solver]);
     if (meta.scenarios.length) fields.push(["scenarios", meta.scenarios.length]);
+    if (state.result) fields.push(["diagnostics", diagnosticsForView().length]);
     if (caseInResult) fields.push(["embedded case", "yes"]);
     const warning = state.resultError ? `<p class="result-warning">${escapeHtml(state.resultError)}</p>` : "";
     const scenarioNote = meta.scenarios.length > 1 && !state.resultScenario ? `<p class="result-warning">Choose a scenario before inspecting result metrics. No slice is silently chosen.</p>` : "";
@@ -284,7 +289,7 @@
 
   function renderCameraControls() {
     const controls = $("camera-controls");
-    if (!state.index) { controls.hidden = true; controls.innerHTML = ""; return; }
+    if (!state.index || state.view === "diagnostics") { controls.hidden = true; controls.innerHTML = ""; return; }
     controls.hidden = false;
     controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button>`;
     controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
@@ -345,7 +350,7 @@
   }
 
   function focusSelection() {
-    const item = itemFor(state.selected); if (!item || !state.index || state.view === "multi") return;
+    const item = itemFor(state.selected); if (!item || !state.index || ["multi", "diagnostics"].includes(state.view)) return;
     const positions = state.view === "geo" ? busCoordinates().positions : singlePositions();
     const points = item.ref.kind === "bus" ? [positions.get(item.ref.id)] : (item.ports || []).map((port) => positions.get(port.busId));
     const valid = points.filter(Boolean); if (!valid.length) return;
@@ -509,6 +514,31 @@
     $("canvas").innerHTML = svgShell(content);
   }
 
+  function drawDiagnostics() {
+    if (!state.result) {
+      setStatus("Attach a results JSON file to inspect validation and solution diagnostics.");
+      $("canvas").innerHTML = '<div class="message">No results attached. Diagnostics are derived from BMOPFTools result/profile fields.</div>';
+      return;
+    }
+    const diagnostics = diagnosticsForView();
+    if (!diagnostics.length) {
+      setStatus("No diagnostics were found in the active result slice.");
+      $("canvas").innerHTML = '<div class="message">No validation, bound, residual, or solution-profile diagnostics were found.</div>';
+      return;
+    }
+    const cards = diagnostics.map((diagnostic) => {
+      const severity = ["error", "warning", "info"].includes(diagnostic.severity) ? diagnostic.severity : "warning";
+      const target = diagnostic.kind && diagnostic.id && itemFor({ kind: diagnostic.kind, id: diagnostic.id })
+        ? '<button class="diagnostic-target" data-kind="' + escapeHtml(diagnostic.kind) + '" data-id="' + escapeHtml(diagnostic.id) + '">' + escapeHtml(diagnostic.kind.replaceAll("_", " ")) + ' ' + escapeHtml(diagnostic.id) + '</button>'
+        : '<span class="muted">No linked asset</span>';
+      const category = diagnostic.category ? '<span class="diagnostic-category">' + escapeHtml(diagnostic.category) + '</span>' : "";
+      return '<article class="diagnostic-card ' + severity + '"><div class="diagnostic-heading"><span class="diagnostic-severity">' + escapeHtml(severity) + '</span>' + category + target + '</div><p>' + escapeHtml(diagnostic.message) + '</p><details><summary>Diagnostic data</summary><pre class="raw">' + escapeHtml(JSON.stringify(diagnostic.raw, null, 2)) + '</pre></details></article>';
+    }).join("");
+    $("canvas").innerHTML = '<div class="diagnostics-view"><div class="diagnostics-heading"><h2>Result diagnostics</h2><span class="muted">' + diagnostics.length + ' finding' + (diagnostics.length === 1 ? "" : "s") + '</span></div>' + cards + '</div>';
+    setStatus(diagnostics.length + ' result diagnostic' + (diagnostics.length === 1 ? "" : "s") + (state.resultScenario ? ' · ' + state.resultScenario : ""));
+    bindSvgSelection();
+  }
+
   function bindSvgSelection() {
     $("canvas").querySelectorAll("[data-kind][data-id]").forEach((node) => {
       node.setAttribute("tabindex", "0");
@@ -525,7 +555,8 @@
     if (!state.index) { $("canvas").innerHTML = `<div class="message">Open a BMOPF JSON case to see its views.</div>`; return; }
     if (state.view === "geo") drawGeo();
     else if (state.view === "single") drawSingle();
-    else drawMulti();
+    else if (state.view === "multi") drawMulti();
+    else drawDiagnostics();
     document.querySelectorAll(".view-tab").forEach((button) => {
       const active = button.dataset.view === state.view;
       button.classList.toggle("active", active);
@@ -539,7 +570,7 @@
 
   function parseHash() {
     const parts = window.location.hash.slice(2).split("/");
-    if (parts[0] && ["geo", "single", "multi"].includes(parts[0])) state.view = parts[0];
+    if (parts[0] && ["geo", "single", "multi", "diagnostics"].includes(parts[0])) state.view = parts[0];
     if (parts[1] && parts[2]) state.selected = { kind: parts[1], id: decodeURIComponent(parts.slice(2).join("/")) };
   }
 
