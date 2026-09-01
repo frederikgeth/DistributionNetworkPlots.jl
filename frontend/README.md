@@ -21,6 +21,7 @@ Open <http://127.0.0.1:8765/> and drop `fixtures/micro/micro_bmopf.json` onto th
 - Reusable geospatial line geometry when supplied, with deterministic endpoint fallback.
 - Diagram assets expose keyboard focus, Enter/Space selection, and accessible names.
 - The case summary and inspector expose support levels for rendered versus raw-only records.
+- Multi-wire conductor rows show phase, neutral, and ground cues with colour, patterns, and labels.
 - Clear load errors for invalid JSON, oversized files, and oversized JSON documents.
 - Schema-identifier diagnostics when a case omits or does not identify BMOPF.
 

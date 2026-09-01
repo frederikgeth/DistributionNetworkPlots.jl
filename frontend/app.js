@@ -128,6 +128,18 @@
     return { assets, buses: seenBuses };
   }
 
+  function conductorVisual(terminal, otherTerminal, busId, otherBusId, index) {
+    const name = String(terminal).toLowerCase(); const otherName = String(otherTerminal).toLowerCase();
+    const bus = state.index.buses.find((candidate) => candidate.ref.id === busId);
+    const otherBus = state.index.buses.find((candidate) => candidate.ref.id === otherBusId);
+    const grounded = Boolean(bus?.groundedTerminals.includes(String(terminal)) || otherBus?.groundedTerminals.includes(String(otherTerminal)));
+    const neutral = name === "n" || otherName === "n";
+    if (grounded && neutral) return { colour: "#5d574d", dash: "4 3", label: "N⏚", kind: "grounded neutral" };
+    if (grounded) return { colour: "#5d574d", dash: "2 4", label: "⏚", kind: "ground" };
+    if (neutral) return { colour: "#787266", dash: "10 5", label: "N", kind: "neutral" };
+    return { colour: ["#c2564b", "#4a8f5f", "#3f6fb9"][index % 3], dash: "", label: ["A", "B", "C"][index % 3], kind: "phase" };
+  }
+
   function renderMultiHopControls() {
     const controls = $("multi-hop-controls");
     const selected = itemFor(state.selected);
@@ -375,8 +387,9 @@
     let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))}</text><rect x="35" y="70" width="200" height="350" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><rect x="525" y="70" width="200" height="350" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><text x="135" y="102" text-anchor="middle" font-size="15">bus ${escapeHtml(left.busId)}</text><text x="625" y="102" text-anchor="middle" font-size="15">bus ${escapeHtml(right.busId)}</text>`;
     const pairs = connection.pairs;
     pairs.forEach(([a, b], i) => {
-      const y = 145 + i * 45; const phase = String(a).toLowerCase() === "n" ? "#787266" : ["#c2564b", "#4a8f5f", "#3f6fb9"][i % 3];
-      content += `<text x="60" y="${y + 4}" fill="#37332c" font-size="13">${escapeHtml(a)}</text><line x1="90" y1="${y}" x2="670" y2="${y}" stroke="${phase}" stroke-width="3" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""}/><text x="690" y="${y + 4}" fill="#37332c" font-size="13">${escapeHtml(b)}</text>`;
+      const y = 145 + i * 45; const visual = conductorVisual(a, b, left.busId, right.busId, i);
+      const dash = [visual.dash, item.status === "open" ? "8 6" : ""].filter(Boolean).join(" ");
+      content += `<text x="60" y="${y + 4}" fill="#37332c" font-size="13">${escapeHtml(a)}</text><line x1="90" y1="${y}" x2="670" y2="${y}" stroke="${visual.colour}" stroke-width="3" ${dash ? `stroke-dasharray="${dash}"` : ""}/><text x="380" y="${y - 6}" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(visual.label)} · ${escapeHtml(visual.kind)}</text><text x="690" y="${y + 4}" fill="#37332c" font-size="13">${escapeHtml(b)}</text>`;
     });
     content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Ordered conductor pairing from source terminal maps</text>`;
     setStatus(`${pairs.length} conductor pairs · ${item.status}`);
