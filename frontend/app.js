@@ -411,8 +411,9 @@
       const dash = [visual.dash, item.status === "open" ? "8 6" : ""].filter(Boolean).join(" ");
       content += `<text x="60" y="${y + 4}" fill="#37332c" font-size="13">${escapeHtml(a)}</text><line x1="90" y1="${y}" x2="670" y2="${y}" stroke="${visual.colour}" stroke-width="3" ${dash ? `stroke-dasharray="${dash}"` : ""}/><text x="380" y="${y - 6}" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(visual.label)} · ${escapeHtml(visual.kind)}</text><text x="690" y="${y + 4}" fill="#37332c" font-size="13">${escapeHtml(b)}</text>`;
     });
-    content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Ordered conductor pairing from source terminal maps</text>`;
-    setStatus(`${pairs.length} conductor pairs · ${item.status}`);
+    const mappingNote = connection.warning ? `<text x="380" y="438" text-anchor="middle" fill="#8a4d20" font-size="12">${escapeHtml(connection.warning)} Inspect raw maps before relying on this pairing.</text>` : "";
+    content += `${mappingNote}<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Ordered conductor pairing from source terminal maps</text>`;
+    setStatus(`${pairs.length} conductor pairs · ${item.status}${connection.warning ? " · terminal-map warning" : ""}`);
     $("canvas").innerHTML = svgShell(content);
   }
 

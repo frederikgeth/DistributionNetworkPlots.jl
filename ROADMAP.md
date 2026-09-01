@@ -30,6 +30,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Keyboard-selectable diagram assets with ARIA names, selected-view state, and reduced-motion handling.
 - [x] Explicit support-level badges for fully rendered, focused, and raw-inspector-only records.
 - [x] Multi-wire phase, neutral, and ground cues use both line patterns and visible labels.
+- [x] Terminal-map length mismatches are surfaced as case and focused-view diagnostics.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
 

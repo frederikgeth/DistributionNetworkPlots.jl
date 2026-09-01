@@ -86,11 +86,15 @@
     // renderer can draw the transformer body and its spokes faithfully.
     if (kind === "transformer" && ports.length > 2) return [];
     const from = ports[0];
-    return ports.slice(1).map((to) => ({
-      from,
-      to,
-      pairs: from.terminals.map((terminal, i) => [terminal, to.terminals[i] ?? "?"])
-    }));
+    return ports.slice(1).map((to) => {
+      const mismatch = kind !== "transformer" && from.terminals.length !== to.terminals.length;
+      return {
+        from,
+        to,
+        pairs: from.terminals.map((terminal, i) => [terminal, to.terminals[i] ?? "?"]),
+        warning: mismatch ? `Terminal-map length mismatch (${from.terminals.length} → ${to.terminals.length}).` : null
+      };
+    });
   }
 
   function statusOf(kind, record) {
@@ -160,6 +164,7 @@
       for (const item of entries) {
         const e = entity(kind, item.id, item.pointer, item.value);
         addEntity(e, ASSET_KINDS.has(kind));
+        for (const connection of e.connections) if (connection.warning) warnings.push(`${kind}/${item.id}: ${connection.warning}`);
         for (const p of e.ports) {
           if (!buses.some((b) => b.ref.id === p.busId)) {
             warnings.push(`${kind}/${item.id} references missing bus ${p.busId}`);
