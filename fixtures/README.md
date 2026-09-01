@@ -14,6 +14,10 @@ illustrative objective, termination, bus voltage, device loading, and dispatch
 fields so the browser result adapter can be exercised without redistributing a
 solver-generated dataset.
 
+`micro/micro_bmopf_multinetwork_result.json` exercises explicit selection of
+multiple `nw` result slices. The viewer refuses to guess a slice and requires
+the user to choose one before showing asset metrics.
+
 ## Reused cases
 
 Cases reused from another initiative must remain under their source license.

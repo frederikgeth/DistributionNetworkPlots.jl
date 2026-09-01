@@ -55,6 +55,8 @@ h2 { margin-bottom: 0; font-size: 15px; }
 .support-meta, .support-note { margin: 0; padding: 0 14px 12px; color: var(--muted); font-size: 11px; }
 .support-note { padding: 0; }
 .result-table { margin: 0 14px 10px; width: calc(100% - 28px); }
+.scenario-control { display: flex; align-items: center; gap: 8px; padding: 10px 14px 2px; color: var(--muted); font-size: 12px; }
+.scenario-control select { min-width: 150px; border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; color: var(--ink); background: var(--panel); }
 .result-empty, .result-missing { margin: 0; padding: 10px 14px 12px; }
 .result-heading { margin-top: 14px !important; }
 .result-warning { margin: 0; padding: 0 14px 10px; color: #8a4d20; font-size: 12px; }

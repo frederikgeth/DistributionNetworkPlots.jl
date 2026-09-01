@@ -14,8 +14,7 @@ Attach a BMOPFTools-style result JSON with the secondary file control after
 opening a case. Raw result dictionaries and wrappers with an embedded
 `case`/`network` are accepted. Run status/objective metadata appears in the
 Results panel; recognised values for the selected asset appear in the
-inspector, alongside a raw result-record view. Multinetwork `nw` results are
-identified and deliberately left for the planned scenario selector.
+inspector, alongside a raw result-record view.
 
 - Asset inventory and search.
 - Source-property inspection and raw-record display.
@@ -34,6 +33,10 @@ identified and deliberately left for the planned scenario selector.
 - Terminal-map length mismatches are reported instead of silently padded in focused views.
 - Clear load errors for invalid JSON, oversized files, and oversized JSON documents.
 - Schema-identifier diagnostics when a case omits or does not identify BMOPF.
+
+Multinetwork `nw` results are identified and require an explicit scenario
+selection before asset metrics are shown; the active slice is displayed in the
+Results panel.
 
 The prototype intentionally has no external basemap or runtime backend. Its layout is deterministic and is not yet the final ELK-backed renderer.
 

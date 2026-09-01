@@ -4,6 +4,7 @@ using DistributionNetworkPlots
 
 const FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro", "micro_bmopf.json")
 const RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro", "micro_bmopf_result.json")
+const MULTINETWORK_RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro", "micro_bmopf_multinetwork_result.json")
 
 @testset "self-contained report" begin
     case = JSON3.read(read(FIXTURE, String), Dict{String,Any})
@@ -55,4 +56,7 @@ end
     @test result["meta"]["case_id"] == "micro-bmopf"
     @test result["termination_status"] == "LOCALLY_SOLVED"
     @test result["line"]["line_main"]["loading"] == 0.42
+    multinetwork = JSON3.read(read(MULTINETWORK_RESULT_FIXTURE, String), Dict{String,Any})
+    @test length(multinetwork["nw"]) == 2
+    @test multinetwork["nw"]["snapshot_01"]["line"]["line_main"]["loading"] == 0.78
 end

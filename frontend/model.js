@@ -215,12 +215,17 @@
 
   function resultRecord(document, kind, id, scenario) {
     const root = resultRoot(document);
+    const scenarios = resultScenarios(document);
+    // Never make an arbitrary choice for a multinetwork result. The caller
+    // must name the slice explicitly; a single slice remains zero-click.
+    if (scenarios.length > 1 && !scenario) return null;
+    const activeScenario = scenario || (scenarios.length === 1 ? scenarios[0] : null);
     const candidates = [];
-    if (scenario && isObject(root.nw?.[scenario])) candidates.push(root.nw[scenario]);
-    if (isObject(root.nw)) {
+    if (activeScenario && isObject(root.nw?.[activeScenario])) candidates.push(root.nw[activeScenario]);
+    if (!scenarios.length && isObject(root.nw)) {
       for (const value of Object.values(root.nw)) if (isObject(value)) candidates.push(value);
     }
-    candidates.push(root);
+    if (!scenarios.length || activeScenario) candidates.push(root);
     for (const candidate of candidates) {
       const table = candidate?.[kind];
       if (isObject(table) && table[id] !== undefined) return table[id];

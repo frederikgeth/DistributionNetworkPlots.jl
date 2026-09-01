@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", view: "geo", query: "", activeKind: null, multiHops: 1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultScenario: null, view: "geo", query: "", activeKind: null, multiHops: 1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -106,7 +106,7 @@
 
   function resultTooltip(item) {
     if (!state.result) return "";
-    const record = globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id);
+    const record = globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id, state.resultScenario);
     if (!record || typeof record !== "object" || Array.isArray(record)) return "";
     const keys = ["vm", "va", "p", "q", "pg", "qg", "loading", "status", "residual"];
     const values = Object.entries(record).filter(([key]) => keys.includes(key) || key.endsWith("_loading") || key.endsWith("_residual"));
@@ -130,14 +130,18 @@
     if (meta.scenarios.length) fields.push(["scenarios", meta.scenarios.length]);
     if (caseInResult) fields.push(["embedded case", "yes"]);
     const warning = state.resultError ? `<p class="result-warning">${escapeHtml(state.resultError)}</p>` : "";
-    const scenarioNote = meta.scenarios.length > 1 ? `<p class="result-warning">Multinetwork result detected (${meta.scenarios.length} slices); scenario selection is planned and no slice is silently chosen.</p>` : "";
+    const scenarioNote = meta.scenarios.length > 1 && !state.resultScenario ? `<p class="result-warning">Choose a scenario before inspecting result metrics. No slice is silently chosen.</p>` : "";
+    const scenarioControl = meta.scenarios.length > 1 ? `<label class="scenario-control">Scenario<select id="result-scenario"><option value="">Select a scenario</option>${meta.scenarios.map((scenario) => `<option value="${escapeHtml(scenario)}" ${state.resultScenario === scenario ? "selected" : ""}>${escapeHtml(scenario)}</option>`).join("")}</select></label>` : "";
+    const selectedScenario = state.resultScenario ? `<p class="report-meta">active scenario <code>${escapeHtml(state.resultScenario)}</code></p>` : "";
     const identity = resultIdentity();
     const identityHtml = identity ? `<p class="report-meta">case identity <code>${escapeHtml(String(identity))}</code></p>` : "";
     const expectedIdentity = state.index?.raw?.meta?.case_fingerprint || state.index?.raw?.meta?.case_id || state.index?.name;
     const mismatch = identity && expectedIdentity && String(identity) !== String(expectedIdentity);
     const mismatchHtml = mismatch ? `<p class="result-warning">Result identity <code>${escapeHtml(String(identity))}</code> does not match the open case <code>${escapeHtml(String(expectedIdentity))}</code>. Metrics are shown, but pairing should be reviewed.</p>` : "";
     panel.className = "panel";
-    panel.innerHTML = `<div class="panel-heading"><h2>Results</h2><span class="muted">${escapeHtml(state.resultLabel || "JSON")}</span></div>${fields.length ? `<table class="property-table result-table">${fields.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("")}</table>` : `<p class="muted result-empty">Result records attached; no run summary fields were found.</p>`}${identityHtml}${mismatchHtml}${scenarioNote}${warning}`;
+    panel.innerHTML = `<div class="panel-heading"><h2>Results</h2><span class="muted">${escapeHtml(state.resultLabel || "JSON")}</span></div>${scenarioControl}${selectedScenario}${fields.length ? `<table class="property-table result-table">${fields.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("")}</table>` : `<p class="muted result-empty">Result records attached; no run summary fields were found.</p>`}${identityHtml}${mismatchHtml}${scenarioNote}${warning}`;
+    const scenarioSelect = $("result-scenario");
+    if (scenarioSelect) scenarioSelect.addEventListener("change", (event) => { state.resultScenario = event.target.value || null; render(); });
   }
 
   function renderInventory() {
@@ -228,7 +232,7 @@
     const uniqueRelated = related.filter((ref, i, all) => all.findIndex((candidate) => candidate.kind === ref.kind && candidate.id === ref.id) === i && itemFor(ref));
     const relatedHtml = uniqueRelated.length ? `<h3>Related</h3><div class="related">${uniqueRelated.map((r) => `<button class="link-button" data-related-kind="${escapeHtml(r.kind)}" data-related-id="${escapeHtml(r.id)}">${escapeHtml(r.kind)} ${escapeHtml(r.id)}</button>`).join("")}</div>` : "";
     const portHtml = item.ports?.length ? `<h3>Ports</h3><table class="property-table">${item.ports.map((p) => `<tr><th>${escapeHtml(p.role || p.id)}</th><td>${escapeHtml(p.busId)} · [${p.terminals.map(escapeHtml).join(", ")}]</td></tr>`).join("")}</table>` : "";
-    const result = state.result ? globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id) : null;
+    const result = state.result ? globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id, state.resultScenario) : null;
     const resultKeys = ["vm", "va", "v_magnitude", "v_angle", "p", "q", "pg", "qg", "loading", "status", "in_service", "residual"];
     const resultEntries = result && typeof result === "object" ? Object.entries(result).filter(([key]) => resultKeys.includes(key) || key.endsWith("_loading") || key.endsWith("_residual")) : [];
     const resultHtml = state.result ? (result ? `<h3 class="result-heading">Simulation / optimisation result</h3><table class="property-table result-table">${resultEntries.length ? resultEntries.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("") : `<tr><td colspan="2" class="muted">A result file is attached, but no recognised metrics were found for this record.</td></tr>`}</table><details><summary>Raw result record</summary><pre class="raw result-raw"></pre></details>` : `<p class="muted result-missing">No result record found for this asset.</p>`) : "";
@@ -549,6 +553,8 @@
       state.result = resultDocument;
       state.resultLabel = label || "Results JSON";
       state.resultError = "";
+      const scenarios = globalThis.BMOPFModel.resultScenarios(resultDocument);
+      state.resultScenario = scenarios.length === 1 ? scenarios[0] : null;
       render();
       setStatus(embeddedCase ? "Results attached with embedded case." : "Results attached to the current case.");
     } catch (error) {

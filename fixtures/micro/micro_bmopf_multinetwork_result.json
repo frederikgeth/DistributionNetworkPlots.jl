@@ -1,0 +1,21 @@
+{
+  "schema": "bmopf-result/v1",
+  "meta": {
+    "license": "CC-BY-4.0",
+    "attribution": "DistributionNetworkPlots.jl contributors",
+    "source": "authored in this repository",
+    "case_id": "micro-bmopf"
+  },
+  "termination_status": "LOCALLY_SOLVED",
+  "objective": 12345.6,
+  "nw": {
+    "snapshot_00": {
+      "bus": {"load_bus": {"vm": [427.2, 425.8, 429.1, 0.0]}},
+      "line": {"line_main": {"loading": 0.42}}
+    },
+    "snapshot_01": {
+      "bus": {"load_bus": {"vm": [421.8, 420.4, 423.6, 0.0]}},
+      "line": {"line_main": {"loading": 0.78}}
+    }
+  }
+}

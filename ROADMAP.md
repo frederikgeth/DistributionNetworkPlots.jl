@@ -404,7 +404,7 @@ A slice is done only when:
 
 - [x] Attach a raw BMOPFTools-compatible result JSON sidecar to an indexed case, show objective/termination metadata, and expose selected asset metrics with safe raw-record access.
 - [ ] Pair a case and result by case fingerprint/provenance, with an explicit mismatch diagnostic.
-- [ ] Add a multinetwork/time/scenario selector; never silently choose the first `nw` slice.
+- [x] Add a multinetwork/time/scenario selector; never silently choose the first `nw` slice.
 - [ ] Add result-driven visual encodings for voltage deviation, line/transformer loading, and open/out-of-service state, with legends and accessible non-colour cues.
 - [ ] Surface BMOPFTools solution-profile findings (bound violations, near-active bounds, residuals, and quality) as filterable diagnostics.
 - [ ] Compare two operating points or result sidecars while keeping source asset identity stable.
