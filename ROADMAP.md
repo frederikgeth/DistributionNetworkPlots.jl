@@ -42,6 +42,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Single-line view uses a deterministic source-to-load layered layout, heavy busbars, orthogonal branch routing, explicit device labels, and IEEE/IEC-inspired symbols.
 - [x] Inventory search ranks exact/prefix asset matches and can jump by keyboard; help panel documents views, symbols, and result cues.
 - [x] Export the active overview view as a standalone SVG.
+- [x] Persist versioned single-line bus adjustments per case, with nudge, lock/unlock, and reset-to-computed controls.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
 
@@ -419,7 +420,7 @@ A slice is done only when:
 - [x] Surface BMOPFTools solution-profile findings (bound violations, near-active bounds, and residuals) as filterable diagnostics.
 - [x] Compare two operating points or result sidecars while keeping source asset identity stable.
 - [x] Add a validation/diagnostic view that focuses assets with BMOPFTools solution-profile violations, residuals, and near-active bounds.
-- [ ] Persist versioned layouts keyed by case fingerprint, including per-bus lock/unlock and reset-to-computed controls.
+- [x] Persist versioned layouts keyed by case fingerprint, including per-bus lock/unlock and reset-to-computed controls.
 - [x] Add ranked search suggestions across buses, devices, diagnostics, and result metrics.
 - [ ] Publish measured SVG/interaction budgets and an explicit focused-neighbourhood fallback for cases above them.
 - [x] Add an accessible help/legend panel for symbols, conductor cues, and result encodings.

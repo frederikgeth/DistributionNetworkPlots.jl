@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { key: null, locked: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -54,6 +54,7 @@
     const requestedSelection = state.selected;
     try {
       state.index = globalThis.BMOPFModel.buildCaseIndex(caseDocument);
+      state.layout = loadLayout();
       state.selected = requestedSelection && itemFor(requestedSelection) ? requestedSelection : null;
       state.activeKind = null;
       render();
@@ -61,6 +62,58 @@
     } catch (error) {
       showLoadError(error.message, label);
     }
+  }
+
+  function layoutKey() {
+    const meta = state.index?.raw?.meta || {};
+    return String(meta.case_fingerprint || meta.case_id || state.index?.name || "unnamed-case");
+  }
+
+  function loadLayout() {
+    const key = layoutKey();
+    try {
+      const stored = JSON.parse(localStorage.getItem(`bmopf-layout-v1:${key}`) || "null");
+      if (stored && stored.version === 1 && stored.key === key && stored.locked && typeof stored.locked === "object") return stored;
+    } catch (_) { /* localStorage is optional in static reports */ }
+    return { version: 1, key, locked: {} };
+  }
+
+  function saveLayout() {
+    if (!state.layout?.key) return;
+    try { localStorage.setItem(`bmopf-layout-v1:${state.layout.key}`, JSON.stringify(state.layout)); } catch (_) { /* ignore unavailable storage */ }
+  }
+
+  function layoutLocked(id) { return Array.isArray(state.layout?.locked?.[id]); }
+
+  function nudgeSelectedBus(dx, dy) {
+    const item = itemFor(state.selected);
+    if (!item || item.ref.kind !== "bus") return;
+    const positions = singlePositions(); const current = positions.get(item.ref.id); if (!current) return;
+    state.layout.locked[item.ref.id] = [current[0] + dx, current[1] + dy];
+    saveLayout(); renderView(); renderCameraControls();
+  }
+
+  function resetLayout() {
+    state.layout = { version: 1, key: layoutKey(), locked: {} };
+    saveLayout();
+    renderView(); renderCameraControls();
+    setStatus("Single-line layout reset to the computed source-to-load arrangement.");
+  }
+
+  function bindLayoutControls() {
+    document.querySelectorAll("[data-layout]").forEach((button) => button.addEventListener("click", () => {
+      const item = itemFor(state.selected);
+      if (button.dataset.layout === "reset") { resetLayout(); return; }
+      if (!item || item.ref.kind !== "bus") return;
+      if (button.dataset.layout === "lock") {
+        const point = singlePositions().get(item.ref.id); if (point) state.layout.locked[item.ref.id] = [...point];
+      } else if (button.dataset.layout === "unlock") delete state.layout.locked[item.ref.id];
+      else if (button.dataset.layout === "left") nudgeSelectedBus(-12, 0);
+      else if (button.dataset.layout === "right") nudgeSelectedBus(12, 0);
+      else if (button.dataset.layout === "up") nudgeSelectedBus(0, -12);
+      else if (button.dataset.layout === "down") nudgeSelectedBus(0, 12);
+      saveLayout(); renderView(); renderCameraControls();
+    }));
   }
 
   function availableExamples() {
@@ -496,7 +549,9 @@
     const controls = $("camera-controls");
     if (!state.index || state.view === "diagnostics") { controls.hidden = true; controls.innerHTML = ""; return; }
     controls.hidden = false;
-    controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export">Export SVG</button>`;
+    const layoutControls = state.view === "single"
+      ? `<span class="layout-label">Layout:</span><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
+    controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export">Export SVG</button>${layoutControls}`;
     controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
       const camera = state.cameras[state.view];
       if (button.dataset.camera === "zoom-in") camera.scale = Math.min(3, camera.scale * 1.25);
@@ -506,6 +561,7 @@
       else { camera.scale = 1; camera.x = 0; camera.y = 0; }
       updateCamera();
     }));
+    bindLayoutControls();
   }
 
   function exportCurrentSvg() {
@@ -603,6 +659,9 @@
       const spacing = Math.min(96, 360 / Math.max(level.length, 1));
       const start = 250 - ((level.length - 1) * spacing) / 2;
       level.forEach((bus, i) => positions.set(bus.ref.id, [70 + d * xStep, start + i * spacing]));
+    }
+    for (const [id, point] of Object.entries(state.layout?.locked || {})) {
+      if (Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) positions.set(id, [point[0], point[1]]);
     }
     return positions;
   }
@@ -723,7 +782,8 @@
     for (const bus of state.index.buses) {
       const p = positions.get(bus.ref.id); const selected = sameRef(bus.ref, state.selected);
       const voltage = resultVoltageVisual(bus, selected, "#2f6fb3"); const voltageDash = voltage.dash ? ` stroke-dasharray="${voltage.dash}"` : ""; const voltageGlyph = voltage.level === "high" ? "!" : voltage.level === "moderate" ? "~" : "";
-      content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><line x1="${p[0] - 42}" y1="${p[1]}" x2="${p[0] + 42}" y2="${p[1]}" stroke="${voltage.colour}" stroke-width="${selected ? 7 : 5}"${voltageDash}/><circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${voltage.colour}"/><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(resultTooltip(bus))}</title>${voltageGlyph ? `<text x="${p[0] - 50}" y="${p[1] - 8}" fill="${voltage.colour}" font-size="10" font-weight="700">${voltageGlyph}</text>` : ""}<text x="${p[0]}" y="${p[1] + 20}" text-anchor="middle" fill="#37332c" font-size="11">${escapeHtml(bus.ref.id)}</text></g>`;
+      const lockMark = layoutLocked(bus.ref.id) ? " · locked" : "";
+      content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><line x1="${p[0] - 42}" y1="${p[1]}" x2="${p[0] + 42}" y2="${p[1]}" stroke="${voltage.colour}" stroke-width="${selected ? 7 : 5}"${voltageDash}/><circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${voltage.colour}"/><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(lockMark)}${escapeHtml(resultTooltip(bus))}</title>${voltageGlyph ? `<text x="${p[0] - 50}" y="${p[1] - 8}" fill="${voltage.colour}" font-size="10" font-weight="700">${voltageGlyph}</text>` : ""}<text x="${p[0]}" y="${p[1] + 20}" text-anchor="middle" fill="#37332c" font-size="11">${escapeHtml(bus.ref.id)}${lockMark ? " · locked" : ""}</text></g>`;
     }
     content += `<text x="24" y="474" fill="#70695f" font-size="10">Legend: heavy line = busbar · ○ = source/generator · paired coils = transformer · □ = load · ║ = capacitor · ⏚ = shunt · open blade = switch</text>`;
     content += resultLegend();

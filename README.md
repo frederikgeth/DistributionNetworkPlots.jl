@@ -48,6 +48,7 @@ The prototype supports:
 - Ranked inventory search across asset IDs, bus links, and result field names, with keyboard jump-to-match.
 - Built-in accessible help panel explaining view semantics, symbols, conductor cues, and result encodings.
 - Export of the active geospatial or single-line SVG for reports and issue attachments.
+- Locally persisted single-line bus adjustments with per-bus nudge, lock/unlock, and reset controls.
 
 ## Generate a static Julia report
 
