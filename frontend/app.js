@@ -2,12 +2,40 @@
   "use strict";
 
   const state = { index: null, selected: null, view: "geo", query: "", activeKind: null };
+  const MAX_FILE_BYTES = 25 * 1024 * 1024;
+  const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const titleOf = (item) => `${item.ref.kind.replaceAll("_", " ")} ${item.ref.id}`;
   const colourOf = (kind) => ({ line: "#8a8378", switch: "#c26a27", transformer: "#4f789f", load: "#a75a1b", generator: "#4a8f5f", ibr: "#789e46", shunt: "#8a6ca8", capacitor: "#8a6ca8", voltage_source: "#3f6fb9" }[kind] || "#9a9388");
 
   function setStatus(text) { $("view-status").textContent = text || ""; }
+
+  function countJsonElements(value, limit) {
+    let count = 0;
+    const pending = [value];
+    while (pending.length) {
+      const current = pending.pop();
+      count += 1;
+      if (count > limit) return count;
+      if (Array.isArray(current)) pending.push(...current);
+      else if (current && typeof current === "object") pending.push(...Object.values(current));
+    }
+    return count;
+  }
+
+  function showLoadError(message, label) {
+    state.index = null;
+    state.selected = null;
+    state.activeKind = null;
+    $("case-summary").className = "panel empty-panel";
+    $("case-summary").innerHTML = `<strong>Could not open case</strong><p class="muted">${escapeHtml(message)}</p>`;
+    $("inventory").innerHTML = "";
+    $("inspector").innerHTML = `<p class="muted">Open a valid BMOPF JSON case to begin exploring it.</p>`;
+    $("selection-label").textContent = "Nothing selected";
+    $("canvas").innerHTML = `<div class="message">${escapeHtml(message)}</div>`;
+    setStatus(label ? `${label} was not loaded.` : "Case was not loaded.");
+  }
 
   function select(ref) {
     state.selected = ref;
@@ -31,11 +59,7 @@
       setStatus(`${state.index.name} · ${state.index.buses.length} buses · ${state.index.assets.length - state.index.buses.length} devices`);
       if (label) globalThis.document.title = `${label} · BMOPF Explorer`;
     } catch (error) {
-      state.index = null;
-      $("case-summary").innerHTML = `<strong>Could not open case</strong><p class="muted">${escapeHtml(error.message)}</p>`;
-      $("inventory").innerHTML = "";
-      $("inspector").textContent = "";
-      $("canvas").innerHTML = `<div class="message">${escapeHtml(error.message)}</div>`;
+      showLoadError(error.message, label);
     }
   }
 
@@ -255,8 +279,25 @@
   }
 
   function readFile(file) {
+    if (file.size > MAX_FILE_BYTES) {
+      showLoadError(`The selected file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`, file.name);
+      return;
+    }
     const reader = new FileReader();
-    reader.onload = () => { try { loadDocument(JSON.parse(reader.result), file.name); } catch (error) { loadDocument(null, file.name); } };
+    reader.onload = () => {
+      let parsed;
+      try { parsed = JSON.parse(reader.result); }
+      catch (error) {
+        showLoadError(`This file is not valid JSON. Check the file syntax and try again.`, file.name);
+        return;
+      }
+      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
+        showLoadError(`This case contains more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`, file.name);
+        return;
+      }
+      loadDocument(parsed, file.name);
+    };
+    reader.onerror = () => showLoadError("The browser could not read this file. Check its permissions and try again.", file.name);
     reader.readAsText(file);
   }
 

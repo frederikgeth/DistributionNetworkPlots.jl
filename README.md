@@ -22,6 +22,7 @@ The prototype supports:
 - Geospatial schematic and single-wire projections.
 - Bus- and device-focused multi-wire drill-down.
 - Local-only case loading with no runtime backend.
+- Browser-side guardrails for invalid JSON and oversized case files.
 
 ## Generate a static Julia report
 

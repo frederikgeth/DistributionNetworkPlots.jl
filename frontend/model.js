@@ -161,6 +161,10 @@
     const coordinateCount = buses.filter((b) => b.coordinates).length;
     if (coordinateCount === 0) warnings.push("No geographic bus coordinates were found.");
     else if (coordinateCount < buses.length) warnings.push(`Coordinates found for ${coordinateCount}/${buses.length} buses.`);
+    if (!document.$schema) warnings.push("No BMOPF schema identifier was provided; semantic support is best effort.");
+    else if (!String(document.$schema).toLowerCase().includes("bmopf")) {
+      warnings.push(`Schema identifier is not recognised as BMOPF: ${String(document.$schema)}`);
+    }
 
     return {
       raw: document,
