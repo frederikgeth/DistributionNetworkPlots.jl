@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { key: null, locked: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { key: null, locked: {}, direction: "source-to-load", root: "auto" }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -73,9 +73,9 @@
     const key = layoutKey();
     try {
       const stored = JSON.parse(localStorage.getItem(`bmopf-layout-v1:${key}`) || "null");
-      if (stored && stored.version === 1 && stored.key === key && stored.locked && typeof stored.locked === "object") return stored;
+      if (stored && stored.version === 1 && stored.key === key && stored.locked && typeof stored.locked === "object") return { ...stored, direction: stored.direction === "load-to-source" ? stored.direction : "source-to-load", root: typeof stored.root === "string" ? stored.root : "auto" };
     } catch (_) { /* localStorage is optional in static reports */ }
-    return { version: 1, key, locked: {} };
+    return { version: 1, key, locked: {}, direction: "source-to-load", root: "auto" };
   }
 
   function saveLayout() {
@@ -94,7 +94,7 @@
   }
 
   function resetLayout() {
-    state.layout = { version: 1, key: layoutKey(), locked: {} };
+    state.layout = { version: 1, key: layoutKey(), locked: {}, direction: "source-to-load", root: "auto" };
     saveLayout();
     renderView(); renderCameraControls();
     setStatus("Single-line layout reset to the computed source-to-load arrangement.");
@@ -588,7 +588,7 @@
     if (!state.index || state.view === "diagnostics") { controls.hidden = true; controls.innerHTML = ""; return; }
     controls.hidden = false;
     const layoutControls = state.view === "single"
-      ? `<span class="layout-label">Layout:</span><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
+      ? `<span class="layout-label">Layout:</span><label class="layout-select">Direction<select id="sld-direction" aria-label="Single-line direction"><option value="source-to-load" ${state.layout.direction === "source-to-load" ? "selected" : ""}>Source → load</option><option value="load-to-source" ${state.layout.direction === "load-to-source" ? "selected" : ""}>Load → source</option></select></label><label class="layout-select">Root<select id="sld-root" aria-label="Single-line root bus"><option value="auto" ${state.layout.root === "auto" ? "selected" : ""}>Automatic</option>${state.index.buses.map((bus) => `<option value="${escapeHtml(bus.ref.id)}" ${state.layout.root === bus.ref.id ? "selected" : ""}>${escapeHtml(bus.ref.id)}</option>`).join("")}</select></label><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
     controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export-svg">Export SVG</button><button data-camera="export-png">Export PNG</button>${layoutControls}`;
     controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
       const camera = state.cameras[state.view];
@@ -600,6 +600,10 @@
       else { camera.scale = 1; camera.x = 0; camera.y = 0; }
       updateCamera();
     }));
+    const direction = $("sld-direction");
+    if (direction) direction.addEventListener("change", (event) => { state.layout.direction = event.target.value; saveLayout(); renderView(); renderCameraControls(); });
+    const root = $("sld-root");
+    if (root) root.addEventListener("change", (event) => { state.layout.root = event.target.value; saveLayout(); renderView(); renderCameraControls(); });
     bindLayoutControls();
   }
 
@@ -706,7 +710,8 @@
       .map((item) => item.ports[0].busId)
       .filter((id, i, all) => all.indexOf(id) === i);
     const depth = new Map();
-    const queue = roots.length ? roots : (buses[0] ? [buses[0].ref.id] : []);
+    const configuredRoot = state.layout?.root && state.layout.root !== "auto" && buses.some((bus) => bus.ref.id === state.layout.root) ? state.layout.root : null;
+    const queue = configuredRoot ? [configuredRoot] : (roots.length ? roots : (buses[0] ? [buses[0].ref.id] : []));
     queue.forEach((id) => depth.set(id, 0));
     for (let cursor = 0; cursor < queue.length; cursor += 1) {
       const id = queue[cursor];
@@ -724,7 +729,8 @@
       level.sort((a, b) => a.ref.id.localeCompare(b.ref.id));
       const spacing = Math.min(96, 360 / Math.max(level.length, 1));
       const start = 250 - ((level.length - 1) * spacing) / 2;
-      level.forEach((bus, i) => positions.set(bus.ref.id, [70 + d * xStep, start + i * spacing]));
+      const column = state.layout?.direction === "load-to-source" ? maxDepth - d : d;
+      level.forEach((bus, i) => positions.set(bus.ref.id, [70 + column * xStep, start + i * spacing]));
     }
     for (const [id, point] of Object.entries(state.layout?.locked || {})) {
       if (Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) positions.set(id, [point[0], point[1]]);
@@ -834,7 +840,7 @@
     for (const item of overviewAssets().filter((e) => !e.connections?.length && e.ports?.length === 1)) {
       const port = item.ports[0]; const p = positions.get(port.busId); if (!p) continue;
       const offset = attached.get(port.busId) || 0; attached.set(port.busId, offset + 1);
-      const left = item.ref.kind === "voltage_source";
+      const left = item.ref.kind === "voltage_source" && state.layout?.direction !== "load-to-source";
       const x = p[0] + (left ? -58 : 62); const y = p[1] + (left ? 0 : -38 - offset * 38);
       content += `<path d="M${p[0] + (left ? -38 : 38)} ${p[1]}H${x}V${y}" fill="none" stroke="${colourOf(item.ref.kind)}" stroke-width="2" marker-end="url(#sld-arrow)"/>`;
       content += singleSymbol(item, x, y);
@@ -853,7 +859,9 @@
     }
     content += `<text x="24" y="474" fill="#70695f" font-size="10">Legend: heavy line = busbar · ○ = source/generator · paired coils = transformer · □ = load · ║ = capacitor · ⏚ = shunt · open blade = switch</text>`;
     content += resultLegend();
-    setStatus("Single-line diagram: source-to-load layered layout with conventional busbars and device symbols.");
+    const directionLabel = state.layout?.direction === "load-to-source" ? "load-to-source" : "source-to-load";
+    const rootLabel = state.layout?.root && state.layout.root !== "auto" ? ` · root ${state.layout.root}` : " · automatic feeder root";
+    setStatus(`Single-line diagram: ${directionLabel} layered layout${rootLabel} with conventional busbars and device symbols.`);
     $("canvas").innerHTML = svgShell(content);
     bindSvgSelection();
   }

@@ -50,6 +50,7 @@ The prototype supports:
 - Export of the active geospatial or single-line SVG for reports and issue attachments.
 - Export of the active view as a 2× PNG, plus a print stylesheet for clean diagram output.
 - Locally persisted single-line bus adjustments with per-bus nudge, lock/unlock, and reset controls.
+- Configurable single-line direction and feeder-root selection, also persisted per case.
 - Explicit overview SVG budgets with a focused one-hop fallback for oversized cases.
 
 ## Generate a static Julia report
