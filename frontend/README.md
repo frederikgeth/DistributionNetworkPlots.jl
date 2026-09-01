@@ -20,6 +20,7 @@ Open <http://127.0.0.1:8765/> and drop `fixtures/micro/micro_bmopf.json` onto th
 - Distinct single-wire symbols for supported device classes and state styling.
 - Reusable geospatial line geometry when supplied, with deterministic endpoint fallback.
 - Focus selection frames the selected bus or device in geospatial and single-wire views.
+- Geographic views omit buses without coordinates when a geographic frame is available and report the omission.
 - Diagram assets expose keyboard focus, Enter/Space selection, and accessible names.
 - The case summary and inspector expose support levels for rendered versus raw-only records.
 - Multi-wire conductor rows show phase, neutral, and ground cues with colour, patterns, and labels.

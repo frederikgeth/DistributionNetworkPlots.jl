@@ -24,6 +24,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Distinct single-wire symbols and visible open/out-of-service styling for supported asset classes.
 - [x] Geospatial routes from reusable line geometry with straight-line fallback.
 - [x] Focus-selection action frames the selected bus or device in overview views.
+- [x] Partial geographic coverage is explicit; buses without coordinates are not placed on the geographic canvas.
 - [x] Julia-generated self-contained report with safe JSON embedding.
 - [x] Static report metadata with case fingerprint, schema, application version, and layout-engine identifier.
 - [x] Keyboard-selectable diagram assets with ARIA names, selected-view state, and reduced-motion handling.

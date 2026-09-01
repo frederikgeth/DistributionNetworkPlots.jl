@@ -57,7 +57,6 @@
       state.selected = requestedSelection && itemFor(requestedSelection) ? requestedSelection : null;
       state.activeKind = null;
       render();
-      setStatus(`${state.index.name} · ${state.index.buses.length} buses · ${state.index.assets.length - state.index.buses.length} devices`);
       if (label) globalThis.document.title = `${label} · BMOPF Explorer`;
     } catch (error) {
       showLoadError(error.message, label);
@@ -244,10 +243,10 @@
     const project = (longitude, latitude) => [55 + ((Number(longitude) - minX) / (maxX - minX || 1)) * 650, 440 - ((Number(latitude) - minY) / (maxY - minY || 1)) * 380];
     const positions = new Map();
     buses.forEach((bus, i) => {
-      if (source.length >= 2 && bus.coordinates) positions.set(bus.ref.id, project(bus.coordinates.longitude, bus.coordinates.latitude));
+      if (source.length >= 2) positions.set(bus.ref.id, bus.coordinates ? project(bus.coordinates.longitude, bus.coordinates.latitude) : null);
       else positions.set(bus.ref.id, [90 + (i % 4) * 210, 110 + Math.floor(i / 4) * 140]);
     });
-    return { positions, geographic: source.length >= 2, project };
+    return { positions, geographic: source.length >= 2, project, unmapped: buses.filter((bus) => source.length >= 2 && !bus.coordinates) };
   }
 
   function singlePositions() {
@@ -279,7 +278,7 @@
   }
 
   function drawGeo() {
-    const { positions, geographic, project } = busCoordinates();
+    const { positions, geographic, project, unmapped } = busCoordinates();
     let content = "";
     for (const item of visibleAssets().filter((e) => e.connections?.length)) {
       for (const connection of item.connections) {
@@ -294,9 +293,11 @@
     }
     for (const bus of state.index.buses) {
       const p = positions.get(bus.ref.id); const selected = sameRef(bus.ref, state.selected);
+      if (!p) continue;
       content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><circle cx="${p[0]}" cy="${p[1]}" r="${selected ? 12 : 8}" fill="${selected ? "#2f6fb3" : "#fffdf9"}" stroke="#2f6fb3" stroke-width="${selected ? 4 : 2}"><title>bus ${escapeHtml(bus.ref.id)}</title></circle><text x="${p[0] + 12}" y="${p[1] + 4}" fill="#37332c" font-size="12">${escapeHtml(bus.ref.id)}</text></g>`;
     }
-    setStatus(geographic ? "Geographic coordinates used for bus placement." : "No geographic coordinates: showing a schematic placement.");
+    if (geographic && unmapped.length) content += `<text x="380" y="478" text-anchor="middle" fill="#8a4d20" font-size="12">Not placed geographically (missing coordinates): ${escapeHtml(unmapped.map((bus) => bus.ref.id).join(", "))}</text>`;
+    setStatus(geographic ? `Geographic coordinates used for ${state.index.buses.length - unmapped.length}/${state.index.buses.length} buses${unmapped.length ? ` · ${unmapped.length} omitted` : ""}.` : "No geographic coordinates: showing a schematic placement.");
     $("canvas").innerHTML = svgShell(content);
     bindSvgSelection();
   }
