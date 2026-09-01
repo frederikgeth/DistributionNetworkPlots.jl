@@ -24,6 +24,8 @@ const MULTINETWORK_RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro"
     @test occursin("result_fingerprint", html)
     @test occursin("__BMOPF_RESULT__", html)
     @test occursin("__BMOPF_ELK_BUNDLE_SOURCE__", html)
+    @test occursin("org.eclipse.elk.processingOrder.preferredRoot", html)
+    @test occursin("routeMidpoint", html)
     @test occursin("Eclipse Public License", read(joinpath(@__DIR__, "..", "frontend", "vendor", "ELK-LICENSE.md"), String))
     @test !occursin("href=\"styles.css\"", html)
     @test !occursin("src=\"examples.js\"", html)

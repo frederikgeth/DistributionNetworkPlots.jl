@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { version: 2, key: null, locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { version: 2, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -76,9 +76,10 @@
   }
 
   function normaliseLayoutProfile(profile) {
-    if (!profile || typeof profile !== "object") return { locked: {}, engine: "deterministic" };
+    if (!profile || typeof profile !== "object") return { locked: {}, routes: {}, engine: "deterministic" };
     const locked = profile.locked && typeof profile.locked === "object" ? profile.locked : {};
-    return { locked, engine: profile.engine === "elk" ? "elk" : "deterministic" };
+    const routes = profile.routes && typeof profile.routes === "object" ? profile.routes : {};
+    return { locked, routes, engine: profile.engine === "elk" ? "elk" : "deterministic" };
   }
 
   function loadLayout() {
@@ -89,24 +90,24 @@
         const direction = stored.direction === "load-to-source" ? stored.direction : "source-to-load";
         const root = typeof stored.root === "string" ? stored.root : "auto";
         const profile = normaliseLayoutProfile(stored.profiles[layoutProfileKey(direction, root)]);
-        return { version: 2, key, locked: profile.locked, direction, root, engine: profile.engine, profiles: stored.profiles };
+        return { version: 2, key, locked: profile.locked, routes: profile.routes, direction, root, engine: profile.engine, profiles: stored.profiles };
       }
       const legacy = JSON.parse(localStorage.getItem(`bmopf-layout-v1:${key}`) || "null");
       if (legacy && legacy.version === 1 && legacy.key === key && legacy.locked && typeof legacy.locked === "object") {
         const direction = legacy.direction === "load-to-source" ? legacy.direction : "source-to-load";
         const root = typeof legacy.root === "string" ? legacy.root : "auto";
         const profileKey = layoutProfileKey(direction, root);
-        return { version: 2, key, locked: legacy.locked, direction, root, engine: legacy.engine === "elk" ? "elk" : "deterministic", profiles: { [profileKey]: { locked: legacy.locked, engine: legacy.engine === "elk" ? "elk" : "deterministic" } } };
+        return { version: 2, key, locked: legacy.locked, routes: {}, direction, root, engine: legacy.engine === "elk" ? "elk" : "deterministic", profiles: { [profileKey]: { locked: legacy.locked, routes: {}, engine: legacy.engine === "elk" ? "elk" : "deterministic" } } };
       }
     } catch (_) { /* localStorage is optional in static reports */ }
-    return { version: 2, key, locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} };
+    return { version: 2, key, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} };
   }
 
   function saveLayout() {
     if (!state.layout?.key) return;
     try {
       const profileKey = layoutProfileKey(state.layout.direction, state.layout.root);
-      const profiles = { ...(state.layout.profiles || {}), [profileKey]: { locked: state.layout.locked || {}, engine: state.layout.engine === "elk" ? "elk" : "deterministic" } };
+      const profiles = { ...(state.layout.profiles || {}), [profileKey]: { locked: state.layout.locked || {}, routes: state.layout.routes || {}, engine: state.layout.engine === "elk" ? "elk" : "deterministic" } };
       state.layout.profiles = profiles;
       localStorage.setItem(`bmopf-layout-v2:${state.layout.key}`, JSON.stringify({ version: 2, key: state.layout.key, direction: state.layout.direction, root: state.layout.root, profiles }));
     } catch (_) { /* ignore unavailable storage */ }
@@ -119,6 +120,7 @@
     state.layout.direction = nextDirection;
     state.layout.root = nextRoot;
     state.layout.locked = profile.locked;
+    state.layout.routes = profile.routes;
     state.layout.engine = profile.engine;
     saveLayout();
   }
@@ -162,12 +164,18 @@
     elkBusy = true;
     setStatus("Loading ELK layered layout…");
     try {
-      const graph = { id: "bmopf-root", layoutOptions: { "elk.algorithm": "layered", "elk.direction": state.layout.direction === "load-to-source" ? "LEFT" : "RIGHT", "elk.edgeRouting": "ORTHOGONAL", "elk.spacing.nodeNode": "36", "elk.layered.spacing.nodeNodeBetweenLayers": "100" }, children: state.index.buses.map((bus) => ({ id: `bus:${bus.ref.id}`, width: 84, height: 24, ports: [{ id: `port:${bus.ref.id}`, width: 4, height: 4, layoutOptions: { "elk.port.side": state.layout.direction === "load-to-source" ? "EAST" : "WEST" } }] })), edges: [] };
+      const direction = state.layout.direction === "load-to-source" ? "LEFT" : "RIGHT";
+      const graph = { id: "bmopf-root", layoutOptions: { "elk.algorithm": "layered", "elk.direction": direction, "elk.edgeRouting": "ORTHOGONAL", "elk.spacing.nodeNode": "36", "elk.layered.spacing.nodeNodeBetweenLayers": "100" }, children: state.index.buses.map((bus) => ({ id: `bus:${bus.ref.id}`, width: 84, height: 24, ports: [{ id: `port:${bus.ref.id}`, width: 4, height: 4, layoutOptions: { "elk.port.side": state.layout.direction === "load-to-source" ? "EAST" : "WEST" } }] })), edges: [] };
       const busIds = new Set(state.index.buses.map((bus) => bus.ref.id));
+      if (state.layout.root && state.layout.root !== "auto" && busIds.has(state.layout.root)) {
+        graph.layoutOptions["org.eclipse.elk.processingOrder.rootSelection"] = "FIXED";
+        graph.layoutOptions["org.eclipse.elk.processingOrder.preferredRoot"] = `bus:${state.layout.root}`;
+      }
       state.index.assets.forEach((item) => {
-        const ports = item.ports || []; if (ports.length < 2) return;
-        const from = ports[0].busId; if (!busIds.has(from)) return;
-        ports.slice(1).forEach((port) => { if (busIds.has(port.busId)) graph.edges.push({ id: `edge:${item.ref.kind}:${item.ref.id}:${from}:${port.busId}`, sources: [`port:${from}`], targets: [`port:${port.busId}`] }); });
+        (item.connections || []).forEach((connection) => {
+          const from = connection.from.busId; const to = connection.to.busId;
+          if (busIds.has(from) && busIds.has(to)) graph.edges.push({ id: `edge:${item.ref.kind}:${item.ref.id}:${from}:${to}`, sources: [`port:${from}`], targets: [`port:${to}`] });
+        });
       });
       const result = await layoutWithElkWorker(graph);
       const children = result.children || [];
@@ -175,11 +183,25 @@
       const minX = Math.min(...xs, 0); const maxX = Math.max(...xs, 1); const minY = Math.min(...ys, 0); const maxY = Math.max(...ys, 1);
       const scale = Math.min(1, 650 / Math.max(maxX - minX + 84, 1), 360 / Math.max(maxY - minY + 24, 1));
       const nextLocked = {};
+      const projectPoint = (point) => [70 + ((Number(point.x) - minX + 42) * scale), 70 + ((Number(point.y) - minY + 12) * scale)];
       children.forEach((node) => {
         const id = String(node.id).replace(/^bus:/, "");
-        nextLocked[id] = [70 + ((Number(node.x) - minX + 42) * scale), 70 + ((Number(node.y) - minY + 12) * scale)];
+        nextLocked[id] = projectPoint(node);
       });
-      state.layout.locked = nextLocked; state.layout.engine = "elk"; saveLayout(); renderView(); renderCameraControls();
+      const nextRoutes = {};
+      (result.edges || []).forEach((edge) => {
+        const points = [];
+        (edge.sections || []).forEach((section) => {
+          [section.startPoint, ...(section.bendPoints || []), section.endPoint].forEach((point) => {
+            if (!point || !Number.isFinite(Number(point.x)) || !Number.isFinite(Number(point.y))) return;
+            const projected = projectPoint(point);
+            const previous = points[points.length - 1];
+            if (!previous || previous[0] !== projected[0] || previous[1] !== projected[1]) points.push(projected);
+          });
+        });
+        if (points.length >= 2) nextRoutes[String(edge.id)] = points;
+      });
+      state.layout.locked = nextLocked; state.layout.routes = nextRoutes; state.layout.engine = "elk"; saveLayout(); renderView(); renderCameraControls();
       setStatus(`ELK layered layout applied in a worker to ${children.length} buses; positions are now locally persisted.`);
     } catch (error) {
       setStatus(`ELK layout unavailable: ${elkErrorMessage(error)}`);
@@ -196,11 +218,13 @@
     if (!item || item.ref.kind !== "bus") return;
     const positions = singlePositions(); const current = positions.get(item.ref.id); if (!current) return;
     state.layout.locked[item.ref.id] = [current[0] + dx, current[1] + dy];
+    state.layout.routes = {};
+    state.layout.engine = "deterministic";
     saveLayout(); renderView(); renderCameraControls();
   }
 
   function resetLayout() {
-    state.layout = { version: 2, key: layoutKey(), locked: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} };
+    state.layout = { version: 2, key: layoutKey(), locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} };
     saveLayout();
     renderView(); renderCameraControls();
     setStatus("Single-line layout reset to the computed source-to-load arrangement.");
@@ -950,6 +974,23 @@
     return `<g transform="translate(${x} ${y})" opacity="${opacity}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · ${escapeHtml(status)}${escapeHtml(resultTooltip(item))}</title>${shape}<text x="0" y="27" text-anchor="middle" fill="#37332c" font-size="9">${escapeHtml(item.ref.id)}</text></g>`;
   }
 
+  function routeMidpoint(points) {
+    if (!Array.isArray(points) || points.length < 2) return null;
+    let total = 0;
+    for (let i = 1; i < points.length; i += 1) total += Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+    if (!total) return points[0];
+    let travelled = 0;
+    for (let i = 1; i < points.length; i += 1) {
+      const length = Math.hypot(points[i][0] - points[i - 1][0], points[i][1] - points[i - 1][1]);
+      if (travelled + length >= total / 2) {
+        const fraction = (total / 2 - travelled) / (length || 1);
+        return [points[i - 1][0] + (points[i][0] - points[i - 1][0]) * fraction, points[i - 1][1] + (points[i][1] - points[i - 1][1]) * fraction];
+      }
+      travelled += length;
+    }
+    return points[points.length - 1];
+  }
+
   function drawSingle() {
     const positions = singlePositions();
     let content = `<defs><marker id="sld-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0 0L7 3.5L0 7z" fill="#6b655c"/></marker></defs><text x="24" y="26" fill="#37332c" font-size="13" font-weight="700">Source → load one-line view</text><text x="24" y="43" fill="#70695f" font-size="10">IEC/IEEE-inspired symbols · heavy busbars · click any device for details</text>`;
@@ -971,9 +1012,12 @@
         const ordinal = edgeSeen.get(key) || 0; edgeSeen.set(key, ordinal + 1);
         const laneOffset = (ordinal - (edgeCounts.get(key) - 1) / 2) * 18;
         const laneY = b[1] + laneOffset;
-        const path = `M${a[0]} ${a[1]}H${midX}V${laneY}H${b[0]}V${b[1]}`;
+        const routeKey = `edge:${item.ref.kind}:${item.ref.id}:${connection.from.busId}:${connection.to.busId}`;
+        const elkRoute = state.layout.engine === "elk" ? state.layout.routes?.[routeKey] : null;
+        const path = Array.isArray(elkRoute) && elkRoute.length >= 2 ? `M${elkRoute.map((point) => `${point[0]} ${point[1]}`).join("L")}` : `M${a[0]} ${a[1]}H${midX}V${laneY}H${b[0]}V${b[1]}`;
         content += `<path d="${path}" fill="none" stroke="${visual.colour}" stroke-width="${visual.width}" stroke-opacity="${opacity}" marker-end="url(#sld-arrow)" ${status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></path>`;
-        content += singleSymbol(item, midX, laneY);
+        const symbolPoint = routeMidpoint(elkRoute) || [midX, laneY];
+        content += singleSymbol(item, symbolPoint[0], symbolPoint[1]);
       }
     }
     const attached = new Map();
