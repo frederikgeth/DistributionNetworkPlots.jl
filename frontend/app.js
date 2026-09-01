@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultScenario: null, view: "geo", query: "", activeKind: null, multiHops: 1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -99,13 +99,46 @@
     };
   }
 
-  function diagnosticsForView() {
+  function allDiagnosticsForView() {
     return state.result ? globalThis.BMOPFModel.resultDiagnostics(state.result, state.resultScenario) : [];
+  }
+
+  function diagnosticsForView() {
+    const query = state.diagnosticsQuery.trim().toLowerCase();
+    return allDiagnosticsForView().filter((diagnostic) => {
+      const severity = ["error", "warning", "info"].includes(diagnostic.severity) ? diagnostic.severity : "warning";
+      if (state.diagnosticsSeverity !== "all" && severity !== state.diagnosticsSeverity) return false;
+      if (!query) return true;
+      return [diagnostic.message, diagnostic.category, diagnostic.kind, diagnostic.id]
+        .filter(Boolean).join(" ").toLowerCase().includes(query);
+    });
   }
 
   function resultIdentity() {
     const root = resultRoot();
     return root?.case_fingerprint ?? root?.case_id ?? root?.meta?.case_fingerprint ?? root?.meta?.case_id ?? null;
+  }
+
+  function resultPairingStatus() {
+    const identity = resultIdentity();
+    const expectedIdentity = state.index?.raw?.meta?.case_fingerprint || state.index?.raw?.meta?.case_id || state.index?.name || null;
+    if (!identity || !expectedIdentity) {
+      return {
+        kind: "unverified",
+        label: "unverified",
+        identity,
+        message: "No comparable case fingerprint or case ID is available. Treat this sidecar as unverified."
+      };
+    }
+    if (String(identity) === String(expectedIdentity)) {
+      return { kind: "matched", label: "matched", identity, message: `Result identity matches open case ${expectedIdentity}.` };
+    }
+    return {
+      kind: "mismatch",
+      label: "mismatch",
+      identity,
+      message: `Result identity ${identity} does not match open case ${expectedIdentity}. Metrics are shown, but pairing should be reviewed.`
+    };
   }
 
   function resultTooltip(item) {
@@ -156,19 +189,17 @@
     if (meta.objective !== undefined) fields.push(["objective", meta.objective]);
     if (meta.solver !== undefined) fields.push(["solver", meta.solver]);
     if (meta.scenarios.length) fields.push(["scenarios", meta.scenarios.length]);
-    if (state.result) fields.push(["diagnostics", diagnosticsForView().length]);
+    if (state.result) fields.push(["diagnostics", allDiagnosticsForView().length]);
     if (caseInResult) fields.push(["embedded case", "yes"]);
     const warning = state.resultError ? `<p class="result-warning">${escapeHtml(state.resultError)}</p>` : "";
     const scenarioNote = meta.scenarios.length > 1 && !state.resultScenario ? `<p class="result-warning">Choose a scenario before inspecting result metrics. No slice is silently chosen.</p>` : "";
     const scenarioControl = meta.scenarios.length > 1 ? `<label class="scenario-control">Scenario<select id="result-scenario"><option value="">Select a scenario</option>${meta.scenarios.map((scenario) => `<option value="${escapeHtml(scenario)}" ${state.resultScenario === scenario ? "selected" : ""}>${escapeHtml(scenario)}</option>`).join("")}</select></label>` : "";
     const selectedScenario = state.resultScenario ? `<p class="report-meta">active scenario <code>${escapeHtml(state.resultScenario)}</code></p>` : "";
-    const identity = resultIdentity();
-    const identityHtml = identity ? `<p class="report-meta">case identity <code>${escapeHtml(String(identity))}</code></p>` : "";
-    const expectedIdentity = state.index?.raw?.meta?.case_fingerprint || state.index?.raw?.meta?.case_id || state.index?.name;
-    const mismatch = identity && expectedIdentity && String(identity) !== String(expectedIdentity);
-    const mismatchHtml = mismatch ? `<p class="result-warning">Result identity <code>${escapeHtml(String(identity))}</code> does not match the open case <code>${escapeHtml(String(expectedIdentity))}</code>. Metrics are shown, but pairing should be reviewed.</p>` : "";
+    const pairing = resultPairingStatus();
+    const identityHtml = pairing.identity ? `<p class="report-meta">case identity <code>${escapeHtml(String(pairing.identity))}</code></p>` : "";
+    const pairingHtml = `<p class="pairing-status ${pairing.kind}"><strong>Pairing ${escapeHtml(pairing.label)}</strong> · ${escapeHtml(pairing.message)}</p>`;
     panel.className = "panel";
-    panel.innerHTML = `<div class="panel-heading"><h2>Results</h2><span class="muted">${escapeHtml(state.resultLabel || "JSON")}</span></div>${scenarioControl}${selectedScenario}${fields.length ? `<table class="property-table result-table">${fields.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("")}</table>` : `<p class="muted result-empty">Result records attached; no run summary fields were found.</p>`}${identityHtml}${mismatchHtml}${scenarioNote}${warning}`;
+    panel.innerHTML = `<div class="panel-heading"><h2>Results</h2><span class="muted">${escapeHtml(state.resultLabel || "JSON")}</span></div>${scenarioControl}${selectedScenario}${fields.length ? `<table class="property-table result-table">${fields.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("")}</table>` : `<p class="muted result-empty">Result records attached; no run summary fields were found.</p>`}${identityHtml}${pairingHtml}${scenarioNote}${warning}`;
     const scenarioSelect = $("result-scenario");
     if (scenarioSelect) scenarioSelect.addEventListener("change", (event) => { state.resultScenario = event.target.value || null; render(); });
   }
@@ -520,10 +551,19 @@
       $("canvas").innerHTML = '<div class="message">No results attached. Diagnostics are derived from BMOPFTools result/profile fields.</div>';
       return;
     }
+    const allDiagnostics = allDiagnosticsForView();
     const diagnostics = diagnosticsForView();
-    if (!diagnostics.length) {
+    const filterControls = '<div class="diagnostic-filters"><label>Filter<input id="diagnostic-query" type="search" placeholder="Search findings" value="' + escapeHtml(state.diagnosticsQuery) + '" aria-label="Filter diagnostics"></label><label>Severity<select id="diagnostic-severity" aria-label="Filter diagnostic severity"><option value="all" ' + (state.diagnosticsSeverity === "all" ? "selected" : "") + '>All</option><option value="error" ' + (state.diagnosticsSeverity === "error" ? "selected" : "") + '>Error</option><option value="warning" ' + (state.diagnosticsSeverity === "warning" ? "selected" : "") + '>Warning</option><option value="info" ' + (state.diagnosticsSeverity === "info" ? "selected" : "") + '>Info</option></select></label><button id="diagnostic-clear" type="button">Clear</button></div>';
+    if (!allDiagnostics.length) {
       setStatus("No diagnostics were found in the active result slice.");
-      $("canvas").innerHTML = '<div class="message">No validation, bound, residual, or solution-profile diagnostics were found.</div>';
+      $("canvas").innerHTML = '<div class="diagnostics-view"><div class="diagnostics-heading"><h2>Result diagnostics</h2><span class="muted">0 findings</span></div>' + filterControls + '<div class="message">No validation, bound, residual, or solution-profile diagnostics were found.</div></div>';
+      bindDiagnosticFilters();
+      return;
+    }
+    if (!diagnostics.length) {
+      setStatus("No diagnostics match the current filters.");
+      $("canvas").innerHTML = '<div class="diagnostics-view"><div class="diagnostics-heading"><h2>Result diagnostics</h2><span class="muted">0 of ' + allDiagnostics.length + ' findings</span></div>' + filterControls + '<div class="message">No findings match the current filters. Clear the filters to show all diagnostics.</div></div>';
+      bindDiagnosticFilters();
       return;
     }
     const cards = diagnostics.map((diagnostic) => {
@@ -534,9 +574,19 @@
       const category = diagnostic.category ? '<span class="diagnostic-category">' + escapeHtml(diagnostic.category) + '</span>' : "";
       return '<article class="diagnostic-card ' + severity + '"><div class="diagnostic-heading"><span class="diagnostic-severity">' + escapeHtml(severity) + '</span>' + category + target + '</div><p>' + escapeHtml(diagnostic.message) + '</p><details><summary>Diagnostic data</summary><pre class="raw">' + escapeHtml(JSON.stringify(diagnostic.raw, null, 2)) + '</pre></details></article>';
     }).join("");
-    $("canvas").innerHTML = '<div class="diagnostics-view"><div class="diagnostics-heading"><h2>Result diagnostics</h2><span class="muted">' + diagnostics.length + ' finding' + (diagnostics.length === 1 ? "" : "s") + '</span></div>' + cards + '</div>';
+    $("canvas").innerHTML = '<div class="diagnostics-view"><div class="diagnostics-heading"><h2>Result diagnostics</h2><span class="muted">' + (diagnostics.length === allDiagnostics.length ? diagnostics.length : diagnostics.length + ' of ' + allDiagnostics.length) + ' finding' + (allDiagnostics.length === 1 ? "" : "s") + '</span></div>' + filterControls + cards + '</div>';
     setStatus(diagnostics.length + ' result diagnostic' + (diagnostics.length === 1 ? "" : "s") + (state.resultScenario ? ' · ' + state.resultScenario : ""));
+    bindDiagnosticFilters();
     bindSvgSelection();
+  }
+
+  function bindDiagnosticFilters() {
+    const query = $("diagnostic-query");
+    const severity = $("diagnostic-severity");
+    const clear = $("diagnostic-clear");
+    if (query) query.addEventListener("input", (event) => { state.diagnosticsQuery = event.target.value; drawDiagnostics(); });
+    if (severity) severity.addEventListener("change", (event) => { state.diagnosticsSeverity = event.target.value; drawDiagnostics(); });
+    if (clear) clear.addEventListener("click", () => { state.diagnosticsQuery = ""; state.diagnosticsSeverity = "all"; drawDiagnostics(); });
   }
 
   function bindSvgSelection() {
@@ -611,6 +661,8 @@
       state.result = resultDocument;
       state.resultLabel = label || "Results JSON";
       state.resultError = "";
+      state.diagnosticsQuery = "";
+      state.diagnosticsSeverity = "all";
       const scenarios = globalThis.BMOPFModel.resultScenarios(resultDocument);
       state.resultScenario = scenarios.length === 1 ? scenarios[0] : null;
       render();

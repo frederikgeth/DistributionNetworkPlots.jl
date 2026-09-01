@@ -30,7 +30,7 @@ The prototype supports:
 - Local-only case loading with no runtime backend.
 - Browser-side guardrails for invalid JSON and oversized case files.
 - Optional BMOPFTools-style result JSON sidecars with objective/status summary and asset-level metrics.
-- Diagnostics view for clickable result validation/profile findings and linked asset inspection.
+- Diagnostics view for filterable result validation/profile findings, clickable linked assets, and explicit case/result pairing status.
 
 ## Generate a static Julia report
 

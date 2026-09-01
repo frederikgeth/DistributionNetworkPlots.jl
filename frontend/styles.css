@@ -47,6 +47,12 @@ h2 { margin-bottom: 0; font-size: 15px; }
 .diagnostics-view { min-height: 500px; padding: 16px; background: #fbfaf7; }
 .diagnostics-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
 .diagnostics-heading h2 { font-size: 17px; }
+.diagnostic-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-bottom: 12px; padding-bottom: 11px; border-bottom: 1px solid var(--line); }
+.diagnostic-filters label { display: flex; flex-direction: column; gap: 3px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+.diagnostic-filters input, .diagnostic-filters select, .diagnostic-filters button { border: 1px solid var(--line); border-radius: 5px; padding: 5px 7px; color: var(--ink); background: var(--panel); font-size: 12px; text-transform: none; letter-spacing: normal; }
+.diagnostic-filters input { min-width: 190px; }
+.diagnostic-filters button { cursor: pointer; }
+.diagnostic-filters button:hover, .diagnostic-filters button:focus-visible, .diagnostic-filters input:focus-visible, .diagnostic-filters select:focus-visible { border-color: var(--accent); outline: 2px solid var(--accent-soft); }
 .diagnostic-card { margin-bottom: 10px; padding: 11px 13px; border: 1px solid var(--line); border-left: 5px solid #9a9388; border-radius: 6px; background: var(--panel); }
 .diagnostic-card.error { border-left-color: #b64035; }
 .diagnostic-card.warning { border-left-color: #c28a26; }
@@ -71,6 +77,11 @@ h2 { margin-bottom: 0; font-size: 15px; }
 .result-empty, .result-missing { margin: 0; padding: 10px 14px 12px; }
 .result-heading { margin-top: 14px !important; }
 .result-warning { margin: 0; padding: 0 14px 10px; color: #8a4d20; font-size: 12px; }
+.pairing-status { margin: 0; padding: 0 14px 10px; font-size: 12px; }
+.pairing-status strong { text-transform: uppercase; letter-spacing: .05em; }
+.pairing-status.matched { color: #3f754b; }
+.pairing-status.mismatch { color: #a33c31; }
+.pairing-status.unverified { color: #8a4d20; }
 .result-raw { margin-top: 8px !important; }
 .inventory-list { max-height: 240px; overflow: auto; padding: 5px 0; }
 .inventory-row { display: flex; width: 100%; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid #eee9e1; padding: 7px 14px; color: var(--ink); background: transparent; cursor: pointer; text-align: left; }
