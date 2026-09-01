@@ -13,8 +13,19 @@ const FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro", "micro_bmopf.json"
     @test occursin("globalThis.__BMOPF_CASE__", html)
     @test occursin("micro-bmopf", html)
     @test occursin("BMOPFModel", html)
+    @test occursin("__BMOPF_REPORT_META__", html)
+    @test occursin("case_fingerprint", html)
     @test !occursin("href=\"styles.css\"", html)
     @test !occursin("src=\"app.js\"", html)
+end
+
+@testset "safe report title" begin
+    case = Dict("name" => "title-case", "bus" => Dict{String,Any}())
+    output = joinpath(mktempdir(), "title.html")
+    render_case(case, output; title="</title><script>alert(1)</script>")
+    html = read(output, String)
+    @test !occursin("</title><script>alert(1)", html)
+    @test occursin("&lt;/title&gt;&lt;script&gt;", html)
 end
 
 @testset "safe embedding" begin

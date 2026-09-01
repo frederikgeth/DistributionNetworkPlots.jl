@@ -47,6 +47,7 @@ h2 { margin-bottom: 0; font-size: 15px; }
 .stat strong { display: block; font-size: 18px; }
 .stat span { color: var(--muted); font-size: 11px; }
 .warnings { margin: 0; padding: 0 14px 12px 29px; color: #8a4d20; font-size: 12px; }
+.report-meta { margin: 0; padding: 0 14px 12px; color: var(--muted); font-size: 11px; }
 .inventory-list { max-height: 240px; overflow: auto; padding: 5px 0; }
 .inventory-row { display: flex; width: 100%; align-items: center; justify-content: space-between; border: 0; border-bottom: 1px solid #eee9e1; padding: 7px 14px; color: var(--ink); background: transparent; cursor: pointer; text-align: left; }
 .inventory-row:hover, .inventory-row.selected { background: var(--accent-soft); }

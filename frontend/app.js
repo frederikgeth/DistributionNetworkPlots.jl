@@ -77,8 +77,10 @@
     ];
     const warningHtml = index.warnings.length
       ? `<ul class="warnings">${index.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>` : "";
+    const report = globalThis.__BMOPF_REPORT_META__;
+    const reportHtml = report ? `<p class="report-meta">Report ${escapeHtml(report.app_version || "unknown")} · layout ${escapeHtml(report.layout_engine || "unknown")} · fingerprint <code>${escapeHtml(String(report.case_fingerprint || "").slice(0, 12))}</code></p>` : "";
     $("case-summary").className = "panel";
-    $("case-summary").innerHTML = `<div class="panel-heading"><h2>${escapeHtml(index.name)}</h2><span class="muted">${index.schema ? "schema" : "JSON"}</span></div><div class="stats">${stats.map(([n, label]) => `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`).join("")}</div>${warningHtml}`;
+    $("case-summary").innerHTML = `<div class="panel-heading"><h2>${escapeHtml(index.name)}</h2><span class="muted">${index.schema ? "schema" : "JSON"}</span></div><div class="stats">${stats.map(([n, label]) => `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`).join("")}</div>${reportHtml}${warningHtml}`;
   }
 
   function renderInventory() {

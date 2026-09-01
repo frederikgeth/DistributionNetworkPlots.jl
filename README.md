@@ -32,6 +32,7 @@ render_case("fixtures/micro/micro_bmopf.json", "micro-report.html")
 ```
 
 The generated report embeds the case and frontend runtime. It does not require Node.js or an application server.
+Generated reports also expose a case fingerprint, schema identifier, application version, and layout-engine identifier for reproducibility.
 
 ## Licensing and case provenance
 

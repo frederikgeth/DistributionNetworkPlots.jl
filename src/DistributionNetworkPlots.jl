@@ -1,10 +1,24 @@
 module DistributionNetworkPlots
 
 using JSON3
+using SHA
 
 export render_case
 
 const FRONTEND_DIR = normpath(joinpath(@__DIR__, "..", "frontend"))
+const REPORT_APP_VERSION = "0.1.0-dev"
+const REPORT_LAYOUT_ENGINE = "deterministic-svg-v1"
+
+"""Escape text inserted into an HTML element or attribute."""
+function _html_escape(value)
+    replace(String(value),
+        "&" => "&amp;",
+        "<" => "&lt;",
+        ">" => "&gt;",
+        "\"" => "&quot;",
+        "'" => "&#39;",
+    )
+end
 
 """Escape JSON before embedding it in a script element."""
 function _safe_json(value)
@@ -15,6 +29,17 @@ function _safe_json(value)
         "&" => "\\u0026",
         "\u2028" => "\\u2028",
         "\u2029" => "\\u2029",
+    )
+end
+
+"""Return stable metadata describing the embedded case and renderer."""
+function _report_metadata(case)
+    json = String(JSON3.write(case))
+    Dict(
+        "case_fingerprint" => bytes2hex(sha256(json)),
+        "schema" => get(case, "\$schema", nothing),
+        "app_version" => REPORT_APP_VERSION,
+        "layout_engine" => REPORT_LAYOUT_ENGINE,
     )
 end
 
@@ -30,12 +55,14 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
     app = read(joinpath(FRONTEND_DIR, "app.js"), String)
     css = read(joinpath(FRONTEND_DIR, "styles.css"), String)
     embedded = _safe_json(case)
+    report_metadata = _safe_json(_report_metadata(case))
+    html_title = _html_escape(title)
 
     html = replace(template,
-        "<title>BMOPF Explorer</title>" => "<title>$(title)</title>",
+        "<title>BMOPF Explorer</title>" => "<title>$(html_title)</title>",
         "<link rel=\"stylesheet\" href=\"styles.css\">" => "<style>$(css)</style>",
         "<script src=\"model.js\"></script>" => "<script>$(model)</script>",
-        "<script src=\"app.js\"></script>" => "<script>globalThis.__BMOPF_CASE__ = $(embedded);</script><script>$(app)</script>",
+        "<script src=\"app.js\"></script>" => "<script>globalThis.__BMOPF_REPORT_META__ = $(report_metadata); globalThis.__BMOPF_CASE__ = $(embedded);</script><script>$(app)</script>",
     )
 
     mkpath(dirname(abspath(output)))

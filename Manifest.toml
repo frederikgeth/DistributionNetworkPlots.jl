@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "e4955292f1300c971c0d4b91978d6f5b5194d0e4"
+project_hash = "2804b3e1ce284660fe9709e4ae28dc0d586c003c"
 
 [[deps.Dates]]
 deps = ["Printf"]
@@ -10,7 +10,7 @@ uuid = "ade2ca70-3891-5945-98fb-dc099432e06a"
 version = "1.11.0"
 
 [[deps.DistributionNetworkPlots]]
-deps = ["JSON3"]
+deps = ["JSON3", "SHA"]
 path = "."
 uuid = "7c4a3c8f-9df7-4f1c-8cc4-bb785f479ad1"
 version = "0.1.0-DEV"
