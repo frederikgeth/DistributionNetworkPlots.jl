@@ -1,7 +1,7 @@
 # DistributionNetworkPlots.jl Roadmap
 
 Status: proposed delivery plan  
-Last updated: 2026-09-01
+Last updated: 2026-09-02
 
 ## 1. Roadmap objective
 
@@ -51,8 +51,8 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Vendor the pinned ELK browser bundle, embed it in Julia reports, and cache layout profiles by case and layout options.
 - [x] Apply ELK orthogonal edge sections to single-line SVG paths and pass the selected root as a fixed ELK processing root.
 - [x] Publish an explicit overview SVG budget and switch oversized geospatial/single-line cases to a focused one-hop fallback.
-- [ ] Replace prototype renderer packages and define formal layout-cache invalidation/versioning.
-- [x] Add an automated browser end-to-end smoke test (CI wiring remains open when the JavaScript toolchain is provisioned).
+- [ ] Replace prototype renderer packages and define formal layout-cache retention/eviction policy.
+- [x] Add an automated browser end-to-end smoke test and wire it into GitHub Actions.
 
 Time boxes below are indicative for one primary developer. Scope is fixed within a slice; time is not a promise.
 
@@ -200,7 +200,7 @@ Small realistic cases are legible and explorable in the two overview views.
 - Open/out-of-service styling.
 - Pan, zoom, fit-all, and focus-selection behaviour.
 - Lightweight tooltips and persistent inspector coordination.
-- Layout caching keyed by case identity and layout options (prototype delivered; formal invalidation policy remains open).
+- Layout caching keyed by case identity and layout options (prototype delivered; formal retention/eviction policy remains open).
 
 ### Acceptance criteria
 

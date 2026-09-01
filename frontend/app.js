@@ -1,7 +1,10 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { version: 2, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const LAYOUT_CACHE_VERSION = 3;
+  const ELK_VERSION = "0.10.2";
+  const LAYOUT_ROUTE_SPACE = "single-svg-v1";
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -75,6 +78,18 @@
     return `direction=${safeDirection};root=${safeRoot}`;
   }
 
+  function layoutGraphSignature() {
+    if (!state.index) return "sld-elk-graph-v1:none";
+    const buses = state.index.buses.map((bus) => bus.ref.id).sort();
+    const edges = [];
+    state.index.assets.forEach((item) => (item.connections || []).forEach((connection) => edges.push({ kind: item.ref.kind, id: item.ref.id, from: connection.from.busId, to: connection.to.busId })));
+    edges.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+    const input = JSON.stringify({ buses, edges });
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i += 1) { hash ^= input.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+    return `sld-elk-graph-v1:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+  }
+
   function normaliseLayoutProfile(profile) {
     if (!profile || typeof profile !== "object") return { locked: {}, routes: {}, engine: "deterministic" };
     const locked = profile.locked && typeof profile.locked === "object" ? profile.locked : {};
@@ -84,32 +99,43 @@
 
   function loadLayout() {
     const key = layoutKey();
+    const graphSignature = layoutGraphSignature();
+    const defaults = (cacheState = "none") => ({ version: LAYOUT_CACHE_VERSION, key, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {}, cacheState });
     try {
+      const current = JSON.parse(localStorage.getItem(`bmopf-layout-v3:${key}`) || "null");
+      if (current && current.version === LAYOUT_CACHE_VERSION && current.key === key && current.graphSignature === graphSignature && current.routeSpace === LAYOUT_ROUTE_SPACE && current.elkVersion === ELK_VERSION && current.profiles && typeof current.profiles === "object") {
+        const direction = current.direction === "load-to-source" ? current.direction : "source-to-load";
+        const root = typeof current.root === "string" ? current.root : "auto";
+        const profile = normaliseLayoutProfile(current.profiles[layoutProfileKey(direction, root)]);
+        return { version: LAYOUT_CACHE_VERSION, key, locked: profile.locked, routes: profile.routes, direction, root, engine: profile.engine, profiles: current.profiles, graphSignature, cacheState: "valid" };
+      }
+      if (current && current.version === LAYOUT_CACHE_VERSION && current.key === key) return defaults("stale");
       const stored = JSON.parse(localStorage.getItem(`bmopf-layout-v2:${key}`) || "null");
       if (stored && stored.version === 2 && stored.key === key && stored.profiles && typeof stored.profiles === "object") {
         const direction = stored.direction === "load-to-source" ? stored.direction : "source-to-load";
         const root = typeof stored.root === "string" ? stored.root : "auto";
         const profile = normaliseLayoutProfile(stored.profiles[layoutProfileKey(direction, root)]);
-        return { version: 2, key, locked: profile.locked, routes: profile.routes, direction, root, engine: profile.engine, profiles: stored.profiles };
+        return { version: LAYOUT_CACHE_VERSION, key, locked: profile.locked, routes: profile.routes, direction, root, engine: profile.engine, profiles: stored.profiles, graphSignature, cacheState: "migrated" };
       }
       const legacy = JSON.parse(localStorage.getItem(`bmopf-layout-v1:${key}`) || "null");
       if (legacy && legacy.version === 1 && legacy.key === key && legacy.locked && typeof legacy.locked === "object") {
         const direction = legacy.direction === "load-to-source" ? legacy.direction : "source-to-load";
         const root = typeof legacy.root === "string" ? legacy.root : "auto";
         const profileKey = layoutProfileKey(direction, root);
-        return { version: 2, key, locked: legacy.locked, routes: {}, direction, root, engine: legacy.engine === "elk" ? "elk" : "deterministic", profiles: { [profileKey]: { locked: legacy.locked, routes: {}, engine: legacy.engine === "elk" ? "elk" : "deterministic" } } };
+        return { version: LAYOUT_CACHE_VERSION, key, locked: legacy.locked, routes: {}, direction, root, engine: legacy.engine === "elk" ? "elk" : "deterministic", profiles: { [profileKey]: { locked: legacy.locked, routes: {}, engine: legacy.engine === "elk" ? "elk" : "deterministic" } }, graphSignature, cacheState: "migrated" };
       }
     } catch (_) { /* localStorage is optional in static reports */ }
-    return { version: 2, key, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} };
+    return defaults();
   }
 
   function saveLayout() {
     if (!state.layout?.key) return;
     try {
       const profileKey = layoutProfileKey(state.layout.direction, state.layout.root);
-      const profiles = { ...(state.layout.profiles || {}), [profileKey]: { locked: state.layout.locked || {}, routes: state.layout.routes || {}, engine: state.layout.engine === "elk" ? "elk" : "deterministic" } };
+      const graphSignature = layoutGraphSignature();
+      const profiles = { ...(state.layout.profiles || {}), [profileKey]: { graphSignature, optionsSignature: profileKey, routeSpace: LAYOUT_ROUTE_SPACE, elkVersion: ELK_VERSION, locked: state.layout.locked || {}, routes: state.layout.routes || {}, engine: state.layout.engine === "elk" ? "elk" : "deterministic" } };
       state.layout.profiles = profiles;
-      localStorage.setItem(`bmopf-layout-v2:${state.layout.key}`, JSON.stringify({ version: 2, key: state.layout.key, direction: state.layout.direction, root: state.layout.root, profiles }));
+      localStorage.setItem(`bmopf-layout-v3:${state.layout.key}`, JSON.stringify({ version: LAYOUT_CACHE_VERSION, key: state.layout.key, graphSignature, optionsSignature: profileKey, routeSpace: LAYOUT_ROUTE_SPACE, elkVersion: ELK_VERSION, direction: state.layout.direction, root: state.layout.root, profiles }));
     } catch (_) { /* ignore unavailable storage */ }
   }
 
@@ -224,7 +250,7 @@
   }
 
   function resetLayout() {
-    state.layout = { version: 2, key: layoutKey(), locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} };
+    state.layout = { version: LAYOUT_CACHE_VERSION, key: layoutKey(), locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} };
     saveLayout();
     renderView(); renderCameraControls();
     setStatus("Single-line layout reset to the computed source-to-load arrangement.");
@@ -1046,7 +1072,8 @@
     const directionLabel = state.layout?.direction === "load-to-source" ? "load-to-source" : "source-to-load";
     const rootLabel = state.layout?.root && state.layout.root !== "auto" ? ` · root ${state.layout.root}` : " · automatic feeder root";
     const engineLabel = state.layout?.engine === "elk" ? " · ELK" : " · deterministic";
-    setStatus(`Single-line diagram: ${directionLabel} layered layout${rootLabel}${engineLabel} with conventional busbars and device symbols.`);
+    const cacheLabel = state.layout?.cacheState === "stale" ? " · stale cached layout ignored" : "";
+    setStatus(`Single-line diagram: ${directionLabel} layered layout${rootLabel}${engineLabel}${cacheLabel} with conventional busbars and device symbols.`);
     $("canvas").innerHTML = svgShell(content);
     bindSvgSelection();
   }

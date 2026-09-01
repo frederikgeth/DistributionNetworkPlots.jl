@@ -89,6 +89,9 @@ npx playwright install chromium
 npm run test:browser
 ```
 
+GitHub Actions runs both the Julia suite and this browser smoke test on pushes
+and pull requests.
+
 ## Project references
 
 - [Architecture](ARCHITECTURE.md)

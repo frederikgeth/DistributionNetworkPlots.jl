@@ -41,18 +41,21 @@ try {
     await page.getByRole("button", { name: "Apply ELK layout" }).click();
     await page.locator("#view-status").waitFor({ state: "visible" });
     await page.waitForFunction(() => document.querySelector("#view-status")?.textContent.includes("ELK layered layout applied"), null, { timeout: 15000 });
-    const cache = await page.evaluate(() => Object.entries(localStorage).find(([key]) => key.startsWith("bmopf-layout-v2:"))?.[1] || "");
+    const cache = await page.evaluate(() => Object.entries(localStorage).find(([key]) => key.startsWith("bmopf-layout-v3:"))?.[1] || "");
     const parsedCache = JSON.parse(cache);
-    assert.equal(parsedCache.version, 2);
+    assert.equal(parsedCache.version, 3);
+    assert.equal(parsedCache.routeSpace, "single-svg-v1");
+    assert.equal(parsedCache.elkVersion, "0.10.2");
+    assert.match(parsedCache.graphSignature, /^sld-elk-graph-v1:/);
     assert.ok(Object.keys(parsedCache.profiles).some((key) => key.includes("direction=source-to-load")));
     const primaryProfile = Object.values(parsedCache.profiles).find((profile) => profile.engine === "elk");
     assert.ok(primaryProfile);
     assert.ok(Object.keys(primaryProfile.routes || {}).length > 0);
     await page.locator("#sld-direction").selectOption("load-to-source");
     await page.locator("#sld-direction").selectOption("source-to-load");
-    const profilesAfterSwitch = await page.evaluate(() => Object.values(localStorage).map((value) => { try { return JSON.parse(value); } catch (_) { return null; } }).find((value) => value?.version === 2)?.profiles || {});
+    const profilesAfterSwitch = await page.evaluate(() => Object.values(localStorage).map((value) => { try { return JSON.parse(value); } catch (_) { return null; } }).find((value) => value?.version === 3)?.profiles || {});
     assert.ok(Object.keys(profilesAfterSwitch).some((key) => key.includes("direction=load-to-source")));
-    const profileCount = await page.evaluate(() => Object.values(localStorage).filter((value) => value.includes('"version":2')).length);
+    const profileCount = await page.evaluate(() => Object.values(localStorage).filter((value) => value.includes('"version":3')).length);
     assert.equal(profileCount, 1);
     assert.deepEqual(consoleErrors, []);
   } finally {
