@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const state = { index: null, selected: null, view: "geo", query: "", activeKind: null };
+  const state = { index: null, selected: null, view: "geo", query: "", activeKind: null, multiHops: 1 };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -105,6 +105,38 @@
   function sameRef(a, b) { return Boolean(a && b && a.kind === b.kind && a.id === b.id); }
   function visibleAssets() { return state.index.assets.filter((item) => !state.activeKind || item.ref.kind === state.activeKind); }
 
+  function neighbourhoodForBus(busId, hops) {
+    const assets = []; const seenAssets = new Set(); const seenBuses = new Set([busId]);
+    let frontier = new Set([busId]);
+    for (let depth = 0; depth < hops; depth += 1) {
+      const next = new Set();
+      for (const currentBus of frontier) {
+        for (const asset of state.index.byBus.get(currentBus) || []) {
+          const key = `${asset.ref.kind}:${asset.ref.id}`;
+          if (!seenAssets.has(key)) { seenAssets.add(key); assets.push(asset); }
+          for (const port of asset.ports || []) {
+            if (!seenBuses.has(port.busId)) { seenBuses.add(port.busId); next.add(port.busId); }
+          }
+        }
+      }
+      frontier = next;
+    }
+    return { assets, buses: seenBuses };
+  }
+
+  function renderMultiHopControls() {
+    const controls = $("multi-hop-controls");
+    const selected = itemFor(state.selected);
+    if (state.view !== "multi" || !selected || selected.ref.kind !== "bus") {
+      controls.hidden = true;
+      controls.innerHTML = "";
+      return;
+    }
+    controls.hidden = false;
+    controls.innerHTML = `<span>Neighbourhood:</span>${[1, 2].map((hops) => `<button class="${state.multiHops === hops ? "active" : ""}" data-hops="${hops}" aria-pressed="${state.multiHops === hops}">${hops}-hop</button>`).join("")}`;
+    controls.querySelectorAll("[data-hops]").forEach((button) => button.addEventListener("click", () => { state.multiHops = Number(button.dataset.hops); render(); }));
+  }
+
   function renderInspector() {
     const item = itemFor(state.selected);
     $("selection-label").textContent = item ? titleOf(item) : "Nothing selected";
@@ -198,21 +230,22 @@
       return;
     }
     if (item.ref.kind === "bus") {
-      const incident = state.index.byBus.get(item.ref.id) || [];
+      const neighbourhood = neighbourhoodForBus(item.ref.id, state.multiHops);
+      const incident = neighbourhood.assets;
       let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">bus ${escapeHtml(item.ref.id)}</text><rect x="35" y="70" width="220" height="350" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><text x="145" y="102" text-anchor="middle" font-size="15">terminals</text>`;
       item.terminals.forEach((terminal, i) => {
         const y = 140 + i * 38;
         const grounded = item.groundedTerminals.includes(terminal) ? " · grounded" : "";
         content += `<text x="60" y="${y}" fill="#37332c" font-size="13">${escapeHtml(terminal)}${escapeHtml(grounded)}</text><line x1="95" y1="${y - 4}" x2="225" y2="${y - 4}" stroke="#9a9388" stroke-width="2"/>`;
       });
-      content += `<rect x="300" y="70" width="425" height="350" rx="8" fill="#fffdf9" stroke="#ded8cc"/><text x="512" y="102" text-anchor="middle" font-size="15">incident assets</text>`;
+      content += `<rect x="300" y="70" width="425" height="350" rx="8" fill="#fffdf9" stroke="#ded8cc"/><text x="512" y="102" text-anchor="middle" font-size="15">${state.multiHops}-hop assets</text>`;
       incident.slice(0, 7).forEach((device, i) => {
         const y = 140 + i * 38;
         content += `<g data-kind="${escapeHtml(device.ref.kind)}" data-id="${escapeHtml(device.ref.id)}"><circle cx="335" cy="${y - 4}" r="6" fill="${colourOf(device.ref.kind)}"/><text x="352" y="${y}" fill="#37332c" font-size="13">${escapeHtml(titleOf(device))}</text><title>${escapeHtml(titleOf(device))}</title></g>`;
       });
       if (incident.length > 7) content += `<text x="512" y="405" text-anchor="middle" fill="#70695f" font-size="12">+ ${incident.length - 7} more in the inspector</text>`;
       content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Select an incident device to expand its conductor pairing</text>`;
-      setStatus(`${item.terminals.length} terminals · ${incident.length} incident assets`);
+      setStatus(`${item.terminals.length} terminals · ${incident.length} assets across ${neighbourhood.buses.size} buses · ${state.multiHops}-hop`);
       $("canvas").innerHTML = svgShell(content);
       bindSvgSelection();
       return;
@@ -270,7 +303,7 @@
     document.querySelectorAll(".view-tab").forEach((button) => button.classList.toggle("active", button.dataset.view === state.view));
   }
 
-  function render() { renderSummary(); renderInventory(); renderInspector(); renderView(); }
+  function render() { renderSummary(); renderInventory(); renderInspector(); renderView(); renderMultiHopControls(); }
 
   function parseHash() {
     const parts = window.location.hash.slice(2).split("/");
