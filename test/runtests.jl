@@ -19,6 +19,7 @@ const MULTINETWORK_RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro"
     @test occursin("BMOPFExamples", html)
     @test occursin("__BMOPF_REPORT_META__", html)
     @test occursin("case_fingerprint", html)
+    @test occursin("case_fingerprint_algorithm", html)
     @test occursin("result_fingerprint", html)
     @test occursin("__BMOPF_RESULT__", html)
     @test !occursin("href=\"styles.css\"", html)
@@ -56,6 +57,7 @@ end
     result = JSON3.read(read(RESULT_FIXTURE, String), Dict{String,Any})
     @test result["meta"]["license"] == "CC-BY-4.0"
     @test result["meta"]["case_id"] == "micro-bmopf"
+    @test result["meta"]["case_fingerprint_algorithm"] == "sha256-json3-v1"
     @test result["termination_status"] == "LOCALLY_SOLVED"
     @test result["line"]["line_main"]["loading"] == 0.42
     @test result["bus"]["load_bus"]["voltage_deviation"] == 0.062

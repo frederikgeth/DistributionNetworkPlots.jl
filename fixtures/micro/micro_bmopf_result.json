@@ -4,7 +4,9 @@
     "license": "CC-BY-4.0",
     "attribution": "DistributionNetworkPlots.jl contributors",
     "source": "authored in this repository",
-    "case_id": "micro-bmopf"
+    "case_id": "micro-bmopf",
+    "case_fingerprint": "6cbe2661f943bf30646ef6ba7fcfe4bdf6261ef4732c9020b1719bf11b2d40c9",
+    "case_fingerprint_algorithm": "sha256-json3-v1"
   },
   "termination_status": "LOCALLY_SOLVED",
   "objective": 12345.6,

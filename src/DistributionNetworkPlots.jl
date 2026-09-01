@@ -37,12 +37,14 @@ function _report_metadata(case, result=nothing)
     json = String(JSON3.write(case))
     metadata = Dict(
         "case_fingerprint" => bytes2hex(sha256(json)),
+        "case_fingerprint_algorithm" => "sha256-json3-v1",
         "schema" => get(case, "\$schema", nothing),
         "app_version" => REPORT_APP_VERSION,
         "layout_engine" => REPORT_LAYOUT_ENGINE,
     )
     if result !== nothing
         metadata["result_fingerprint"] = bytes2hex(sha256(String(JSON3.write(result))))
+        metadata["result_fingerprint_algorithm"] = "sha256-json3-v1"
     end
     metadata
 end

@@ -52,3 +52,7 @@ not equipment protection limits.
 The prototype intentionally has no external basemap or runtime backend. Its layout is deterministic and is not yet the final ELK-backed renderer.
 
 Julia-generated reports display reproducibility metadata for the embedded case and renderer.
+The report metadata uses the versioned `sha256-json3-v1` fingerprint convention.
+Results may provide the same `case_fingerprint` and algorithm in `meta`; when
+both sides are present the Results panel reports a cryptographic match or
+mismatch. Older results continue through the case-ID/name fallback.

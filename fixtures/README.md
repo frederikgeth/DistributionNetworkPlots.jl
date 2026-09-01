@@ -18,6 +18,8 @@ The result fixture also includes illustrative solution-profile findings so the
 Diagnostics view can exercise clickable bound-violation, near-active-bound, and
 residual records, plus an explicit bus voltage-deviation value for result-aware
 overview styling.
+Its `meta.case_fingerprint` demonstrates the optional producer metadata used for
+cryptographic case/result pairing.
 
 `micro/micro_bmopf_multinetwork_result.json` exercises explicit selection of
 multiple `nw` result slices. The viewer refuses to guess a slice and requires

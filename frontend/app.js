@@ -144,7 +144,16 @@
 
   function resultIdentity() {
     const root = resultRoot();
-    return root?.case_fingerprint ?? root?.case_id ?? root?.meta?.case_fingerprint ?? root?.meta?.case_id ?? null;
+    return root?.case_fingerprint ?? root?.meta?.case_fingerprint ?? root?.case_id ?? root?.meta?.case_id ?? null;
+  }
+
+  function resultFingerprint() {
+    const root = resultRoot();
+    return root?.case_fingerprint ?? root?.meta?.case_fingerprint ?? null;
+  }
+
+  function openCaseFingerprint() {
+    return globalThis.__BMOPF_REPORT_META__?.case_fingerprint ?? state.index?.raw?.meta?.case_fingerprint ?? null;
   }
 
   function resultRecordFor(item) {
@@ -186,6 +195,22 @@
 
   function resultPairingStatus() {
     const identity = resultIdentity();
+    const fingerprint = resultFingerprint();
+    const expectedFingerprint = openCaseFingerprint();
+    if (fingerprint && expectedFingerprint) {
+      if (String(fingerprint) === String(expectedFingerprint)) {
+        return { kind: "matched", label: "matched", identity, message: "Cryptographic case fingerprints match." };
+      }
+      return { kind: "mismatch", label: "mismatch", identity, message: "Cryptographic case fingerprints differ. Metrics are shown, but pairing should be reviewed." };
+    }
+    if (fingerprint || expectedFingerprint) {
+      return {
+        kind: "unverified",
+        label: "unverified",
+        identity,
+        message: fingerprint ? "The result provides a fingerprint, but the open case fingerprint is unavailable." : "The open report provides a fingerprint, but this result does not."
+      };
+    }
     const expectedIdentity = state.index?.raw?.meta?.case_fingerprint || state.index?.raw?.meta?.case_id || state.index?.name || null;
     if (!identity || !expectedIdentity) {
       return {

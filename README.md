@@ -47,6 +47,10 @@ render_case("fixtures/micro/micro_bmopf.json", "micro-report.html")
 
 The generated report embeds the case and frontend runtime. It does not require Node.js or an application server.
 Generated reports also expose a case fingerprint, schema identifier, application version, and layout-engine identifier for reproducibility.
+When a result includes the optional matching `case_fingerprint` and
+`case_fingerprint_algorithm` metadata, the report verifies that pairing
+cryptographically; otherwise it retains the identity-based fallback and marks
+the result unverified when necessary.
 
 ## Licensing and case provenance
 

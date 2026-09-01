@@ -36,6 +36,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Diagnostics view normalises result validation/profile findings and links linked findings back to assets.
 - [x] Diagnostics findings can be filtered by severity and text while preserving the total finding count.
 - [x] Result attachment reports matched, mismatched, or unverified case identity status.
+- [x] Viewer recognises versioned optional case fingerprints and prefers cryptographic pairing when producer metadata is available.
 - [x] Overview views encode supported loading, explicit voltage deviation, and operating-state result cues with non-colour legend guidance.
 - [x] Frontend provides built-in authored cases for complete-model and partial/raw-only support-boundary smoke tests.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
@@ -409,7 +410,7 @@ A slice is done only when:
 ### Results-aware visualisation: next vertical slices
 
 - [x] Attach a raw BMOPFTools-compatible result JSON sidecar to an indexed case, show objective/termination metadata, and expose selected asset metrics with safe raw-record access.
-- [ ] Compute and compare canonical cryptographic case fingerprints for robust case/result pairing (current status is identity-based and may be unverified).
+- [ ] Align `sha256-json3-v1` with BMOPFTools or a shared canonicalisation specification; support a migration path if the producer adopts a different algorithm.
 - [x] Add a multinetwork/time/scenario selector; never silently choose the first `nw` slice.
 - [x] Add result-driven visual encodings for voltage deviation, line/transformer loading, and open/out-of-service state, with legends and accessible non-colour cues.
 - [x] Surface BMOPFTools solution-profile findings (bound violations, near-active bounds, and residuals) as filterable diagnostics.
