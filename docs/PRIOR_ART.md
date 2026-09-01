@@ -104,3 +104,50 @@ silently choosing a slice.
 Every reused case or result fixture keeps its source licence and attribution.
 Only authored examples in this repository use the repository’s CC BY 4.0 data
 licence.
+
+## STAC (Monash/DATA61): usability patterns to carry forward
+
+[STAC](https://immersive.erc.monash.edu/stac/) is an earlier browser-first
+steady-state AC network explorer. Its [source repository](https://github.com/aayushGaur/stac)
+is MIT-licensed and describes a client-side workflow built around D3 and
+WebCola. The live demo explicitly recommends a practical scale envelope (under
+500 buses) and keeps dropped cases in local memory.
+
+### Strong patterns to adopt
+
+- **Validation as a view, not only a log.** STAC computes warnings/errors and
+  highlights the affected node, edge, or decorator in one action. For BMOPF,
+  this should become a result/diagnostic mode driven by `profile_solution`:
+  bound violations, residuals, and near-active constraints should be clickable
+  and should focus the corresponding asset.
+- **Layout ownership.** STAC supports automatic layout, exporting a layout,
+  and locking/unlocking bus positions. We should persist a versioned layout
+  sidecar keyed by case fingerprint and layout options, with per-bus locks and
+  an explicit reset-to-computed action.
+- **Search-to-focus.** Its bus autocomplete immediately zooms to the selected
+  element. Our search already selects assets; the next refinement is ranked
+  suggestions across buses/devices/results plus a focus action that preserves
+  the current view.
+- **Visible scale guidance.** The under-500-bus recommendation is useful
+  product honesty. We should publish measured budgets for SVG element count,
+  load time, and interaction latency, then offer a focused-neighbourhood mode
+  when a case exceeds them.
+- **Decorators and help.** STAC’s element decorators and help graph make
+  symbols discoverable. We should provide a compact, accessible legend/help
+  panel for BMOPF asset symbols, conductor cues, and result encodings.
+
+### Patterns to adapt or deliberately defer
+
+- STAC’s parser is tied to MATPOWER text and a rules file. We should keep the
+  canonical BMOPF index/parser boundary and use metadata-driven metric adapters
+  instead of reproducing that parser architecture.
+- Its solution updater computes one steady-state flow and the solution view is
+  explicitly unfinished. For this project, result sidecars must support
+  multiple operating points and `nw` slices first; a dedicated flow projection
+  comes only after the metric and scenario contracts are stable.
+- STAC’s validation colours are useful, but colour alone is not sufficient for
+  four-wire distribution semantics. Every warning/error overlay needs labels,
+  patterns, inspector details, and an accessible list/search surface.
+- The repository’s MIT licence is compatible with this project’s BSD-3-Clause
+  code licence, but no STAC source or image assets are copied. Any future reuse
+  must preserve the MIT notice and be recorded in the source inventory.

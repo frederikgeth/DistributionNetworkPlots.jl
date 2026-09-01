@@ -409,6 +409,11 @@ A slice is done only when:
 - [ ] Add result-driven visual encodings for voltage deviation, line/transformer loading, and open/out-of-service state, with legends and accessible non-colour cues.
 - [ ] Surface BMOPFTools solution-profile findings (bound violations, near-active bounds, residuals, and quality) as filterable diagnostics.
 - [ ] Compare two operating points or result sidecars while keeping source asset identity stable.
+- [ ] Add a validation/diagnostic view that focuses assets with BMOPFTools solution-profile violations, residuals, and near-active bounds.
+- [ ] Persist versioned layouts keyed by case fingerprint, including per-bus lock/unlock and reset-to-computed controls.
+- [ ] Add ranked search suggestions across buses, devices, diagnostics, and result metrics.
+- [ ] Publish measured SVG/interaction budgets and an explicit focused-neighbourhood fallback for cases above them.
+- [ ] Add an accessible help/legend panel for symbols, conductor cues, and result encodings.
 
 ### Later: explicitly outside the alpha
 
