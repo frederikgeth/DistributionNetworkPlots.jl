@@ -25,6 +25,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Geospatial routes from reusable line geometry with straight-line fallback.
 - [x] Julia-generated self-contained report with safe JSON embedding.
 - [x] Static report metadata with case fingerprint, schema, application version, and layout-engine identifier.
+- [x] Keyboard-selectable diagram assets with ARIA names, selected-view state, and reduced-motion handling.
 - [ ] Replace prototype layout with worker-backed ELK layout and production renderer packages.
 - [ ] Add automated browser end-to-end tests to CI once the JavaScript toolchain is available.
 

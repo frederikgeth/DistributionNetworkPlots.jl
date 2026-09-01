@@ -381,7 +381,15 @@
   }
 
   function bindSvgSelection() {
-    $("canvas").querySelectorAll("[data-kind][data-id]").forEach((node) => node.addEventListener("click", () => select({ kind: node.dataset.kind, id: node.dataset.id })));
+    $("canvas").querySelectorAll("[data-kind][data-id]").forEach((node) => {
+      node.setAttribute("tabindex", "0");
+      node.setAttribute("role", "button");
+      node.setAttribute("aria-label", `${node.dataset.kind.replaceAll("_", " ")} ${node.dataset.id}`);
+      node.addEventListener("click", () => select({ kind: node.dataset.kind, id: node.dataset.id }));
+      node.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select({ kind: node.dataset.kind, id: node.dataset.id }); }
+      });
+    });
   }
 
   function renderView() {
@@ -389,7 +397,12 @@
     if (state.view === "geo") drawGeo();
     else if (state.view === "single") drawSingle();
     else drawMulti();
-    document.querySelectorAll(".view-tab").forEach((button) => button.classList.toggle("active", button.dataset.view === state.view));
+    document.querySelectorAll(".view-tab").forEach((button) => {
+      const active = button.dataset.view === state.view;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", String(active));
+      button.setAttribute("tabindex", active ? "0" : "-1");
+    });
     bindCamera();
   }
 
