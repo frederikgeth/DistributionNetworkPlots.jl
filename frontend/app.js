@@ -99,6 +99,20 @@
     };
   }
 
+  function resultIdentity() {
+    const root = resultRoot();
+    return root?.case_fingerprint ?? root?.case_id ?? root?.meta?.case_fingerprint ?? root?.meta?.case_id ?? null;
+  }
+
+  function resultTooltip(item) {
+    if (!state.result) return "";
+    const record = globalThis.BMOPFModel.resultRecord(state.result, item.ref.kind, item.ref.id);
+    if (!record || typeof record !== "object" || Array.isArray(record)) return "";
+    const keys = ["vm", "va", "p", "q", "pg", "qg", "loading", "status", "residual"];
+    const values = Object.entries(record).filter(([key]) => keys.includes(key) || key.endsWith("_loading") || key.endsWith("_residual"));
+    return values.length ? ` · result ${values.slice(0, 3).map(([key, value]) => `${key}=${formatValue(value)}`).join(", ")}` : "";
+  }
+
   function renderResultSummary() {
     const panel = $("result-summary");
     if (!state.result) {
@@ -117,10 +131,13 @@
     if (caseInResult) fields.push(["embedded case", "yes"]);
     const warning = state.resultError ? `<p class="result-warning">${escapeHtml(state.resultError)}</p>` : "";
     const scenarioNote = meta.scenarios.length > 1 ? `<p class="result-warning">Multinetwork result detected (${meta.scenarios.length} slices); scenario selection is planned and no slice is silently chosen.</p>` : "";
-    const identity = root?.case_fingerprint || root?.case_id || root?.meta?.case_fingerprint;
+    const identity = resultIdentity();
     const identityHtml = identity ? `<p class="report-meta">case identity <code>${escapeHtml(String(identity))}</code></p>` : "";
+    const expectedIdentity = state.index?.raw?.meta?.case_fingerprint || state.index?.raw?.meta?.case_id || state.index?.name;
+    const mismatch = identity && expectedIdentity && String(identity) !== String(expectedIdentity);
+    const mismatchHtml = mismatch ? `<p class="result-warning">Result identity <code>${escapeHtml(String(identity))}</code> does not match the open case <code>${escapeHtml(String(expectedIdentity))}</code>. Metrics are shown, but pairing should be reviewed.</p>` : "";
     panel.className = "panel";
-    panel.innerHTML = `<div class="panel-heading"><h2>Results</h2><span class="muted">${escapeHtml(state.resultLabel || "JSON")}</span></div>${fields.length ? `<table class="property-table result-table">${fields.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("")}</table>` : `<p class="muted result-empty">Result records attached; no run summary fields were found.</p>`}${identityHtml}${scenarioNote}${warning}`;
+    panel.innerHTML = `<div class="panel-heading"><h2>Results</h2><span class="muted">${escapeHtml(state.resultLabel || "JSON")}</span></div>${fields.length ? `<table class="property-table result-table">${fields.map(([key, value]) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(value))}</td></tr>`).join("")}</table>` : `<p class="muted result-empty">Result records attached; no run summary fields were found.</p>`}${identityHtml}${mismatchHtml}${scenarioNote}${warning}`;
   }
 
   function renderInventory() {
@@ -331,14 +348,14 @@
         const selected = sameRef(item.ref, state.selected);
         const route = geometryPointsOf(item).map(([longitude, latitude]) => project(longitude, latitude));
         const stroke = colourOf(item.ref.kind); const width = selected ? 6 : 3; const opacity = item.status === "open" ? .35 : .85;
-        if (route.length >= 2) content += `<polyline points="${route.map(([x, y]) => `${x},${y}`).join(" ")}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · routed geometry</title></polyline>`;
-        else content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}</title></line>`;
+        if (route.length >= 2) content += `<polyline points="${route.map(([x, y]) => `${x},${y}`).join(" ")}" fill="none" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · routed geometry${escapeHtml(resultTooltip(item))}</title></polyline>`;
+        else content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${stroke}" stroke-width="${width}" stroke-opacity="${opacity}" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></line>`;
       }
     }
     for (const bus of state.index.buses) {
       const p = positions.get(bus.ref.id); const selected = sameRef(bus.ref, state.selected);
       if (!p) continue;
-      content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><circle cx="${p[0]}" cy="${p[1]}" r="${selected ? 12 : 8}" fill="${selected ? "#2f6fb3" : "#fffdf9"}" stroke="#2f6fb3" stroke-width="${selected ? 4 : 2}"><title>bus ${escapeHtml(bus.ref.id)}</title></circle><text x="${p[0] + 12}" y="${p[1] + 4}" fill="#37332c" font-size="12">${escapeHtml(bus.ref.id)}</text></g>`;
+      content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><circle cx="${p[0]}" cy="${p[1]}" r="${selected ? 12 : 8}" fill="${selected ? "#2f6fb3" : "#fffdf9"}" stroke="#2f6fb3" stroke-width="${selected ? 4 : 2}"><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(resultTooltip(bus))}</title></circle><text x="${p[0] + 12}" y="${p[1] + 4}" fill="#37332c" font-size="12">${escapeHtml(bus.ref.id)}</text></g>`;
     }
     if (geographic && unmapped.length) content += `<text x="380" y="478" text-anchor="middle" fill="#8a4d20" font-size="12">Not placed geographically (missing coordinates): ${escapeHtml(unmapped.map((bus) => bus.ref.id).join(", "))}</text>`;
     setStatus(geographic ? `Geographic coordinates used for ${state.index.buses.length - unmapped.length}/${state.index.buses.length} buses${unmapped.length ? ` · ${unmapped.length} omitted` : ""}.` : "No geographic coordinates: showing a schematic placement.");
@@ -362,7 +379,7 @@
       case "shunt": shape = `<path d="M0-11v22M-8 7h16" stroke="${colour}" stroke-width="${width}"/>`; break;
       default: shape = `<rect x="-10" y="-7" width="20" height="14" rx="3" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"${dash}/>`;
     }
-    return `<g transform="translate(${x} ${y})" opacity="${opacity}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · ${escapeHtml(item.status)}</title>${shape}</g>`;
+    return `<g transform="translate(${x} ${y})" opacity="${opacity}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · ${escapeHtml(item.status)}${escapeHtml(resultTooltip(item))}</title>${shape}</g>`;
   }
 
   function drawSingle() {
@@ -371,7 +388,7 @@
     for (const item of visibleAssets().filter((e) => e.connections?.length)) {
       for (const connection of item.connections) {
         const a = positions.get(connection.from.busId); const b = positions.get(connection.to.busId); if (!a || !b) continue;
-        content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${colourOf(item.ref.kind)}" stroke-width="${sameRef(item.ref, state.selected) ? 6 : 3}" stroke-opacity=".85" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}</title></line>`;
+        content += `<line x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}" stroke="${colourOf(item.ref.kind)}" stroke-width="${sameRef(item.ref, state.selected) ? 6 : 3}" stroke-opacity=".85" ${item.status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))}${escapeHtml(resultTooltip(item))}</title></line>`;
         content += singleSymbol(item, (a[0] + b[0]) / 2, (a[1] + b[1]) / 2);
       }
     }
