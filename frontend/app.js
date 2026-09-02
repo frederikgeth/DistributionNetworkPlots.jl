@@ -1254,7 +1254,7 @@
     return `<g transform="translate(${x} ${y})" aria-label="${escapeHtml(caption)} transformer winding"><title>${escapeHtml(caption)} transformer winding</title><text x="0" y="-52" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(caption)}</text>${shape}</g>`;
   }
 
-  function transformerWindingInterior(configuration, body, side, terminals, busId, labelPrefix = null) {
+  function transformerWindingInterior(configuration, body, side, terminals, busId, labelPrefix = null, options = {}) {
     const config = String(configuration || "").toUpperCase();
     const phaseColours = ["#c2564b", "#4a8f5f", "#3f6fb9"];
     const neutralIndex = terminals.findIndex((terminal) => /^(n|neutral|g|pe|ground|earth)$/i.test(String(terminal)));
@@ -1269,20 +1269,42 @@
     }).join("");
     const configLabel = config.replaceAll("_", " ");
     const sideLabel = labelPrefix ?? (side === "left" ? "from: " : side === "right" ? "to: " : "");
+    const segmentCoil = (start, end, colour) => {
+      if (!options.coil) return "";
+      const dx = end[0] - start[0]; const dy = end[1] - start[1]; const length = Math.hypot(dx, dy);
+      if (length < 8) return "";
+      const ux = dx / length; const uy = dy / length; const px = -uy; const py = ux;
+      const begin = 0.18; const finish = 0.82; const turns = 3; const steps = turns * 2; const amplitude = Math.min(4.5, length / 12);
+      const point = (fraction, offset = 0) => [start[0] + dx * fraction + px * offset, start[1] + dy * fraction + py * offset];
+      const first = point(begin); let path = `M${first[0]} ${first[1]}`;
+      for (let i = 0; i < steps; i += 1) {
+        const t0 = begin + (finish - begin) * (i / steps); const t1 = begin + (finish - begin) * ((i + 1) / steps);
+        const control = point((t0 + t1) / 2, (i % 2 === 0 ? 1 : -1) * amplitude); const next = point(t1);
+        path += `Q${control[0]} ${control[1]} ${next[0]} ${next[1]}`;
+      }
+      return `<path d="${path}" fill="none" stroke="${colour}" stroke-width="2.6" stroke-linecap="round"/>`;
+    };
     let html = `<g aria-label="${escapeHtml(side)} ${escapeHtml(configLabel || "terminal")} winding"><text x="${cx}" y="${body.y + 18}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">${escapeHtml(`${sideLabel}${configLabel || "terminal"}`)}</text>${dotHtml}`;
     if (config === "DELTA" && phaseEntries.length >= 3) {
       const points = [[cx, cy - 29], [cx - 25, cy + 17], [cx + 25, cy + 17]];
       html += `<path d="M${points[0][0]} ${points[0][1]}L${points[1][0]} ${points[1][1]}L${points[2][0]} ${points[2][1]}Z" fill="none" stroke="#4f789f" stroke-width="2"/>`;
+      if (options.coil) [[0, 1], [1, 2], [2, 0]].forEach(([from, to], branchIndex) => { html += segmentCoil(points[from], points[to], phaseColours[branchIndex]); });
       phaseEntries.forEach(({ index }, phaseIndex) => {
         const [px, py] = points[phaseIndex]; const [tx, ty] = terminalPoints[index]; const colour = phaseColours[phaseIndex];
         html += `<path d="M${tx} ${ty}L${px} ${py}" fill="none" stroke="${colour}" stroke-width="2.5"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/>`;
       });
     } else if (config === "WYE" && phaseEntries.length >= 2) {
-      const points = [[cx - 25, cy - 17], [cx, cy - 28], [cx + 25, cy - 17]];
-      const centre = [cx, cy + 5];
+      const radius = 34;
+      const centre = [cx, cy + 2];
+      const points = [
+        [centre[0], centre[1] - radius],
+        [centre[0] + radius * Math.cos(Math.PI / 6), centre[1] + radius * Math.sin(Math.PI / 6)],
+        [centre[0] - radius * Math.cos(Math.PI / 6), centre[1] + radius * Math.sin(Math.PI / 6)]
+      ];
       phaseEntries.forEach(({ index }, phaseIndex) => {
         const [px, py] = points[phaseIndex]; const [tx, ty] = terminalPoints[index]; const colour = phaseColours[phaseIndex];
         html += `<path d="M${tx} ${ty}L${px} ${py}M${px} ${py}L${centre[0]} ${centre[1]}" fill="none" stroke="${colour}" stroke-width="2.5"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/>`;
+        html += segmentCoil([px, py], centre, colour);
       });
       html += `<circle cx="${centre[0]}" cy="${centre[1]}" r="3" fill="#fffdf9" stroke="#4f789f" stroke-width="1.5"/>`;
       if (neutralIndex >= 0) {
@@ -1301,8 +1323,7 @@
     const mid = body.x + body.width / 2;
     const top = body.y + 32;
     const bottom = body.y + body.height - 28;
-    const coil = (x, direction) => `<path d="M${x} ${top + 8}c${direction * 14} 0 ${direction * 14} 12 0 12s${-direction * 14} 12 0 12 ${direction * 14} 0 ${direction * 14} 12 0 12s${-direction * 14} 12 0 12 ${direction * 14} 0 ${direction * 14} 12 0 12s${-direction * 14} 12 0 12" fill="none" stroke="#4f789f" stroke-width="2.5"/>`;
-    return `${coil(mid - 27, 1)}${coil(mid + 27, -1)}<line x1="${mid - 5}" y1="${top}" x2="${mid - 5}" y2="${bottom}" stroke="#4f789f" stroke-width="2"/><line x1="${mid + 5}" y1="${top}" x2="${mid + 5}" y2="${bottom}" stroke="#4f789f" stroke-width="2"/>`;
+    return `<line x1="${mid - 5}" y1="${top}" x2="${mid - 5}" y2="${bottom}" stroke="#4f789f" stroke-width="2"/><line x1="${mid + 5}" y1="${top}" x2="${mid + 5}" y2="${bottom}" stroke="#4f789f" stroke-width="2"/>`;
   }
 
   function singleDeviceConnectionDiagram(item, configuration, terminals, x, y) {
@@ -1679,7 +1700,7 @@
         const windingRecord = item.sourceRecord?.windings?.[i] || {};
         const panel = multiWindingPanel(bus, winding, layout.x, layout.y, layout.width, layout.side);
         content += panel.html;
-        const interior = i < 2 ? transformerWindingInterior(windingRecord.configuration, body, i === 0 ? "left" : "right", winding.terminals || [], winding.busId) : null;
+        const interior = i < 2 ? transformerWindingInterior(windingRecord.configuration, body, i === 0 ? "left" : "right", winding.terminals || [], winding.busId, null, { coil: true }) : null;
         if (interior) content += interior.html;
         panel.anchors.forEach((anchor, terminalIndex) => {
           const terminal = winding.terminals[terminalIndex] || "?";
@@ -1763,8 +1784,8 @@
       const body = { x: 280, y: 88, width: 200, height: 300 };
       const fromConfiguration = transformerConfiguration(item, 0);
       const toConfiguration = transformerConfiguration(item, 1);
-      const leftInterior = transformerWindingInterior(fromConfiguration, body, "left", left.terminals || [], left.busId);
-      const rightInterior = transformerWindingInterior(toConfiguration, body, "right", right.terminals || [], right.busId);
+      const leftInterior = transformerWindingInterior(fromConfiguration, body, "left", left.terminals || [], left.busId, null, { coil: true });
+      const rightInterior = transformerWindingInterior(toConfiguration, body, "right", right.terminals || [], right.busId, null, { coil: true });
       let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · transformer winding detail</tspan></text>${leftPanel.html}${rightPanel.html}<rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="10" fill="#e8f0f8" stroke="${colourOf(item.ref.kind)}" stroke-width="2.5"/><text x="380" y="${body.y + 28}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">galvanically isolated windings</text>${transformerIsolationAndCoils(body)}${leftInterior.html}${rightInterior.html}`;
       pairs.forEach(([a, b], i) => {
         const yLeft = leftPanel.rowY[i] || (142 + i * 34);

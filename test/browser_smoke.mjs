@@ -307,6 +307,8 @@ try {
     assert.match(transformerText, /Ordered conductor pairing/);
     assert.equal(await page.locator('#canvas g[aria-label="left DELTA winding"] circle').count(), 3);
     assert.equal(await page.locator('#canvas g[aria-label="right WYE winding"] circle').count(), 4);
+    assert.ok(await page.locator('#canvas g[aria-label="left DELTA winding"] path[stroke="#c2564b"]').count() >= 1);
+    assert.ok(await page.locator('#canvas g[aria-label="right WYE winding"] path[stroke="#3f6fb9"]').count() >= 1);
     assert.equal(await page.locator('#canvas rect[x="280"][y="88"]').count(), 1);
     const transformerLabelXs = await page.locator('#canvas text[data-role="conductor-label"]').evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute("x"))));
     assert.ok(transformerLabelXs.length >= 3 && transformerLabelXs.every((x) => x < 285));
