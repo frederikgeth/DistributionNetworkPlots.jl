@@ -106,6 +106,10 @@ try {
     const multiDetailPane = page.locator("#multi-detail-panel");
     assert.equal(await multiDetailPane.isVisible(), true);
     assert.match(await page.locator("#multi-detail-canvas").innerText(), /terminal detail|Π branch model/);
+    const busGroups = page.locator('#multi-detail-canvas g[data-kind="bus"]');
+    assert.ok(await busGroups.count() >= 2);
+    assert.equal(await busGroups.locator("rect").count(), 0);
+    assert.ok(await busGroups.locator('line[stroke-dasharray="2 5"]').count() >= 2);
     const multiDetailHandle = page.locator("#multi-detail-resizer");
     assert.equal(await multiDetailHandle.getAttribute("role"), "separator");
     const detailWidthBefore = Number(await multiDetailHandle.getAttribute("aria-valuenow"));

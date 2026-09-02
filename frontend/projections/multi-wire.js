@@ -28,13 +28,15 @@
     function multiBusPanel(bus, port, x, y, width, side) {
       const terminals = terminalNames(port);
       const rowY = terminals.map((_, i) => y + 72 + i * 34);
-      let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><rect x="${x}" y="${y}" width="${width}" height="${Math.max(190, 112 + terminals.length * 34)}" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><text x="${x + width / 2}" y="${y + 28}" text-anchor="middle" fill="#25231f" font-size="14">bus ${escapeHtml(bus.ref.id)}</text>`;
+      const spineX = side === "left" ? x + width : x;
+      const labelX = side === "left" ? spineX - 10 : spineX + 10;
+      const labelAnchor = side === "left" ? "end" : "start";
+      const lineEnd = rowY[rowY.length - 1] + 10;
+      let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><title>bus ${escapeHtml(bus.ref.id)} · ${terminals.length} terminals</title><text x="${spineX}" y="${y + 24}" text-anchor="middle" fill="#25231f" font-size="14">bus ${escapeHtml(bus.ref.id)}</text><line x1="${spineX}" y1="${y + 42}" x2="${spineX}" y2="${lineEnd}" stroke="#2f6fb3" stroke-width="2" stroke-dasharray="2 5"/>`;
       terminals.forEach((terminal, i) => {
         const grounded = (bus.groundedTerminals || []).includes(terminal) || /^(g|pe|ground|earth)$/i.test(terminal);
         const label = grounded ? `${terminal} · ⏚` : terminal;
-        const lineStart = side === "left" ? x + width - 18 : x + 18;
-        const textX = side === "left" ? x + 14 : x + width - 14;
-        html += `<line x1="${lineStart}" y1="${rowY[i]}" x2="${side === "left" ? x + width - 4 : x + 4}" y2="${rowY[i]}" stroke="${grounded ? "#5d574d" : "#9a9388"}" stroke-width="${grounded ? 3 : 2}"${grounded ? " stroke-dasharray=\"2 4\"" : ""}/><text x="${textX}" y="${rowY[i] + 4}" text-anchor="${side === "left" ? "start" : "end"}" fill="#37332c" font-size="12">${escapeHtml(label)}</text>`;
+        html += `<circle cx="${spineX}" cy="${rowY[i]}" r="4" fill="#fffdf9" stroke="${grounded ? "#5d574d" : "#2f6fb3"}" stroke-width="2"/><text x="${labelX}" y="${rowY[i] + 4}" text-anchor="${labelAnchor}" fill="#37332c" font-size="12">${escapeHtml(label)}</text>`;
       });
       html += `</g>`;
       return { html, rowY };
@@ -42,23 +44,19 @@
 
     function multiWindingPanel(bus, port, x, y, width, side) {
       const terminals = terminalNames(port);
-      const height = side === "top" ? 92 : Math.max(150, 78 + terminals.length * 28);
       const anchors = [];
-      let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><rect x="${x}" y="${y}" width="${width}" height="${height}" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><text x="${x + width / 2}" y="${y + 24}" text-anchor="middle" fill="#25231f" font-size="13">bus ${escapeHtml(bus.ref.id)}</text>`;
+      const spineX = side === "left" ? x + width : side === "right" ? x : x + width / 2;
+      const labelX = side === "right" ? spineX + 10 : side === "left" ? spineX - 10 : spineX + 10;
+      const labelAnchor = side === "right" ? "start" : side === "left" ? "end" : "start";
+      const rowY = terminals.map((_, i) => side === "top" ? y + 42 + i * 24 : y + 54 + i * 28);
+      const lineStart = side === "top" ? y + 28 : y + 38;
+      const lineEnd = rowY[rowY.length - 1] + 9;
+      let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><title>bus ${escapeHtml(bus.ref.id)} · ${terminals.length} terminals</title><text x="${spineX}" y="${y + 20}" text-anchor="middle" fill="#25231f" font-size="13">bus ${escapeHtml(bus.ref.id)}</text><line x1="${spineX}" y1="${lineStart}" x2="${spineX}" y2="${lineEnd}" stroke="#2f6fb3" stroke-width="2" stroke-dasharray="2 5"/>`;
       terminals.forEach((terminal, i) => {
         const grounded = (bus.groundedTerminals || []).includes(terminal) || /^(g|pe|ground|earth)$/i.test(terminal);
         const label = grounded ? `${terminal} · ⏚` : terminal;
-        if (side === "top") {
-          const point = terminals.length === 1 ? x + width / 2 : x + 24 + i * ((width - 48) / (terminals.length - 1));
-          anchors.push([point, y]);
-          html += `<line x1="${point}" y1="${y}" x2="${point}" y2="${y + 15}" stroke="${grounded ? "#5d574d" : "#9a9388"}" stroke-width="${grounded ? 3 : 2}"${grounded ? " stroke-dasharray=\"2 4\"" : ""}/><text x="${point}" y="${y + 39}" text-anchor="middle" fill="#37332c" font-size="11">${escapeHtml(label)}</text>`;
-        } else {
-          const rowY = y + 54 + i * 28;
-          const lineStart = side === "left" ? x + width - 18 : x + 18;
-          const lineEnd = side === "left" ? x + width - 4 : x + 4;
-          anchors.push([lineEnd, rowY]);
-          html += `<line x1="${lineStart}" y1="${rowY}" x2="${lineEnd}" y2="${rowY}" stroke="${grounded ? "#5d574d" : "#9a9388"}" stroke-width="${grounded ? 3 : 2}"${grounded ? " stroke-dasharray=\"2 4\"" : ""}/><text x="${side === "left" ? x + 12 : x + width - 12}" y="${rowY + 4}" text-anchor="${side === "left" ? "start" : "end"}" fill="#37332c" font-size="11">${escapeHtml(label)}</text>`;
-        }
+        anchors.push([spineX, rowY[i]]);
+        html += `<circle cx="${spineX}" cy="${rowY[i]}" r="3.5" fill="#fffdf9" stroke="${grounded ? "#5d574d" : "#2f6fb3"}" stroke-width="1.8"/><text x="${labelX}" y="${rowY[i] + 4}" text-anchor="${labelAnchor}" fill="#37332c" font-size="11">${escapeHtml(label)}</text>`;
       });
       html += `</g>`;
       return { html, anchors };
