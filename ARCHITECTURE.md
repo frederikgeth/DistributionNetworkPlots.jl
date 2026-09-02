@@ -312,7 +312,7 @@ Single-wire also exposes page-session display toggles for semantic decluttering:
 
 ### 7.3 Multi-wire projection
 
-The multi-wire projection expands ports into terminal-level connections.
+The multi-wire projection expands ports into terminal-level connections. In the browser UI it is available both as a standalone focused view and as a resizable component-detail pane alongside Single-wire. Single-wire remains the primary network context; the pane reuses the same renderer and follows the canonical selected `AssetRef`. Selecting a related bus or device in the pane updates the Single-wire selection, while Collapse and Open full view provide explicit control over the detail mode. The pane uses its own neutral camera so network zoom/pan does not distort component detail, and it stacks below the SLD on narrow screens.
 
 Projection rules:
 

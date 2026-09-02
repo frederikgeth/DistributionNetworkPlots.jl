@@ -10,7 +10,7 @@
   const SIDEBAR_WIDTH_DEFAULT = 360;
   const SIDEBAR_WIDTH_MIN = 280;
   const SIDEBAR_WIDTH_MAX = 640;
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, singleDisplay: { showBusLabels: true, showDeviceLabels: true, showArrows: true, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusLabels: true, showDeviceLabels: true, showArrows: true, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -183,6 +183,48 @@
     window.addEventListener("resize", () => setSidebarWidth(state.sidebarWidth, { persist: false }));
   }
 
+  function setMultiDetailWidth(value) {
+    const stage = $("single-view-layout");
+    const handle = $("multi-detail-resizer");
+    if (!stage || !handle) return;
+    const available = Math.max(280, stage.getBoundingClientRect().width - 320);
+    const width = Math.round(Math.max(280, Math.min(560, Math.min(available, Number(value) || 380))));
+    state.multiDetailWidth = width;
+    stage.style.setProperty("--multi-detail-width", `${width}px`);
+    handle.setAttribute("aria-valuenow", String(width));
+    handle.setAttribute("aria-valuemax", String(Math.round(Math.min(560, available))));
+  }
+
+  function initialiseMultiDetailResize() {
+    const handle = $("multi-detail-resizer");
+    const stage = $("single-view-layout");
+    if (!handle || !stage) return;
+    setMultiDetailWidth(state.multiDetailWidth);
+    let dragging = false;
+    const stopDragging = () => { dragging = false; document.body.classList.remove("resizing-multi-detail"); };
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || window.matchMedia("(max-width: 880px)").matches) return;
+      dragging = true;
+      handle.setPointerCapture?.(event.pointerId);
+      document.body.classList.add("resizing-multi-detail");
+      event.preventDefault();
+    });
+    handle.addEventListener("pointermove", (event) => {
+      if (!dragging) return;
+      setMultiDetailWidth(stage.getBoundingClientRect().right - event.clientX);
+      event.preventDefault();
+    });
+    handle.addEventListener("pointerup", stopDragging);
+    handle.addEventListener("pointercancel", stopDragging);
+    handle.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowLeft") { setMultiDetailWidth(state.multiDetailWidth + 24); event.preventDefault(); }
+      else if (event.key === "ArrowRight") { setMultiDetailWidth(state.multiDetailWidth - 24); event.preventDefault(); }
+      else if (event.key === "Home") { setMultiDetailWidth(380); event.preventDefault(); }
+      else if (event.key === "End") { setMultiDetailWidth(560); event.preventDefault(); }
+    });
+    window.addEventListener("resize", () => setMultiDetailWidth(state.multiDetailWidth));
+  }
+
   function countJsonElements(value, limit) {
     let count = 0;
     const pending = [value];
@@ -256,6 +298,7 @@
 
   function navigateTo(entry) {
     const current = state.navigation.entries[state.navigation.cursor];
+    if (entry.view === "single" && (!current || current.view !== "single" || JSON.stringify(current.selected) !== JSON.stringify(entry.selected))) state.multiDetailCollapsed = false;
     if (current && current.view === entry.view && JSON.stringify(current.selected) === JSON.stringify(entry.selected)) {
       applyNavigationEntry(entry);
       return;
@@ -1089,7 +1132,7 @@
     return String(value);
   }
 
-  function svgShell(content, options = {}) { const rendererContract = globalThis.BMOPFRendererContract; const camera = state.cameras[state.view]; const shellOptions = { camera, view: state.view, escapeHtml, ...options }; return rendererContract ? rendererContract.svgShell(content, shellOptions) : `<svg${options.className ? ` class="${escapeHtml(options.className)}"` : ""}${options.size ? ` width="${Math.ceil(options.size.width)}" height="${Math.ceil(options.size.height)}" style="width:${Math.ceil(options.size.width)}px;height:${Math.ceil(options.size.height)}px;max-width:none"` : ""} viewBox="0 0 ${Math.ceil(options.size?.width || 760)} ${Math.ceil(options.size?.height || 500)}" role="img" aria-label="${escapeHtml(state.view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`; }
+  function svgShell(content, options = {}) { const rendererContract = globalThis.BMOPFRendererContract; const camera = options.camera || state.cameras[state.view]; const shellOptions = { camera, view: state.view, escapeHtml, ...options }; return rendererContract ? rendererContract.svgShell(content, shellOptions) : `<svg${options.className ? ` class="${escapeHtml(options.className)}"` : ""}${options.size ? ` width="${Math.ceil(options.size.width)}" height="${Math.ceil(options.size.height)}" style="width:${Math.ceil(options.size.width)}px;height:${Math.ceil(options.size.height)}px;max-width:none"` : ""} viewBox="0 0 ${Math.ceil(options.size?.width || 760)} ${Math.ceil(options.size?.height || 500)}" role="img" aria-label="${escapeHtml(state.view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`; }
 
   function updateCamera() {
     const viewport = $("canvas").querySelector("#viewport");
@@ -1105,7 +1148,9 @@
     const layoutControls = state.view === "single"
       ? `<span class="layout-label">Layout:</span><label class="layout-select">Direction<select id="sld-direction" aria-label="Single-line direction"><option value="source-to-load" ${state.layout.direction === "source-to-load" ? "selected" : ""}>Source → load</option><option value="load-to-source" ${state.layout.direction === "load-to-source" ? "selected" : ""}>Load → source</option></select></label><label class="layout-select">Root<select id="sld-root" aria-label="Single-line root bus"><option value="auto" ${state.layout.root === "auto" ? "selected" : ""}>Automatic</option>${state.index.buses.map((bus) => `<option value="${escapeHtml(bus.ref.id)}" ${state.layout.root === bus.ref.id ? "selected" : ""}>${escapeHtml(bus.ref.id)}</option>`).join("")}</select></label><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
     const overviewButton = state.view === "single" ? `<button data-navigation="overview" aria-label="Show full overview" ${state.selected ? "" : "disabled"}>Overview</button>` : "";
-    controls.innerHTML = `<span>View:</span><button data-navigation="back" aria-label="Go back" ${navigationDisabled("back") ? "disabled" : ""}>Back</button><button data-navigation="forward" aria-label="Go forward" ${navigationDisabled("forward") ? "disabled" : ""}>Forward</button>${overviewButton}<button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export-svg">Export SVG</button><button data-camera="export-png">Export PNG</button>${layoutControls}`;
+    const detailTarget = itemFor(state.selected);
+    const detailButton = state.view === "single" && state.multiDetailCollapsed && multiDetailAvailable(detailTarget) ? `<button data-navigation="multi-detail">Show component detail</button>` : "";
+    controls.innerHTML = `<span>View:</span><button data-navigation="back" aria-label="Go back" ${navigationDisabled("back") ? "disabled" : ""}>Back</button><button data-navigation="forward" aria-label="Go forward" ${navigationDisabled("forward") ? "disabled" : ""}>Forward</button>${overviewButton}${detailButton}<button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export-svg">Export SVG</button><button data-camera="export-png">Export PNG</button>${layoutControls}`;
     if (state.view === "single") {
       const elkButton = document.createElement("button"); elkButton.dataset.layout = "elk"; elkButton.textContent = "Apply ELK layout";
       controls.querySelector('[data-layout="left"]')?.before(elkButton);
@@ -1123,6 +1168,7 @@
       updateCamera();
     }));
     controls.querySelectorAll("[data-navigation]").forEach((button) => button.addEventListener("click", () => {
+      if (button.dataset.navigation === "multi-detail") { state.multiDetailCollapsed = false; render(); return; }
       if (button.dataset.navigation === "overview") {
         const budget = overviewBudget();
         state.largeCaseDecision = budget.over ? (state.largeCaseBypass ? "full" : "pending") : "full";
@@ -1302,11 +1348,13 @@
   });
   function drawSingle() { return singleWireRenderer.drawSingle(); }
 
-  function drawMulti() {
+  function drawMulti(target = $("canvas"), { announce = target === $("canvas") } = {}) {
+    const setMultiStatus = announce ? setStatus : () => {};
+    const multiShell = (content, options = {}) => target === $("canvas") ? svgShell(content, options) : svgShell(content, { ...options, camera: { x: 0, y: 0, scale: 1 }, view: "multi" });
     const item = itemFor(state.selected);
     if (!item) {
-      setStatus("Select a line, switch, or transformer to expand its terminal-level neighbourhood.");
-      $("canvas").innerHTML = `<div class="message">Multi-wire focus mode starts from a selected multi-terminal device.</div>`;
+      setMultiStatus("Select a line, switch, or transformer to expand its terminal-level neighbourhood.");
+      target.innerHTML = `<div class="message">Multi-wire focus mode starts from a selected multi-terminal device.</div>`;
       return;
     }
     if (item.ref.kind === "bus") {
@@ -1324,9 +1372,9 @@
       });
       if (incident.length > 7) content += `<text x="512" y="405" text-anchor="middle" fill="#70695f" font-size="12">+ ${incident.length - 7} more in the inspector</text>`;
       content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Select an incident device to expand its conductor pairing</text>`;
-      setStatus(`${item.terminals.length} terminals · ${incident.length} assets across ${neighbourhood.buses.size} buses · ${state.multiHops}-hop`);
-      $("canvas").innerHTML = svgShell(content);
-      bindSvgSelection();
+      setMultiStatus(`${item.terminals.length} terminals · ${incident.length} assets across ${neighbourhood.buses.size} buses · ${state.multiHops}-hop`);
+      target.innerHTML = multiShell(content);
+      bindSvgSelection(target);
       return;
     }
     if (item.ref.kind === "transformer" && item.ports?.length > 2) {
@@ -1358,24 +1406,25 @@
         content += `<text x="${layout.side === "left" ? layout.x + layout.width + 8 : layout.side === "right" ? layout.x - 8 : layout.x + layout.width / 2}" y="${layout.side === "top" ? layout.y + 78 : layout.y + 42}" text-anchor="${layout.side === "left" ? "start" : layout.side === "right" ? "end" : "middle"}" fill="#70695f" font-size="10">${escapeHtml(details || winding.role)}</text>`;
       });
       content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Each winding keeps its bus and terminal stack; no false direct bus-to-bus edges are drawn</text>`;
-      setStatus(`${item.ports.length} winding ports · ${item.status}`);
-      $("canvas").innerHTML = svgShell(content);
-      bindSvgSelection();
+      setMultiStatus(`${item.ports.length} winding ports · ${item.status}`);
+      target.innerHTML = multiShell(content);
+      bindSvgSelection(target);
       return;
     }
     if (!item.connections?.length) {
       const attachment = item.ports?.[0];
       if (!attachment) {
-        setStatus("This record has no renderable terminal connection.");
-        $("canvas").innerHTML = `<div class="message">The selected record is inspectable but has no terminal connection to draw.</div>`;
+        setMultiStatus("This record has no renderable terminal connection.");
+        target.innerHTML = `<div class="message">The selected record is inspectable but has no terminal connection to draw.</div>`;
         return;
       }
       const terminals = attachment.terminals.length ? attachment.terminals : ["(no terminal map)"];
       let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))}</text><rect x="180" y="85" width="400" height="300" rx="8" fill="#fffdf9" stroke="${colourOf(item.ref.kind)}" stroke-width="3"/><text x="380" y="125" text-anchor="middle" font-size="15">bus ${escapeHtml(attachment.busId)}</text>`;
       terminals.forEach((terminal, i) => { const y = 170 + i * 42; content += `<line x1="250" y1="${y}" x2="510" y2="${y}" stroke="#9a9388" stroke-width="2"/><text x="230" y="${y + 4}" text-anchor="end" fill="#37332c" font-size="13">${escapeHtml(terminal)}</text>`; });
       content += `<text x="380" y="430" text-anchor="middle" fill="#70695f" font-size="12">Single-bus attachment · inspect properties for device details</text>`;
-      setStatus(`${terminals.length} attached terminals · ${item.status}`);
-      $("canvas").innerHTML = svgShell(content);
+      setMultiStatus(`${terminals.length} attached terminals · ${item.status}`);
+      target.innerHTML = multiShell(content);
+      bindSvgSelection(target);
       return;
     }
     const connection = item.connections[0];
@@ -1388,8 +1437,8 @@
     const pairs = connection.pairs;
     if (item.ref.kind === "switch") {
       if (!pairs.length) {
-        setStatus(`${item.status} switch · terminal map unavailable`);
-        $("canvas").innerHTML = `<div class="message">This switch has no terminal pairs to draw. Inspect its raw terminal mapping.</div>`;
+        setMultiStatus(`${item.status} switch · terminal map unavailable`);
+        target.innerHTML = `<div class="message">This switch has no terminal pairs to draw. Inspect its raw terminal mapping.</div>`;
         return;
       }
       const switchX = 380;
@@ -1403,9 +1452,9 @@
         content += `<text x="${switchX}" y="${y - 15}" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(visual.label)} · ${escapeHtml(a)}→${escapeHtml(b)}</text>`;
       });
       content += `<text x="380" y="${Math.max(365, rowY[rowY.length - 1] + 58)}" text-anchor="middle" fill="#70695f" font-size="12">${item.status === "open" ? "Open switch: each conductor path is interrupted independently" : "Closed switch: each conductor path is switched independently"}</text>`;
-      setStatus(`${pairs.length} conductor switches · ${item.status}`);
-      $("canvas").innerHTML = svgShell(content, { size: { width: 760, height: Math.max(500, rowY[rowY.length - 1] + 90) } });
-      bindSvgSelection();
+      setMultiStatus(`${pairs.length} conductor switches · ${item.status}`);
+      target.innerHTML = multiShell(content, { size: { width: 760, height: Math.max(500, rowY[rowY.length - 1] + 90) } });
+      bindSvgSelection(target);
       return;
     }
     const bodyY = 142 + Math.max(pairs.length - 1, 0) * 17;
@@ -1438,9 +1487,9 @@
         content += focusedPath([[boxX + boxWidth, yRight], [700, yRight]], visual, item.status);
       });
       content += `<text x="470" y="${branch.shuntPresent ? branchHeight - 16 : branchHeight - 16}" text-anchor="middle" fill="#70695f" font-size="10">R and X are absolute series impedance entries in Ω; shunt G/B entries are absolute admittance values in S.</text>`;
-      setStatus(`${pairs.length} conductor pairs · ${item.status} · ${branch.shuntPresent ? "Π series + shunt model" : "pure series model"}`);
-      $("canvas").innerHTML = svgShell(content, { size: { width: canvasWidth, height: Math.max(510, branchHeight) } });
-      bindSvgSelection();
+      setMultiStatus(`${pairs.length} conductor pairs · ${item.status} · ${branch.shuntPresent ? "Π series + shunt model" : "pure series model"}`);
+      target.innerHTML = multiShell(content, { size: { width: canvasWidth, height: Math.max(510, branchHeight) } });
+      bindSvgSelection(target);
       return;
     }
     content += `<rect x="285" y="${Math.max(105, bodyY - 48)}" width="190" height="96" rx="10" fill="#f4f1ea" stroke="${colourOf(item.ref.kind)}" stroke-width="2"/><text x="380" y="${Math.max(122, bodyY - 20)}" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(item.ref.kind.replaceAll("_", " "))}</text>`;
@@ -1458,9 +1507,38 @@
     content += singleSymbol(item, 380, bodyY);
     const mappingNote = connection.warning ? `<text x="380" y="438" text-anchor="middle" fill="#8a4d20" font-size="12">${escapeHtml(connection.warning)} Inspect raw maps before relying on this pairing.</text>` : "";
     content += `${mappingNote}<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">${item.status === "open" ? "Open switch: conductor paths are intentionally interrupted" : "Ordered conductor pairing from source terminal maps"}</text>`;
-    setStatus(`${pairs.length} conductor pairs · ${item.status}${connection.warning ? " · terminal-map warning" : ""}`);
-    $("canvas").innerHTML = svgShell(content);
-    bindSvgSelection();
+    setMultiStatus(`${pairs.length} conductor pairs · ${item.status}${connection.warning ? " · terminal-map warning" : ""}`);
+    target.innerHTML = multiShell(content);
+    bindSvgSelection(target);
+  }
+
+  function multiDetailAvailable(item) { return Boolean(item && (item.ref.kind === "bus" || item.ports?.length)); }
+
+  function renderMultiDetail() {
+    const stage = $("single-view-layout");
+    const pane = $("multi-detail-panel");
+    const resizer = $("multi-detail-resizer");
+    const target = $("multi-detail-canvas");
+    if (!stage || !pane || !resizer || !target) return;
+    const item = itemFor(state.selected);
+    const visible = state.view === "single" && !state.multiDetailCollapsed && multiDetailAvailable(item);
+    stage.classList.toggle("has-detail", visible);
+    pane.hidden = !visible;
+    resizer.hidden = !visible;
+    if (!visible) { target.innerHTML = ""; return; }
+    $("multi-detail-selection").textContent = titleOf(item);
+    setMultiDetailWidth(state.multiDetailWidth);
+    drawMulti(target, { announce: false });
+  }
+
+  function bindMultiDetailActions() {
+    $("multi-detail-open")?.addEventListener("click", () => {
+      if (multiDetailAvailable(itemFor(state.selected))) navigateTo({ view: "multi", selected: state.selected });
+    });
+    $("multi-detail-close")?.addEventListener("click", () => {
+      state.multiDetailCollapsed = true;
+      render();
+    });
   }
 
   function drawDiagnostics() {
@@ -1507,7 +1585,7 @@
     if (clear) clear.addEventListener("click", () => { state.diagnosticsQuery = ""; state.diagnosticsSeverity = "all"; drawDiagnostics(); });
   }
 
-  function bindSvgSelection() {
+  function bindSvgSelection(target = $("canvas")) {
     const svgPoint = (svg, event) => {
       const ctm = svg.getScreenCTM?.();
       if (!ctm) return [event.offsetX || 0, event.offsetY || 0];
@@ -1520,7 +1598,7 @@
       return match ? [Number(match[1]), Number(match[2])] : null;
     };
     let activeDrag = null;
-    $("canvas").querySelectorAll("[data-kind][data-id]").forEach((node) => {
+    target.querySelectorAll("[data-kind][data-id]").forEach((node) => {
       node.setAttribute("tabindex", "0");
       node.setAttribute("role", "button");
       node.setAttribute("aria-label", `${node.dataset.kind.replaceAll("_", " ")} ${node.dataset.id}`);
@@ -1592,7 +1670,7 @@
     bindCamera();
   }
 
-  function render() { renderSummary(); renderClassOverview(); renderResultSummary(); renderInventory(); renderInspector(); renderView(); renderCameraControls(); renderMultiHopControls(); renderDisplayOptions(); }
+  function render() { renderSummary(); renderClassOverview(); renderResultSummary(); renderInventory(); renderInspector(); renderView(); renderMultiDetail(); renderCameraControls(); renderMultiHopControls(); renderDisplayOptions(); }
 
   function parseHash() {
     const entry = navigationEntryFromHash();
@@ -1762,6 +1840,8 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     initialiseSidebarResize();
+    initialiseMultiDetailResize();
+    bindMultiDetailActions();
     const initialNavigation = parseHash();
     initialiseNavigation(initialNavigation);
     populateExamples();

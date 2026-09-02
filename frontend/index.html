@@ -42,7 +42,14 @@
         </div>
         <p class="muted">These Single-wire-only switches are temporary page-session settings. Tooltips and selection still work when visual labels are hidden.</p>
       </details>
-      <div id="canvas" class="canvas" aria-live="polite"></div>
+      <div id="single-view-layout" class="single-view-layout">
+        <div id="canvas" class="canvas" aria-live="polite"></div>
+        <div id="multi-detail-resizer" class="multi-detail-resizer" role="separator" aria-label="Resize Multi-wire detail" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="560" aria-valuenow="380" tabindex="0" title="Drag to resize the Multi-wire detail pane; use arrow keys for precise sizing" hidden></div>
+        <section id="multi-detail-panel" class="multi-detail-panel" aria-label="Multi-wire component detail" hidden>
+          <div class="multi-detail-heading"><div><h2>Multi-wire detail</h2><span id="multi-detail-selection" class="muted"></span></div><div class="multi-detail-actions"><button id="multi-detail-open" type="button">Open full view</button><button id="multi-detail-close" type="button" aria-label="Collapse Multi-wire detail">Collapse</button></div></div>
+          <div id="multi-detail-canvas" class="multi-detail-canvas" aria-live="polite"></div>
+        </section>
+      </div>
     </section>
 
     <div id="sidebar-resizer" class="sidebar-resizer" role="separator" aria-label="Resize details panel" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="640" aria-valuenow="360" tabindex="0" title="Drag to resize the details panel; use arrow keys for precise sizing"></div>

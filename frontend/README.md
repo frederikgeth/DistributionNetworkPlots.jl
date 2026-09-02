@@ -40,6 +40,7 @@ be matched for best-effort inspection.
 - One- and two-hop neighbourhood expansion from a selected bus.
 - Back and Forward controls for stepping through selected assets and view changes; browser history and deep links remain supported.
 - The single-line **Overview** control clears the focused asset and returns to the whole-network diagram; on oversized cases it re-enters the full-render confirmation.
+- When Single-wire has a selected bus or asset with terminal data, a resizable Multi-wire component-detail pane appears alongside it. The pane can be collapsed, reopened, or promoted to the standalone Multi-wire view.
 - Pan, zoom, and fit/reset controls for the static SVG views.
 - On desktop, drag the divider beside the details panel to change its width. The divider also supports Arrow keys, Home (default width), and End (widest width), and the preference is retained locally.
 - Class overview and inventory columns have the same drag/keyboard resize affordance; widths are retained locally so result ranges and long asset names can stay readable.
