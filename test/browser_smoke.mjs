@@ -50,7 +50,7 @@ try {
     const cache = await page.evaluate(() => Object.entries(localStorage).find(([key]) => key.startsWith("bmopf-layout-v3:"))?.[1] || "");
     const parsedCache = JSON.parse(cache);
     assert.equal(parsedCache.version, 3);
-    assert.equal(parsedCache.routeSpace, "single-svg-v1");
+    assert.equal(parsedCache.routeSpace, "single-svg-v2");
     assert.equal(parsedCache.elkVersion, "0.10.2");
     assert.match(parsedCache.graphSignature, /^sld-elk-graph-v1:/);
     assert.ok(Object.keys(parsedCache.profiles).some((key) => key.includes("direction=source-to-load")));

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtemp, readFile } from "node:fs/promises";
+import vm from "node:vm";
 import { join, resolve } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
@@ -11,6 +12,7 @@ const result = await buildStatic({ rootDir: projectRoot, outDir });
 const index = await readFile(join(outDir, "index.html"), "utf8");
 const bundle = await readFile(join(outDir, "assets", "bmopf-explorer.js"), "utf8");
 const elk = await readFile(join(outDir, "vendor", "elk.bundled.js"), "utf8");
+const deterministicSource = await readFile(join(projectRoot, "frontend", "layout", "deterministic.js"), "utf8");
 const manifest = JSON.parse(await readFile(join(outDir, "build-manifest.json"), "utf8"));
 
 assert.equal(result.manifest.format, "distribution-network-plots-static-v1");
@@ -26,3 +28,13 @@ assert.match(bundle, /BMOPFLayouts/);
 assert.match(bundle, /Geospatial/);
 assert.match(bundle, /Single-line diagram/);
 assert.match(elk, /ELK/);
+
+const sandbox = { globalThis: {} };
+vm.runInNewContext(deterministicSource, sandbox);
+const denseBuses = [{ ref: { id: "source_bus" } }, ...Array.from({ length: 12 }, (_, index) => ({ ref: { id: `load_${index + 1}` } }))];
+const denseAssets = [{ ref: { kind: "voltage_source", id: "source" }, ports: [{ busId: "source_bus" }] }, ...denseBuses.slice(1).map((bus) => ({ ref: { kind: "line", id: `line_${bus.ref.id}` }, ports: [{ busId: "source_bus" }, { busId: bus.ref.id }] }))];
+const denseLayout = sandbox.globalThis.BMOPFLayouts.createDeterministicLayout({ getIndex: () => ({ buses: denseBuses, assets: denseAssets }), getLayout: () => ({ direction: "source-to-load", root: "auto", locked: {} }) });
+const densePositions = denseLayout.singlePositions();
+const denseY = denseBuses.slice(1).map((bus) => densePositions.get(bus.ref.id)[1]).sort((a, b) => a - b);
+assert.ok(denseY.every((value, index) => index === 0 || value - denseY[index - 1] >= 64));
+assert.ok(denseLayout.singleBounds(densePositions).height > 500);

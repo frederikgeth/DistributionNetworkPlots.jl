@@ -1,7 +1,10 @@
 (function () {
   "use strict";
 
-  const MODULE_VERSION = "deterministic-layout-v1";
+  const MODULE_VERSION = "deterministic-layout-v2";
+  const MIN_BUS_GAP = 64;
+  const LAYER_STEP = 190;
+  const CANVAS_PADDING = { left: 70, top: 86, right: 90, bottom: 82 };
 
   function createDeterministicLayout(dependencies) {
     const getIndex = dependencies.getIndex;
@@ -39,16 +42,16 @@
       }
       let maxDepth = Math.max(0, ...depth.values());
       buses.forEach((bus) => { if (!depth.has(bus.ref.id)) { maxDepth += 1; depth.set(bus.ref.id, maxDepth); } });
-      const xStep = Math.min(180, 650 / Math.max(maxDepth, 1));
       const byDepth = new Map();
       buses.forEach((bus) => { const d = depth.get(bus.ref.id) || 0; if (!byDepth.has(d)) byDepth.set(d, []); byDepth.get(d).push(bus); });
       const positions = new Map();
+      const maxLevelSize = Math.max(1, ...[...byDepth.values()].map((level) => level.length));
+      const layoutHeight = Math.max(360, (maxLevelSize - 1) * MIN_BUS_GAP);
       for (const [d, level] of byDepth.entries()) {
         level.sort((a, b) => a.ref.id.localeCompare(b.ref.id));
-        const spacing = Math.min(96, 360 / Math.max(level.length, 1));
-        const start = 250 - ((level.length - 1) * spacing) / 2;
+        const start = CANVAS_PADDING.top + (layoutHeight - (level.length - 1) * MIN_BUS_GAP) / 2;
         const column = layout.direction === "load-to-source" ? maxDepth - d : d;
-        level.forEach((bus, i) => positions.set(bus.ref.id, [70 + column * xStep, start + i * spacing]));
+        level.forEach((bus, i) => positions.set(bus.ref.id, [CANVAS_PADDING.left + column * LAYER_STEP, start + i * MIN_BUS_GAP]));
       }
       for (const [id, point] of Object.entries(layout.locked || {})) {
         if (Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) positions.set(id, [point[0], point[1]]);
@@ -56,7 +59,18 @@
       return positions;
     }
 
-    return Object.freeze({ MODULE_VERSION, singlePositions });
+    function singleBounds(positions) {
+      const points = [...(positions || new Map()).values()].filter((point) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite));
+      const maxX = Math.max(670, ...points.map((point) => point[0]));
+      const maxY = Math.max(360, ...points.map((point) => point[1]));
+      return {
+        width: Math.ceil(maxX + CANVAS_PADDING.right),
+        height: Math.max(500, Math.ceil(maxY + CANVAS_PADDING.bottom)),
+        minBusGap: MIN_BUS_GAP
+      };
+    }
+
+    return Object.freeze({ MODULE_VERSION, singlePositions, singleBounds });
   }
 
   globalThis.BMOPFLayouts = Object.freeze({ MODULE_VERSION, createDeterministicLayout });

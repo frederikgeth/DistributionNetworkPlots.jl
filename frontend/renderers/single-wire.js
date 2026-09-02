@@ -11,6 +11,14 @@
     const svgShell = dependencies.svgShell;
     const bindSvgSelection = dependencies.bindSvgSelection;
 
+    function canvasSize(positions) {
+      const base = dependencies.singleBounds ? dependencies.singleBounds(positions) : { width: 760, height: 500 };
+      const routePoints = Object.values(state.layout?.routes || {}).flatMap((route) => Array.isArray(route) ? route : []);
+      const maxRouteX = Math.max(0, ...routePoints.map((point) => Number(point?.[0]) || 0));
+      const maxRouteY = Math.max(0, ...routePoints.map((point) => Number(point?.[1]) || 0));
+      return { width: Math.max(base.width, Math.ceil(maxRouteX + 90)), height: Math.max(base.height, Math.ceil(maxRouteY + 82)) };
+    }
+
     function routeMidpoint(points) {
       if (!Array.isArray(points) || points.length < 2) return null;
       let total = 0;
@@ -85,7 +93,7 @@
       const engineLabel = state.layout?.engine === "elk" ? " · ELK" : " · deterministic";
       const cacheLabel = state.layout?.cacheState === "stale" ? " · stale cached layout ignored" : "";
       setStatus(`Single-line diagram: ${directionLabel} layered layout${rootLabel}${engineLabel}${cacheLabel} with conventional busbars and device symbols.`);
-      setCanvas(svgShell(content));
+      setCanvas(svgShell(content, { className: "single-wire-svg", size: canvasSize(positions) }));
       bindSvgSelection();
     }
 

@@ -15,7 +15,11 @@
     const camera = options?.camera || { x: 0, y: 0, scale: 1 };
     const view = String(options?.view || "view");
     const escapeHtml = typeof options?.escapeHtml === "function" ? options.escapeHtml : (value) => String(value);
-    return `<svg viewBox="0 0 760 500" role="img" aria-label="${escapeHtml(view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`;
+    const width = Math.max(1, Math.ceil(Number(options?.size?.width) || 760));
+    const height = Math.max(1, Math.ceil(Number(options?.size?.height) || 500));
+    const sized = options?.size ? ` width="${width}" height="${height}" style="width:${width}px;height:${height}px;max-width:none"` : "";
+    const className = options?.className ? ` class="${escapeHtml(options.className)}"` : "";
+    return `<svg${className}${sized} viewBox="0 0 ${width} ${height}" role="img" aria-label="${escapeHtml(view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`;
   }
 
   globalThis.BMOPFRendererContract = Object.freeze({ VERSION, assetRef, svgShell });

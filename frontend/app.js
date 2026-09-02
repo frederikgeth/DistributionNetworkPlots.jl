@@ -4,7 +4,7 @@
   const LAYOUT_CACHE_VERSION = 3;
   const LAYOUT_MAX_PROFILES = 8;
   const ELK_VERSION = "0.10.2";
-  const LAYOUT_ROUTE_SPACE = "single-svg-v1";
+  const LAYOUT_ROUTE_SPACE = "single-svg-v2";
   const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
@@ -208,7 +208,7 @@
     setStatus("Loading ELK layered layout…");
     try {
       const direction = state.layout.direction === "load-to-source" ? "LEFT" : "RIGHT";
-      const graph = { id: "bmopf-root", layoutOptions: { "elk.algorithm": "layered", "elk.direction": direction, "elk.edgeRouting": "ORTHOGONAL", "elk.spacing.nodeNode": "36", "elk.layered.spacing.nodeNodeBetweenLayers": "100" }, children: state.index.buses.map((bus) => ({ id: `bus:${bus.ref.id}`, width: 84, height: 24, ports: [{ id: `port:${bus.ref.id}`, width: 4, height: 4, layoutOptions: { "elk.port.side": state.layout.direction === "load-to-source" ? "EAST" : "WEST" } }] })), edges: [] };
+      const graph = { id: "bmopf-root", layoutOptions: { "elk.algorithm": "layered", "elk.direction": direction, "elk.edgeRouting": "ORTHOGONAL", "elk.spacing.nodeNode": "64", "elk.layered.spacing.nodeNodeBetweenLayers": "150" }, children: state.index.buses.map((bus) => ({ id: `bus:${bus.ref.id}`, width: 84, height: 24, ports: [{ id: `port:${bus.ref.id}`, width: 4, height: 4, layoutOptions: { "elk.port.side": state.layout.direction === "load-to-source" ? "EAST" : "WEST" } }] })), edges: [] };
       const busIds = new Set(state.index.buses.map((bus) => bus.ref.id));
       if (state.layout.root && state.layout.root !== "auto" && busIds.has(state.layout.root)) {
         graph.layoutOptions["org.eclipse.elk.processingOrder.rootSelection"] = "FIXED";
@@ -224,7 +224,7 @@
       const children = result.children || [];
       const xs = children.map((node) => Number(node.x) || 0); const ys = children.map((node) => Number(node.y) || 0);
       const minX = Math.min(...xs, 0); const maxX = Math.max(...xs, 1); const minY = Math.min(...ys, 0); const maxY = Math.max(...ys, 1);
-      const scale = Math.min(1, 650 / Math.max(maxX - minX + 84, 1), 360 / Math.max(maxY - minY + 24, 1));
+      const scale = 1;
       const nextLocked = {};
       const projectPoint = (point) => [70 + ((Number(point.x) - minX + 42) * scale), 70 + ((Number(point.y) - minY + 12) * scale)];
       children.forEach((node) => {
@@ -779,7 +779,7 @@
     return String(value);
   }
 
-  function svgShell(content) { const rendererContract = globalThis.BMOPFRendererContract; const camera = state.cameras[state.view]; return rendererContract ? rendererContract.svgShell(content, { camera, view: state.view, escapeHtml }) : `<svg viewBox="0 0 760 500" role="img" aria-label="${escapeHtml(state.view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`; }
+  function svgShell(content, options = {}) { const rendererContract = globalThis.BMOPFRendererContract; const camera = state.cameras[state.view]; const shellOptions = { camera, view: state.view, escapeHtml, ...options }; return rendererContract ? rendererContract.svgShell(content, shellOptions) : `<svg${options.className ? ` class="${escapeHtml(options.className)}"` : ""}${options.size ? ` width="${Math.ceil(options.size.width)}" height="${Math.ceil(options.size.height)}" style="width:${Math.ceil(options.size.width)}px;height:${Math.ceil(options.size.height)}px;max-width:none"` : ""} viewBox="0 0 ${Math.ceil(options.size?.width || 760)} ${Math.ceil(options.size?.height || 500)}" role="img" aria-label="${escapeHtml(state.view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`; }
 
   function updateCamera() {
     const viewport = $("canvas").querySelector("#viewport");
@@ -843,7 +843,10 @@
     const url = URL.createObjectURL(new Blob([source], { type: "image/svg+xml;charset=utf-8" }));
     image.onload = () => {
       const canvas = document.createElement("canvas");
-      const scale = 2; canvas.width = 760 * scale; canvas.height = 500 * scale;
+      const viewBox = (svg.getAttribute("viewBox") || "0 0 760 500").trim().split(/\s+/).map(Number);
+      const width = Number(svg.getAttribute("width")) || viewBox[2] || 760;
+      const height = Number(svg.getAttribute("height")) || viewBox[3] || 500;
+      const scale = 2; canvas.width = Math.ceil(width * scale); canvas.height = Math.ceil(height * scale);
       const context = canvas.getContext("2d"); context.fillStyle = "#fbfaf7"; context.fillRect(0, 0, canvas.width, canvas.height);
       context.drawImage(image, 0, 0, canvas.width, canvas.height);
       canvas.toBlob((blob) => {
@@ -956,6 +959,7 @@
     svgShell,
     bindSvgSelection,
     singlePositions,
+    singleBounds: deterministicLayout.singleBounds,
     overviewAssets,
     overviewBuses,
     sameRef,
