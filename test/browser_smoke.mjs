@@ -58,6 +58,7 @@ try {
     assert.equal(await page.locator(".view-tab.active").getAttribute("data-view"), "single");
     assert.match(await page.evaluate(() => window.location.hash), /#\/single$/);
     assert.deepEqual(await page.locator(".view-tab").evaluateAll((tabs) => tabs.map((tab) => tab.dataset.view)), ["single", "multi", "geo", "diagnostics"]);
+    assert.ok(await page.locator("#canvas .entity-kind").count() > 0);
     assert.equal(await page.locator("#canvas text").evaluateAll((nodes) => nodes.some((node) => /Source → load one-line view|IEC\/IEEE-inspired symbols/.test(node.textContent))), false);
     assert.equal(await page.locator(".sidebar > .help-panel").evaluate((node) => node === node.parentElement.firstElementChild), true);
     const displayOptions = page.locator("#display-options");
@@ -70,7 +71,11 @@ try {
     assert.equal(await displayOptions.locator('input[data-display-option="showDeviceLabels"]').isChecked(), false);
     await displayOptions.locator('input[data-display-option="showDeviceLabels"]').check();
     await page.getByPlaceholder("Search assets, buses, or result fields").fill("rooftop_ibr");
+    assert.equal(await page.locator("#inventory .entity-kind").first().textContent(), "ibr");
+    assert.equal(await page.locator("#inventory .entity-id").first().textContent(), "rooftop_ibr");
     await page.locator('button[data-kind="ibr"][data-id="rooftop_ibr"]').click();
+    assert.equal(await page.locator("#selection-label .entity-kind").textContent(), "ibr");
+    assert.equal(await page.locator("#inspector h3 .entity-id").textContent(), "rooftop_ibr");
     assert.match(await page.locator("#inspector").innerText(), /s_max[\s\S]*35000 VA/);
     assert.ok(await page.locator("#inspector .copy-button").count() > 0);
     assert.equal(await page.locator('#inspector [data-copy-target="pre.raw"]').count(), 1);

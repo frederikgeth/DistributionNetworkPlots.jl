@@ -187,6 +187,12 @@ body.resizing-column, body.resizing-column * { cursor: col-resize !important; us
 .inventory-row.focused { outline: 2px solid var(--accent); outline-offset: -2px; }
 .inventory-row .kind { color: var(--muted); text-transform: capitalize; }
 .inventory-row .count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.entity-label { display: inline-flex; min-width: 0; align-items: baseline; gap: 4px; }
+.entity-kind { color: var(--muted); font-size: .82em; font-style: italic; font-variant: small-caps; font-weight: 600; letter-spacing: .04em; text-transform: lowercase; }
+.entity-id { color: var(--ink); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 650; }
+.entity-meta { fill: var(--muted); font-size: .82em; font-style: italic; font-weight: 400; }
+.canvas .entity-kind, .multi-detail-canvas .entity-kind { fill: #70695f; font-size: .82em; font-style: italic; font-variant: small-caps; font-weight: 600; letter-spacing: .04em; text-transform: lowercase; }
+.canvas .entity-id, .multi-detail-canvas .entity-id { fill: #25231f; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 700; }
 .search-meta { margin: 0; padding: 7px 14px 2px; color: var(--muted); font-size: 11px; }
 .help-panel summary { padding: 12px 14px; color: var(--ink); cursor: pointer; font-weight: 600; }
 .help-panel summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }

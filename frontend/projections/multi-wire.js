@@ -6,6 +6,7 @@
   function createMultiWireProjection(dependencies) {
     const escapeHtml = dependencies.escapeHtml;
     const findBus = dependencies.findBus;
+    const entityLabelSvg = dependencies.entityLabelSvg || ((kind, id) => `${escapeHtml(kind)} ${escapeHtml(id)}`);
 
     function conductorVisual(terminal, otherTerminal, busId, otherBusId, index) {
       const name = String(terminal).toLowerCase();
@@ -32,7 +33,7 @@
       const labelX = side === "left" ? spineX - 10 : spineX + 10;
       const labelAnchor = side === "left" ? "end" : "start";
       const lineEnd = rowY[rowY.length - 1] + 10;
-      let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><title>bus ${escapeHtml(bus.ref.id)} · ${terminals.length} terminals</title><text x="${spineX}" y="${y + 24}" text-anchor="middle" fill="#25231f" font-size="14">bus ${escapeHtml(bus.ref.id)}</text><line x1="${spineX}" y1="${y + 42}" x2="${spineX}" y2="${lineEnd}" stroke="#2f6fb3" stroke-width="2" stroke-dasharray="2 5"/>`;
+      let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><title>bus ${escapeHtml(bus.ref.id)} · ${terminals.length} terminals</title><text x="${spineX}" y="${y + 24}" text-anchor="middle" fill="#25231f" font-size="14">${entityLabelSvg("bus", bus.ref.id)}</text><line x1="${spineX}" y1="${y + 42}" x2="${spineX}" y2="${lineEnd}" stroke="#2f6fb3" stroke-width="2" stroke-dasharray="2 5"/>`;
       terminals.forEach((terminal, i) => {
         const grounded = (bus.groundedTerminals || []).includes(terminal) || /^(g|pe|ground|earth)$/i.test(terminal);
         const label = grounded ? `${terminal} · ⏚` : terminal;
@@ -51,7 +52,7 @@
       const rowY = terminals.map((_, i) => side === "top" ? y + 42 + i * 24 : y + 54 + i * 28);
       const lineStart = side === "top" ? y + 28 : y + 38;
       const lineEnd = rowY[rowY.length - 1] + 9;
-      let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><title>bus ${escapeHtml(bus.ref.id)} · ${terminals.length} terminals</title><text x="${spineX}" y="${y + 20}" text-anchor="middle" fill="#25231f" font-size="13">bus ${escapeHtml(bus.ref.id)}</text><line x1="${spineX}" y1="${lineStart}" x2="${spineX}" y2="${lineEnd}" stroke="#2f6fb3" stroke-width="2" stroke-dasharray="2 5"/>`;
+      let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><title>bus ${escapeHtml(bus.ref.id)} · ${terminals.length} terminals</title><text x="${spineX}" y="${y + 20}" text-anchor="middle" fill="#25231f" font-size="13">${entityLabelSvg("bus", bus.ref.id)}</text><line x1="${spineX}" y1="${lineStart}" x2="${spineX}" y2="${lineEnd}" stroke="#2f6fb3" stroke-width="2" stroke-dasharray="2 5"/>`;
       terminals.forEach((terminal, i) => {
         const grounded = (bus.groundedTerminals || []).includes(terminal) || /^(g|pe|ground|earth)$/i.test(terminal);
         const label = grounded ? `${terminal} · ⏚` : terminal;

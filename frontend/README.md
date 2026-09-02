@@ -34,6 +34,7 @@ be matched for best-effort inspection.
 
 - Asset inventory and search.
 - Source-property inspection and raw-record display.
+- Asset labels use a consistent class/identifier hierarchy: muted italic small-caps for the class and darker monospaced text for the identifier.
 - Inspector values use SI base units where BMOPF semantics are known (for example V, A, W, var, VA, Ω, Ω/m, S, m, Hz, and p.u.); engineering angles and geographic coordinates retain degrees. Unknown or model-dependent fields remain visibly unmodified and the raw record is always available.
 - Copy controls are available on inspector property/port/result rows, raw component/result/comparison records, diagnostics, and branch impedance/admittance matrices. Values copy in readable text with units; raw records copy formatted JSON.
 - Endpoint links from devices to buses.

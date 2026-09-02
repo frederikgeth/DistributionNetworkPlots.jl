@@ -16,6 +16,9 @@
   const $ = (id) => document.getElementById(id);
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const titleOf = (item) => `${item.ref.kind.replaceAll("_", " ")} ${item.ref.id}`;
+  const kindName = (kind) => String(kind || "").replaceAll("_", " ");
+  const entityLabelHtml = (kind, id) => `<span class="entity-label" aria-label="${escapeHtml(`${kindName(kind)} ${id}`)}"><span class="entity-kind">${escapeHtml(kindName(kind))}</span> <span class="entity-id">${escapeHtml(id)}</span></span>`;
+  const entityLabelSvg = (kind, id) => `<tspan class="entity-kind" fill="#70695f" font-size=".82em" font-style="italic" font-variant="small-caps" font-weight="600" letter-spacing=".04em">${escapeHtml(kindName(kind))}</tspan><tspan class="entity-id" fill="#25231f" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="700"> ${escapeHtml(id)}</tspan>`;
   const colourOf = (kind) => ({ line: "#8a8378", switch: "#c26a27", transformer: "#4f789f", load: "#a75a1b", generator: "#4a8f5f", ibr: "#789e46", shunt: "#8a6ca8", capacitor: "#8a6ca8", voltage_source: "#3f6fb9" }[kind] || "#9a9388");
   const copyIcon = `<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="5" y="2" width="8" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="5" width="8" height="9" rx="1.5" fill="var(--panel)" stroke="currentColor" stroke-width="1.3"/></svg>`;
 
@@ -82,7 +85,7 @@
       });
     });
   }
-  const symbolRenderer = globalThis.BMOPFRenderers?.createSymbolRenderer({ escapeHtml, colourOf, sameRef, resultStatus, resultTooltip, titleOf });
+  const symbolRenderer = globalThis.BMOPFRenderers?.createSymbolRenderer({ escapeHtml, colourOf, sameRef, resultStatus, resultTooltip, titleOf, entityLabelSvg });
 
   function setStatus(text) { $("view-status").textContent = text || ""; }
 
@@ -1073,7 +1076,7 @@
     }).filter((entry) => entry.score < 99).sort((a, b) => a.score - b.score || a.item.ref.id.localeCompare(b.item.ref.id)).map((entry) => entry.item) : null;
     const filtered = ranked;
     const body = filtered
-      ? filtered.map((item, i) => `<button class="inventory-row ${sameRef(item.ref, state.selected) ? "selected" : ""} ${state.searchFocus === i ? "focused" : ""}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}" role="option" aria-selected="${sameRef(item.ref, state.selected)}" aria-posinset="${i + 1}" aria-setsize="${filtered.length}"><span>${escapeHtml(titleOf(item))}</span><span class="count">›</span></button>`).join("")
+      ? filtered.map((item, i) => `<button class="inventory-row ${sameRef(item.ref, state.selected) ? "selected" : ""} ${state.searchFocus === i ? "focused" : ""}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}" role="option" aria-selected="${sameRef(item.ref, state.selected)}" aria-posinset="${i + 1}" aria-setsize="${filtered.length}"><span>${entityLabelHtml(item.ref.kind, item.ref.id)}</span><span class="count">›</span></button>`).join("")
       : rows.map(([kind, count]) => `<button class="inventory-row ${state.activeKind === kind ? "selected" : ""}" data-kind-filter="${escapeHtml(kind)}"><span class="kind">${escapeHtml(kind.replaceAll("_", " "))}</span><span class="count">${count}</span></button>`).join("");
     const resultNote = filtered ? `<p class="search-meta" role="status">${filtered.length} ranked match${filtered.length === 1 ? "" : "es"} · Enter opens the first result</p>` : "";
     $("inventory").innerHTML = `<div class="panel-heading"><h2>Inventory</h2><input id="search" type="search" placeholder="Search assets, buses, or result fields" value="${escapeHtml(state.query)}" aria-label="Search assets, buses, or result fields" aria-controls="inventory-list" aria-autocomplete="list"></div>${resultNote}<div class="inventory-header" role="row"><span>asset / class</span><span class="inventory-column-resizer" role="separator" aria-orientation="vertical" aria-label="Resize inventory name column" tabindex="0" title="Drag to resize this column; use Arrow keys for precise sizing"></span><span>count</span></div><div id="inventory-list" class="inventory-list" role="listbox">${body || `<p class="muted" style="padding:12px 14px">No matching assets.</p>`}</div>`;
@@ -1141,6 +1144,7 @@
 
   const multiWireProjection = globalThis.BMOPFProjections?.createMultiWireProjection({
     escapeHtml,
+    entityLabelSvg,
     findBus: (id) => state.index?.buses.find((bus) => bus.ref.id === id),
     findRecord: (ref) => itemFor(ref)
   });
@@ -1252,7 +1256,7 @@
 
   function renderInspector() {
     const item = itemFor(state.selected);
-    $("selection-label").textContent = item ? titleOf(item) : "Nothing selected";
+    $("selection-label").innerHTML = item ? entityLabelHtml(item.ref.kind, item.ref.id) : "Nothing selected";
     if (!item) { $("inspector").innerHTML = `<p class="muted">Select a bus or asset in a view or in the inventory.</p>`; return; }
     const record = item.sourceRecord || {};
     const supportNote = item.support === "full" ? "Fully rendered in overview and focused views." : item.support === "focused" ? "Rendered in focused multi-wire view; overview topology stays explicit." : item.support === "partial" ? "Partially rendered; inspect raw properties for unsupported semantics." : "Preserved for inspection; no diagram renderer is currently available.";
@@ -1268,7 +1272,7 @@
       if (typeof record[key] === "string") related.push({ kind: key, id: record[key] });
     }
     const uniqueRelated = related.filter((ref, i, all) => all.findIndex((candidate) => candidate.kind === ref.kind && candidate.id === ref.id) === i && itemFor(ref));
-    const relatedHtml = uniqueRelated.length ? `<h3>Related</h3><div class="related">${uniqueRelated.map((r) => `<button class="link-button" data-related-kind="${escapeHtml(r.kind)}" data-related-id="${escapeHtml(r.id)}">${escapeHtml(r.kind)} ${escapeHtml(r.id)}</button>`).join("")}</div>` : "";
+    const relatedHtml = uniqueRelated.length ? `<h3>Related</h3><div class="related">${uniqueRelated.map((r) => `<button class="link-button" data-related-kind="${escapeHtml(r.kind)}" data-related-id="${escapeHtml(r.id)}">${entityLabelHtml(r.kind, r.id)}</button>`).join("")}</div>` : "";
     const portHtml = item.ports?.length ? `<h3>Ports</h3><table class="property-table">${item.ports.map((p) => { const role = p.role || p.id; const value = `${p.busId} · [${p.terminals.join(", ")}]`; return `<tr><th>${escapeHtml(role)}</th><td><span class="copyable-value-text">${escapeHtml(value)}</span>${copyButton(`${role}: ${value}`, `Copy ${role} port`)}</td></tr>`; }).join("")}</table>` : "";
     const result = state.result ? resultRecordFor(item) : null;
     const comparison = state.resultCompare ? comparisonRecordFor(item) : null;
@@ -1291,7 +1295,7 @@
     const resultHtml = state.result ? (result ? `<h3 class="result-heading">Simulation / optimisation result${state.resultCompare ? " · comparison" : ""}</h3><table class="property-table result-table">${comparisonHeader}${metricRows || `<tr><td colspan="${resultColspan}" class="muted">No recognised metrics were found for this record.</td></tr>`}</table><details class="copyable-details"><summary>Raw result record ${copyTargetButton("Copy raw result record")}</summary><pre class="raw result-raw"></pre></details>${comparisonRaw}` : `<p class="muted result-missing">No result record found for this asset.</p>`) : "";
     const unitContext = { kind: item.ref.kind, source: "case" };
     const propertyRows = keys.map((key) => { const value = formatInspectorValue(record[key], key, unitContext); return `<tr><th>${escapeHtml(key)}</th><td><span class="copyable-value-text">${escapeHtml(value)}</span>${copyButton(`${key}: ${value}`, `Copy ${key} property`)}</td></tr>`; }).join("");
-    $("inspector").innerHTML = `<h3>${escapeHtml(titleOf(item))}</h3><p class="muted">status: ${escapeHtml(item.status)} · support: ${escapeHtml(item.support || "raw-only")}</p><p class="support-note">${escapeHtml(supportNote)}</p><p class="support-note inspector-units-note">Physical quantities are displayed in SI base units (without automatic scaling); engineering angles and geographic coordinates retain their degree convention. Unknown fields remain in their source form.</p>${relatedHtml}${portHtml}${resultHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${propertyRows}</table><details class="copyable-details"><summary>Raw record ${copyTargetButton("Copy raw component record")}</summary><pre class="raw component-raw"></pre></details>`;
+    $("inspector").innerHTML = `<h3>${entityLabelHtml(item.ref.kind, item.ref.id)}</h3><p class="muted">status: ${escapeHtml(item.status)} · support: ${escapeHtml(item.support || "raw-only")}</p><p class="support-note">${escapeHtml(supportNote)}</p><p class="support-note inspector-units-note">Physical quantities are displayed in SI base units (without automatic scaling); engineering angles and geographic coordinates retain their degree convention. Unknown fields remain in their source form.</p>${relatedHtml}${portHtml}${resultHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${propertyRows}</table><details class="copyable-details"><summary>Raw record ${copyTargetButton("Copy raw component record")}</summary><pre class="raw component-raw"></pre></details>`;
     $("inspector").querySelector(".component-raw").textContent = JSON.stringify(record, null, 2);
     const resultRaw = $("inspector").querySelector(".result-raw");
     if (resultRaw) resultRaw.textContent = JSON.stringify(result, null, 2);
@@ -1528,6 +1532,7 @@
     colourOf,
     resultStatus,
     titleOf,
+    entityLabelSvg,
     resultTooltip,
     resultVoltageVisual,
     resultLegend
@@ -1552,6 +1557,7 @@
     colourOf,
     resultStatus,
     titleOf,
+    entityLabelSvg,
     resultTooltip,
     singleSymbol,
     singleElementPosition,
@@ -1574,14 +1580,14 @@
       const neighbourhood = neighbourhoodForBus(item.ref.id, state.multiHops);
       const incident = neighbourhood.assets;
       const busPanel = multiBusPanel(item, { terminals: item.terminals }, 35, 70, 220, "left");
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">bus ${escapeHtml(item.ref.id)} · terminal neighbourhood</text>${busPanel.html}`;
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg("bus", item.ref.id)}<tspan class="entity-meta"> · terminal neighbourhood</tspan></text>${busPanel.html}`;
       content += `<rect x="300" y="70" width="425" height="350" rx="8" fill="#fffdf9" stroke="#ded8cc"/><text x="512" y="102" text-anchor="middle" font-size="15">${state.multiHops}-hop assets</text>`;
       incident.slice(0, 7).forEach((device, i) => {
         const y = 140 + i * 38;
         const attachedPorts = (device.ports || []).filter((port) => port.busId === item.ref.id);
         const terminalText = attachedPorts.map((port) => `${port.role}: ${terminalNames(port).join(", ")}`).join(" · ");
         const warning = (device.connections || []).find((connection) => connection.warning)?.warning;
-        content += `<g data-kind="${escapeHtml(device.ref.kind)}" data-id="${escapeHtml(device.ref.id)}"><circle cx="335" cy="${y - 4}" r="6" fill="${colourOf(device.ref.kind)}"/><text x="352" y="${y}" fill="#37332c" font-size="13">${escapeHtml(titleOf(device))}</text><text x="352" y="${y + 15}" fill="#70695f" font-size="10">${escapeHtml(terminalText || "terminal mapping unavailable")}</text>${warning ? `<text x="352" y="${y + 28}" fill="#8a4d20" font-size="10">⚠ ${escapeHtml(warning)}</text>` : ""}<title>${escapeHtml(titleOf(device))}${terminalText ? ` · ${escapeHtml(terminalText)}` : ""}</title></g>`;
+        content += `<g data-kind="${escapeHtml(device.ref.kind)}" data-id="${escapeHtml(device.ref.id)}"><circle cx="335" cy="${y - 4}" r="6" fill="${colourOf(device.ref.kind)}"/><text x="352" y="${y}" fill="#37332c" font-size="13">${entityLabelSvg(device.ref.kind, device.ref.id)}</text><text x="352" y="${y + 15}" fill="#70695f" font-size="10">${escapeHtml(terminalText || "terminal mapping unavailable")}</text>${warning ? `<text x="352" y="${y + 28}" fill="#8a4d20" font-size="10">⚠ ${escapeHtml(warning)}</text>` : ""}<title>${escapeHtml(titleOf(device))}${terminalText ? ` · ${escapeHtml(terminalText)}` : ""}</title></g>`;
       });
       if (incident.length > 7) content += `<text x="512" y="405" text-anchor="middle" fill="#70695f" font-size="12">+ ${incident.length - 7} more in the inspector</text>`;
       content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Select an incident device to expand its conductor pairing</text>`;
@@ -1601,7 +1607,7 @@
         const x = 380 - (width * count) / 2 + (i - 2) * width;
         return { x, y: 335, width, side: "top" };
       });
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))} · winding detail</text><rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="10" fill="#e8f0f8" stroke="#4f789f" stroke-width="3"/><path d="M345 188c-16 0-16 28 0 28s16 28 0 28 16 28 0 28M415 188c16 0 16 28 0 28s-16 28 0 28-16 28 0 28" fill="none" stroke="#4f789f" stroke-width="3"/><text x="380" y="232" text-anchor="middle" font-size="14">multi-winding body</text>`;
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · winding detail</tspan></text><rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="10" fill="#e8f0f8" stroke="#4f789f" stroke-width="3"/><path d="M345 188c-16 0-16 28 0 28s16 28 0 28 16 28 0 28M415 188c16 0 16 28 0 28s-16 28 0 28-16 28 0 28" fill="none" stroke="#4f789f" stroke-width="3"/><text x="380" y="232" text-anchor="middle" font-size="14">multi-winding body</text>`;
       item.ports.forEach((winding, i) => {
         const layout = layouts[i];
         const bus = state.index.buses.find((candidate) => candidate.ref.id === winding.busId) || { ref: { id: winding.busId }, groundedTerminals: [] };
@@ -1644,7 +1650,7 @@
       const diagramY = 290;
       const cardHeight = 285;
       const footerY = 404;
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))}</text><rect x="180" y="85" width="400" height="${cardHeight}" rx="8" fill="#fffdf9" stroke="${colourOf(item.ref.kind)}" stroke-width="3"/><text x="380" y="125" text-anchor="middle" font-size="15">bus ${escapeHtml(attachment.busId)}</text>`;
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}</text><rect x="180" y="85" width="400" height="${cardHeight}" rx="8" fill="#fffdf9" stroke="${colourOf(item.ref.kind)}" stroke-width="3"/><text x="380" y="125" text-anchor="middle" font-size="15">${entityLabelSvg("bus", attachment.busId)}</text>`;
       details.forEach((detail, i) => { content += `<text x="380" y="${148 + i * 15}" text-anchor="middle" fill="#70695f" font-size="11">${escapeHtml(detail)}</text>`; });
       content += `<text x="380" y="205" text-anchor="middle" fill="#70695f" font-size="11">terminal map: ${escapeHtml(terminals.join(" · "))}</text>`;
       content += connectionDiagram(item, record.configuration, terminals, 380, diagramY);
@@ -1671,7 +1677,7 @@
       }
       const switchX = 380;
       const rowY = pairs.map((_, i) => 138 + i * 46);
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))} · multi-wire switch</text>${leftPanel.html}${rightPanel.html}<text x="380" y="64" text-anchor="middle" fill="#70695f" font-size="11">One switch blade per conductor pair · ${item.status === "open" ? "open" : "closed"}</text>`;
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · multi-wire switch</tspan></text>${leftPanel.html}${rightPanel.html}<text x="380" y="64" text-anchor="middle" fill="#70695f" font-size="11">One switch blade per conductor pair · ${item.status === "open" ? "open" : "closed"}</text>`;
       pairs.forEach(([a, b], i) => {
         const yLeft = leftPanel.rowY[i] || (142 + i * 34); const yRight = rightPanel.rowY[i] || (142 + i * 34); const y = rowY[i]; const visual = conductorVisual(a, b, left.busId, right.busId, i);
         content += focusedPath([[220, yLeft], [switchX - 16, y]], visual, item.status);
@@ -1688,7 +1694,7 @@
     }
     const bodyY = 142 + Math.max(pairs.length - 1, 0) * 17;
     const canvasWidth = branch ? 940 : 760;
-    let content = `<text x="${branch ? 470 : 380}" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))} · terminal detail</text>${leftPanel.html}${rightPanel.html}`;
+    let content = `<text x="${branch ? 470 : 380}" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · terminal detail</tspan></text>${leftPanel.html}${rightPanel.html}`;
     if (branch) {
       const boxX = 260; const boxY = 92; const boxWidth = 400; const columnStep = Math.min(82, 320 / Math.max(pairs.length - 1, 1));
       const boxHeight = Math.max(190, 78 + pairs.length * 28);
@@ -1770,7 +1776,7 @@
     pane.hidden = !visible;
     resizer.hidden = !visible;
     if (!visible) { target.innerHTML = ""; return; }
-    $("multi-detail-selection").textContent = titleOf(item);
+    $("multi-detail-selection").innerHTML = entityLabelHtml(item.ref.kind, item.ref.id);
     setMultiDetailWidth(state.multiDetailWidth);
     drawMulti(target, { announce: false });
   }
@@ -1809,7 +1815,7 @@
     const cards = diagnostics.map((diagnostic) => {
       const severity = ["error", "warning", "info"].includes(diagnostic.severity) ? diagnostic.severity : "warning";
       const target = diagnostic.kind && diagnostic.id && itemFor({ kind: diagnostic.kind, id: diagnostic.id })
-        ? '<button class="diagnostic-target" data-kind="' + escapeHtml(diagnostic.kind) + '" data-id="' + escapeHtml(diagnostic.id) + '">' + escapeHtml(diagnostic.kind.replaceAll("_", " ")) + ' ' + escapeHtml(diagnostic.id) + '</button>'
+        ? '<button class="diagnostic-target" data-kind="' + escapeHtml(diagnostic.kind) + '" data-id="' + escapeHtml(diagnostic.id) + '">' + entityLabelHtml(diagnostic.kind, diagnostic.id) + '</button>'
         : '<span class="muted">No linked asset</span>';
       const category = diagnostic.category ? '<span class="diagnostic-category">' + escapeHtml(diagnostic.category) + '</span>' : "";
       return '<article class="diagnostic-card ' + severity + '"><div class="diagnostic-heading"><span class="diagnostic-severity">' + escapeHtml(severity) + '</span>' + category + target + '</div><p>' + escapeHtml(diagnostic.message) + '</p><details class="copyable-details"><summary>Diagnostic data ' + copyTargetButton("Copy diagnostic data") + '</summary><pre class="raw">' + escapeHtml(JSON.stringify(diagnostic.raw, null, 2)) + '</pre></details></article>';

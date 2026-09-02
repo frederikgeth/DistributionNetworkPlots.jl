@@ -10,6 +10,7 @@
     const setCanvas = dependencies.setCanvas;
     const svgShell = dependencies.svgShell;
     const bindSvgSelection = dependencies.bindSvgSelection;
+    const entityLabelSvg = dependencies.entityLabelSvg;
 
     function canvasSize(positions) {
       const base = dependencies.singleBounds ? dependencies.singleBounds(positions) : { width: 760, height: 500 };
@@ -155,7 +156,7 @@
         const voltage = dependencies.resultVoltageVisual(bus, selected, "#2f6fb3"); const voltageDash = voltage.dash ? ` stroke-dasharray="${voltage.dash}"` : ""; const voltageGlyph = voltage.level === "high" ? "!" : voltage.level === "moderate" ? "~" : "";
         const lockMark = dependencies.layoutLocked(bus.ref.id) ? " · locked" : "";
         const showBusLabel = display.showBusLabels !== false && (!display.labelsSelectedOnly || selected);
-        content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><line x1="${p[0] - 42}" y1="${p[1]}" x2="${p[0] + 42}" y2="${p[1]}" stroke="${voltage.colour}" stroke-width="${selected ? 7 : 5}"${voltageDash}/><circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${voltage.colour}"/><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(lockMark)}${escapeHtml(dependencies.resultTooltip(bus))}</title>${voltageGlyph ? `<text x="${p[0] - 50}" y="${p[1] - 8}" fill="${voltage.colour}" font-size="10" font-weight="700">${voltageGlyph}</text>` : ""}${showBusLabel ? `<text x="${p[0]}" y="${p[1] + 20}" text-anchor="middle" fill="#37332c" font-size="11">${escapeHtml(bus.ref.id)}${lockMark ? " · locked" : ""}</text>` : ""}</g>`;
+        content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><line x1="${p[0] - 42}" y1="${p[1]}" x2="${p[0] + 42}" y2="${p[1]}" stroke="${voltage.colour}" stroke-width="${selected ? 7 : 5}"${voltageDash}/><circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${voltage.colour}"/><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(lockMark)}${escapeHtml(dependencies.resultTooltip(bus))}</title>${voltageGlyph ? `<text x="${p[0] - 50}" y="${p[1] - 8}" fill="${voltage.colour}" font-size="10" font-weight="700">${voltageGlyph}</text>` : ""}${showBusLabel ? `<text x="${p[0]}" y="${p[1] + 20}" text-anchor="middle" fill="#37332c" font-size="11">${entityLabelSvg("bus", bus.ref.id)}${lockMark ? ` <tspan class="entity-meta">· locked</tspan>` : ""}</text>` : ""}</g>`;
       }
       content += `<g class="sld-embedded-legend"><text x="24" y="474" fill="#70695f" font-size="10">Legend: heavy line = busbar · ○ = source/generator · paired coils = transformer · □ = load · ║ = capacitor · ⏚ = shunt · open blade/dashed path = open switch · dashed leader = moved symbol</text>${dependencies.resultLegend()}</g>`;
       const directionLabel = state.layout?.direction === "load-to-source" ? "load-to-source" : "source-to-load";

@@ -10,6 +10,7 @@
     const resultStatus = dependencies.resultStatus;
     const resultTooltip = dependencies.resultTooltip;
     const titleOf = dependencies.titleOf;
+    const entityLabelSvg = dependencies.entityLabelSvg;
 
     function singleSymbol(item, x, y, selectedRef, display = {}) {
       const colour = colourOf(item.ref.kind);
@@ -35,7 +36,7 @@
         case "shunt": shape = `<path d="M0-15v10M-9-5h18M-6 1h12M-3 7h6" stroke="${colour}" stroke-width="${width}"/>`; break;
         default: shape = `<rect x="-10" y="-7" width="20" height="14" rx="3" fill="#fffdf9" stroke="${colour}" stroke-width="${width}"${dash}/>`;
       }
-      return `<g transform="translate(${x} ${y})" opacity="${opacity}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · ${escapeHtml(status)}${escapeHtml(resultTooltip(item))}</title>${shape}${showLabel ? `<text x="0" y="27" text-anchor="middle" fill="#37332c" font-size="9">${escapeHtml(item.ref.id)}</text>` : ""}</g>`;
+      return `<g transform="translate(${x} ${y})" opacity="${opacity}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(titleOf(item))} · ${escapeHtml(status)}${escapeHtml(resultTooltip(item))}</title>${shape}${showLabel ? `<text x="0" y="27" text-anchor="middle" fill="#37332c" font-size="9">${entityLabelSvg(item.ref.kind, item.ref.id)}</text>` : ""}</g>`;
     }
 
     return Object.freeze({ MODULE_VERSION, singleSymbol });
