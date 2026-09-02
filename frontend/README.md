@@ -41,6 +41,7 @@ be matched for best-effort inspection.
 - The single-line **Overview** control clears the focused asset and returns to the whole-network diagram; on oversized cases it re-enters the full-render confirmation.
 - Pan, zoom, and fit/reset controls for the static SVG views.
 - On desktop, drag the divider beside the details panel to change its width. The divider also supports Arrow keys, Home (default width), and End (widest width), and the preference is retained locally.
+- Class overview and inventory columns have the same drag/keyboard resize affordance; widths are retained locally so result ranges and long asset names can stay readable.
 - Single-wire buses and device symbols can be dragged to refine the diagram; bus/device positions are stored in the active case layout profile and moved symbols retain a dashed leader to their electrical anchor.
 - Selecting a line or DC branch in Multi-wire shows its Π-model data. Series entries are absolute `R+jX` values in Ω; linecode values in Ω/m are multiplied by the line length. Shunt `G/B` sections are shown in S only when nonzero, and pure-series branches explicitly omit them.
 - Shared `renderer-contract-v1` boundary for SVG shells and canonical selectable asset references.

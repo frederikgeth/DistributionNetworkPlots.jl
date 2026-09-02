@@ -6,6 +6,7 @@
   const ELK_VERSION = "0.10.2";
   const LAYOUT_ROUTE_SPACE = "single-svg-v2";
   const SIDEBAR_WIDTH_KEY = "bmopf-sidebar-width-v1";
+  const TABLE_WIDTHS_KEY = "bmopf-table-widths-v1";
   const SIDEBAR_WIDTH_DEFAULT = 360;
   const SIDEBAR_WIDTH_MIN = 280;
   const SIDEBAR_WIDTH_MAX = 640;
@@ -19,6 +20,107 @@
   const symbolRenderer = globalThis.BMOPFRenderers?.createSymbolRenderer({ escapeHtml, colourOf, sameRef, resultStatus, resultTooltip, titleOf });
 
   function setStatus(text) { $("view-status").textContent = text || ""; }
+
+  function tableWidths() {
+    try {
+      const stored = JSON.parse(localStorage.getItem(TABLE_WIDTHS_KEY) || "{}");
+      return stored && typeof stored === "object" ? stored : {};
+    } catch (_) { return {}; }
+  }
+
+  function saveTableWidths(widths) {
+    try { localStorage.setItem(TABLE_WIDTHS_KEY, JSON.stringify(widths)); } catch (_) { /* localStorage is optional */ }
+  }
+
+  function bindResizableTable(table) {
+    if (!table) return;
+    const headers = [...table.querySelectorAll("thead th")];
+    if (headers.length < 2) return;
+    const key = table.dataset.resizableTable || "table";
+    const stored = tableWidths()[key];
+    if (Array.isArray(stored)) headers.forEach((header, index) => { if (Number.isFinite(stored[index])) header.style.width = `${stored[index]}px`; });
+    headers.slice(0, -1).forEach((header) => {
+      const handle = document.createElement("span");
+      handle.className = "column-resizer";
+      handle.setAttribute("role", "separator");
+      handle.setAttribute("aria-orientation", "vertical");
+      handle.setAttribute("aria-label", `Resize ${header.textContent.trim()} column`);
+      handle.setAttribute("tabindex", "0");
+      handle.title = "Drag to resize this column; use Arrow keys for precise sizing";
+      const setWidth = (width) => {
+        const minimum = 48;
+        const maximum = Math.max(minimum, table.clientWidth - headers.length * minimum + header.getBoundingClientRect().width);
+        const next = Math.max(minimum, Math.min(maximum, width));
+        header.style.width = `${Math.round(next)}px`;
+        handle.setAttribute("aria-valuemin", String(minimum));
+        handle.setAttribute("aria-valuemax", String(Math.round(maximum)));
+        handle.setAttribute("aria-valuenow", String(Math.round(next)));
+        const widths = tableWidths();
+        widths[key] = headers.map((column) => Math.round(column.getBoundingClientRect().width));
+        saveTableWidths(widths);
+      };
+      handle.setAttribute("aria-valuenow", String(Math.round(header.getBoundingClientRect().width)));
+      handle.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        const startX = event.clientX;
+        const startWidth = header.getBoundingClientRect().width;
+        const move = (moveEvent) => { setWidth(startWidth + moveEvent.clientX - startX); moveEvent.preventDefault(); };
+        const finish = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", finish); window.removeEventListener("pointercancel", finish); document.body.classList.remove("resizing-column"); };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", finish, { once: true });
+        window.addEventListener("pointercancel", finish, { once: true });
+        document.body.classList.add("resizing-column");
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      handle.addEventListener("keydown", (event) => {
+        if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+        event.preventDefault();
+        setWidth(header.getBoundingClientRect().width + (event.key === "ArrowRight" ? 8 : -8));
+      });
+      header.append(handle);
+    });
+  }
+
+  function bindResizableInventory() {
+    const panel = $("inventory");
+    const handle = panel?.querySelector(".inventory-column-resizer");
+    const header = panel?.querySelector(".inventory-header");
+    if (!panel || !handle || !header) return;
+    let stored = NaN;
+    try { stored = Number(localStorage.getItem("bmopf-inventory-column-width-v1")); } catch (_) { /* localStorage is optional */ }
+    const current = Number.isFinite(stored) && stored > 0 ? stored : header.querySelector("span")?.getBoundingClientRect().width;
+    const setWidth = (width) => {
+      const minimum = 100;
+      const maximum = Math.max(minimum, panel.clientWidth - 14 * 2 - 8 - 44 - 8);
+      const next = Math.max(minimum, Math.min(maximum, width));
+      panel.style.setProperty("--inventory-label-width", `${Math.round(next)}px`);
+      handle.setAttribute("aria-valuemin", String(minimum));
+      handle.setAttribute("aria-valuemax", String(Math.round(maximum)));
+      handle.setAttribute("aria-valuenow", String(Math.round(next)));
+      try { localStorage.setItem("bmopf-inventory-column-width-v1", String(Math.round(next))); } catch (_) { /* localStorage is optional */ }
+    };
+    if (Number.isFinite(current)) setWidth(current);
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      const startX = event.clientX;
+      const startWidth = panel.querySelector(".inventory-header > span")?.getBoundingClientRect().width || 0;
+      const move = (moveEvent) => { setWidth(startWidth + moveEvent.clientX - startX); moveEvent.preventDefault(); };
+      const finish = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", finish); window.removeEventListener("pointercancel", finish); document.body.classList.remove("resizing-column"); };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", finish, { once: true });
+      window.addEventListener("pointercancel", finish, { once: true });
+      document.body.classList.add("resizing-column");
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    handle.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      event.preventDefault();
+      const width = panel.querySelector(".inventory-header > span")?.getBoundingClientRect().width || 0;
+      setWidth(width + (event.key === "ArrowRight" ? 8 : -8));
+    });
+  }
 
   function sidebarWidthBounds() {
     const available = Math.max(SIDEBAR_WIDTH_MIN, window.innerWidth - 368);
@@ -549,7 +651,8 @@
       const resultRange = state.result ? `load ${range(loading)} · ΔV ${range(voltage)}` : "—";
       return `<tr><th><button class="class-filter ${state.activeKind === kind ? "selected" : ""}" data-kind-filter="${escapeHtml(kind)}">${escapeHtml(kind.replaceAll("_", " "))}</button></th><td>${items.length}</td><td>${support.full || 0}/${support.focused || 0}/${support["raw-only"] || 0}</td><td>${escapeHtml(resultRange)}</td></tr>`;
     }).join("");
-    panel.innerHTML = `<div class="panel-heading"><h2>Class overview</h2><span class="muted">full / focused / raw</span></div><table class="property-table class-overview-table"><thead><tr><th>class</th><th>count</th><th>support</th><th>result ranges</th></tr></thead><tbody>${rows}</tbody></table>`;
+    panel.innerHTML = `<div class="panel-heading"><h2>Class overview</h2><span class="muted">full / focused / raw</span></div><table class="property-table class-overview-table resizable-table" data-resizable-table="class-overview"><thead><tr><th>class</th><th>count</th><th>support</th><th>result ranges</th></tr></thead><tbody>${rows}</tbody></table>`;
+    bindResizableTable(panel.querySelector(".resizable-table"));
     panel.querySelectorAll("[data-kind-filter]").forEach((button) => button.addEventListener("click", () => {
       state.activeKind = state.activeKind === button.dataset.kindFilter ? null : button.dataset.kindFilter;
       state.query = ""; renderInventory(); renderClassOverview(); renderView();
@@ -810,7 +913,8 @@
       ? filtered.map((item, i) => `<button class="inventory-row ${sameRef(item.ref, state.selected) ? "selected" : ""} ${state.searchFocus === i ? "focused" : ""}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}" role="option" aria-selected="${sameRef(item.ref, state.selected)}" aria-posinset="${i + 1}" aria-setsize="${filtered.length}"><span>${escapeHtml(titleOf(item))}</span><span class="count">›</span></button>`).join("")
       : rows.map(([kind, count]) => `<button class="inventory-row ${state.activeKind === kind ? "selected" : ""}" data-kind-filter="${escapeHtml(kind)}"><span class="kind">${escapeHtml(kind.replaceAll("_", " "))}</span><span class="count">${count}</span></button>`).join("");
     const resultNote = filtered ? `<p class="search-meta" role="status">${filtered.length} ranked match${filtered.length === 1 ? "" : "es"} · Enter opens the first result</p>` : "";
-    $("inventory").innerHTML = `<div class="panel-heading"><h2>Inventory</h2><input id="search" type="search" placeholder="Search assets, buses, or result fields" value="${escapeHtml(state.query)}" aria-label="Search assets, buses, or result fields" aria-controls="inventory-list" aria-autocomplete="list"></div>${resultNote}<div id="inventory-list" class="inventory-list" role="listbox">${body || `<p class="muted" style="padding:12px 14px">No matching assets.</p>`}</div>`;
+    $("inventory").innerHTML = `<div class="panel-heading"><h2>Inventory</h2><input id="search" type="search" placeholder="Search assets, buses, or result fields" value="${escapeHtml(state.query)}" aria-label="Search assets, buses, or result fields" aria-controls="inventory-list" aria-autocomplete="list"></div>${resultNote}<div class="inventory-header" role="row"><span>asset / class</span><span class="inventory-column-resizer" role="separator" aria-orientation="vertical" aria-label="Resize inventory name column" tabindex="0" title="Drag to resize this column; use Arrow keys for precise sizing"></span><span>count</span></div><div id="inventory-list" class="inventory-list" role="listbox">${body || `<p class="muted" style="padding:12px 14px">No matching assets.</p>`}</div>`;
+    bindResizableInventory();
     const search = $("search");
     search.addEventListener("input", (event) => { state.query = event.target.value; state.searchFocus = -1; renderInventory(); $("search")?.focus(); });
     search.addEventListener("keydown", (event) => {

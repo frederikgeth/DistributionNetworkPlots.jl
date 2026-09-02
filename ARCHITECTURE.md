@@ -356,6 +356,10 @@ bounded vertical separator changes the CSS grid track without changing renderer
 state or the case model; keyboard arrows provide equivalent adjustments, while
 mobile and print layouts collapse to a single-column/print flow.
 
+Tabular detail panels use the same pointer-plus-keyboard pattern for column
+separators. The class overview and inventory widths are UI preferences stored
+locally under versioned keys; they never modify the BMOPF case or result data.
+
 ### 8.2 Navigation
 
 Related assets in the inspector are interactive references, not plain strings. Examples include:

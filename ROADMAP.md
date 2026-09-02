@@ -45,6 +45,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Inventory search ranks exact/prefix asset matches and can jump by keyboard; help panel documents views, symbols, and result cues.
 - [x] Add Back/Forward navigation for selection and view changes, preserving multi-wire drill-down history and hash deep links.
 - [x] Add an explicit single-line Overview action for returning from focused selection to the whole-network diagram, including the large-case render gate.
+- [x] Add keyboard- and pointer-resizable class-overview and inventory columns with local width persistence.
 - [x] Make single-wire buses and device symbols draggable with persisted per-profile overrides and visible anchor leaders.
 - [x] Show branch Π-model series impedance values with SI units in focused multi-wire views, omitting zero/absent shunt sections for pure-series records.
 - [x] Export the active overview view as a standalone SVG.
