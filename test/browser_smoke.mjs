@@ -193,6 +193,7 @@ try {
     await inventorySearch.fill("switch_open");
     await page.locator('button[data-kind="switch"][data-id="switch_open"]').click();
     assert.match(await page.locator("#canvas").innerText(), /Open switch/);
+    assert.equal(await page.locator('#canvas g[data-kind="switch"][data-id="switch_open"]').count(), 4);
     await inventorySearch.fill("tx_lv");
     await page.locator('button[data-kind="transformer"][data-id="tx_lv"]').click();
     const transformerText = await page.locator("#canvas").innerText();

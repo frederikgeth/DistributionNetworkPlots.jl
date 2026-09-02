@@ -35,7 +35,7 @@ be matched for best-effort inspection.
 - Source-property inspection and raw-record display.
 - Endpoint links from devices to buses.
 - Geospatial and schematic single-wire projections.
-- Focused multi-wire terminal stacks and conductor pairing for selected buses, lines, switches, and transformers, including phase permutations, explicit neutral/ground cues, and one panel per multi-winding transformer port.
+- Focused multi-wire terminal stacks and conductor pairing for selected buses, lines, switches, and transformers, including phase permutations, explicit neutral/ground cues, one switch blade per conductor, and one panel per multi-winding transformer port.
 - One- and two-hop neighbourhood expansion from a selected bus.
 - Back and Forward controls for stepping through selected assets and view changes; browser history and deep links remain supported.
 - The single-line **Overview** control clears the focused asset and returns to the whole-network diagram; on oversized cases it re-enters the full-render confirmation.

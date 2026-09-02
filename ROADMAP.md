@@ -243,7 +243,7 @@ Users can drill into the terminal-level structure around a selected asset or bus
 - Bus terminal stack or busbar representation.
 - Phase, neutral, and ground styling using colour plus non-colour cues.
 - Explicit conductor pairing and phase permutations.
-- Open-switch conductor representation.
+- Open-switch conductor representation, with one independently visible blade per conductor pair.
 - Two-winding transformer port/winding symbol.
 - Agreed representation for supported multi-winding transformer forms.
 - Attachment badges or symbols tied to specific terminals.

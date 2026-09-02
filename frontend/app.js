@@ -1326,6 +1326,28 @@
       bindSvgSelection();
       return;
     }
+    if (item.ref.kind === "switch") {
+      if (!pairs.length) {
+        setStatus(`${item.status} switch · terminal map unavailable`);
+        $("canvas").innerHTML = `<div class="message">This switch has no terminal pairs to draw. Inspect its raw terminal mapping.</div>`;
+        return;
+      }
+      const switchX = 380;
+      const rowY = pairs.map((_, i) => 138 + i * 46);
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))} · multi-wire switch</text>${leftPanel.html}${rightPanel.html}<text x="380" y="64" text-anchor="middle" fill="#70695f" font-size="11">One switch blade per conductor pair · ${item.status === "open" ? "open" : "closed"}</text>`;
+      pairs.forEach(([a, b], i) => {
+        const yLeft = leftPanel.rowY[i] || (142 + i * 34); const yRight = rightPanel.rowY[i] || (142 + i * 34); const y = rowY[i]; const visual = conductorVisual(a, b, left.busId, right.busId, i);
+        content += focusedPath([[220, yLeft], [switchX - 16, y]], visual, item.status);
+        content += focusedPath([[switchX + 16, y], [700, yRight]], visual, item.status);
+        content += singleSymbol(item, switchX, y);
+        content += `<text x="${switchX}" y="${y - 15}" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(visual.label)} · ${escapeHtml(a)}→${escapeHtml(b)}</text>`;
+      });
+      content += `<text x="380" y="${Math.max(365, rowY[rowY.length - 1] + 58)}" text-anchor="middle" fill="#70695f" font-size="12">${item.status === "open" ? "Open switch: each conductor path is interrupted independently" : "Closed switch: each conductor path is switched independently"}</text>`;
+      setStatus(`${pairs.length} conductor switches · ${item.status}`);
+      $("canvas").innerHTML = svgShell(content, { size: { width: 760, height: Math.max(500, rowY[rowY.length - 1] + 90) } });
+      bindSvgSelection();
+      return;
+    }
     if (!item.connections?.length) {
       const attachment = item.ports?.[0];
       if (!attachment) {
