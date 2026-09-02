@@ -47,6 +47,7 @@ The prototype supports:
 - Built-in example cases that can be loaded directly from the frontend for repeatable demonstrations and semantic smoke tests.
 - Side-by-side comparison of two result sidecars while retaining stable source-asset identity.
 - Ranked inventory search across asset IDs, bus links, and result field names, with keyboard jump-to-match.
+- Back/Forward navigation through selected assets and view changes, including multi-wire drill-down paths.
 - Built-in accessible help panel explaining view semantics, symbols, conductor cues, and result encodings.
 - Export of the active geospatial or single-line SVG for reports and issue attachments.
 - Export of the active view as a 2× PNG, plus a print stylesheet for clean diagram output.

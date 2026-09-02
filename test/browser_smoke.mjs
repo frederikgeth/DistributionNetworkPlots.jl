@@ -97,6 +97,17 @@ try {
     const inventorySearch = page.getByPlaceholder("Search assets, buses, or result fields");
     await inventorySearch.fill("line_main");
     await page.locator('button[data-kind="line"][data-id="line_main"]').click();
+    await inventorySearch.fill("switch_open");
+    await page.locator('button[data-kind="switch"][data-id="switch_open"]').click();
+    assert.equal(await page.getByRole("button", { name: "Go back", exact: true }).isDisabled(), false);
+    await page.getByRole("button", { name: "Go back", exact: true }).click();
+    await page.waitForTimeout(100);
+    assert.match(await page.evaluate(() => window.location.hash), /line\/line_main$/);
+    await page.getByRole("button", { name: "Go forward", exact: true }).click();
+    await page.waitForTimeout(100);
+    assert.match(await page.evaluate(() => window.location.hash), /switch\/switch_open$/);
+    await inventorySearch.fill("line_main");
+    await page.locator('button[data-kind="line"][data-id="line_main"]').click();
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     const multiText = await page.locator("#canvas").innerText();
     assert.match(multiText, /terminal detail/);

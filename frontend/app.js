@@ -5,7 +5,7 @@
   const LAYOUT_MAX_PROFILES = 8;
   const ELK_VERSION = "0.10.2";
   const LAYOUT_ROUTE_SPACE = "single-svg-v2";
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -43,11 +43,73 @@
   }
 
   function select(ref) {
-    state.selected = ref;
+    navigateTo({ view: state.view, selected: ref });
+  }
+
+  function navigationEntryFromHash() {
+    const parts = window.location.hash.slice(2).split("/");
+    const view = parts[0] && ["geo", "single", "multi", "diagnostics"].includes(parts[0]) ? parts[0] : "geo";
+    const selected = parts[1] && parts[2] ? { kind: parts[1], id: decodeURIComponent(parts.slice(2).join("/")) } : null;
+    return { view, selected };
+  }
+
+  function navigationHash(entry) {
+    const selected = entry.selected;
+    return selected ? `#/${entry.view}/${selected.kind}/${encodeURIComponent(selected.id)}` : `#/${entry.view}`;
+  }
+
+  function applyNavigationEntry(entry) {
+    state.view = entry.view;
+    state.selected = entry.selected;
     state.activeKind = null;
-    if (ref) window.location.hash = `#/${state.view}/${ref.kind}/${encodeURIComponent(ref.id)}`;
     render();
-    focusSelection();
+    if (entry.selected) focusSelection();
+  }
+
+  function syncNavigationEntry(entry) {
+    const current = state.navigation.entries[state.navigation.cursor];
+    if (current && current.view === entry.view && JSON.stringify(current.selected) === JSON.stringify(entry.selected)) return;
+    const stateEntry = history.state?.bmopfNavigationId;
+    const known = state.navigation.entries.findIndex((candidate) => candidate.id === stateEntry);
+    if (known >= 0) state.navigation.cursor = known;
+    else {
+      const id = state.navigation.nextId++;
+      state.navigation.entries = [{ ...entry, id }];
+      state.navigation.cursor = 0;
+      history.replaceState({ ...(history.state || {}), bmopfNavigationId: id, bmopfEntry: entry }, "", navigationHash(entry));
+    }
+  }
+
+  function initialiseNavigation(entry) {
+    const id = state.navigation.nextId++;
+    state.navigation.entries = [{ ...entry, id }];
+    state.navigation.cursor = 0;
+    history.replaceState({ ...(history.state || {}), bmopfNavigationId: id, bmopfEntry: entry }, "", navigationHash(entry));
+  }
+
+  function navigateTo(entry) {
+    const current = state.navigation.entries[state.navigation.cursor];
+    if (current && current.view === entry.view && JSON.stringify(current.selected) === JSON.stringify(entry.selected)) {
+      applyNavigationEntry(entry);
+      return;
+    }
+    const id = state.navigation.nextId++;
+    state.navigation.entries = state.navigation.entries.slice(0, state.navigation.cursor + 1);
+    state.navigation.entries.push({ ...entry, id });
+    state.navigation.cursor = state.navigation.entries.length - 1;
+    history.pushState({ ...(history.state || {}), bmopfNavigationId: id, bmopfEntry: entry }, "", navigationHash(entry));
+    applyNavigationEntry(entry);
+  }
+
+  function navigationReset(entry) {
+    const id = state.navigation.nextId++;
+    state.navigation.entries = [{ ...entry, id }];
+    state.navigation.cursor = 0;
+    history.replaceState({ ...(history.state || {}), bmopfNavigationId: id, bmopfEntry: entry }, "", navigationHash(entry));
+  }
+
+  function navigationDisabled(direction) {
+    return direction === "back" ? state.navigation.cursor <= 0 : state.navigation.cursor < 0 || state.navigation.cursor >= state.navigation.entries.length - 1;
   }
 
   function itemFor(ref) {
@@ -62,6 +124,7 @@
       state.layout = loadLayout();
       state.selected = requestedSelection && itemFor(requestedSelection) ? requestedSelection : null;
       state.activeKind = null;
+      navigationReset({ view: state.view, selected: state.selected });
       render();
       if (label) globalThis.document.title = `${label} · BMOPF Explorer`;
     } catch (error) {
@@ -796,7 +859,7 @@
     controls.hidden = false;
     const layoutControls = state.view === "single"
       ? `<span class="layout-label">Layout:</span><label class="layout-select">Direction<select id="sld-direction" aria-label="Single-line direction"><option value="source-to-load" ${state.layout.direction === "source-to-load" ? "selected" : ""}>Source → load</option><option value="load-to-source" ${state.layout.direction === "load-to-source" ? "selected" : ""}>Load → source</option></select></label><label class="layout-select">Root<select id="sld-root" aria-label="Single-line root bus"><option value="auto" ${state.layout.root === "auto" ? "selected" : ""}>Automatic</option>${state.index.buses.map((bus) => `<option value="${escapeHtml(bus.ref.id)}" ${state.layout.root === bus.ref.id ? "selected" : ""}>${escapeHtml(bus.ref.id)}</option>`).join("")}</select></label><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
-    controls.innerHTML = `<span>View:</span><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export-svg">Export SVG</button><button data-camera="export-png">Export PNG</button>${layoutControls}`;
+    controls.innerHTML = `<span>View:</span><button data-navigation="back" aria-label="Go back" ${navigationDisabled("back") ? "disabled" : ""}>Back</button><button data-navigation="forward" aria-label="Go forward" ${navigationDisabled("forward") ? "disabled" : ""}>Forward</button><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export-svg">Export SVG</button><button data-camera="export-png">Export PNG</button>${layoutControls}`;
     if (state.view === "single") {
       const elkButton = document.createElement("button"); elkButton.dataset.layout = "elk"; elkButton.textContent = "Apply ELK layout";
       controls.querySelector('[data-layout="left"]')?.before(elkButton);
@@ -810,6 +873,10 @@
       else if (button.dataset.camera === "export-png") { exportCurrentPng(); return; }
       else { camera.scale = 1; camera.x = 0; camera.y = 0; }
       updateCamera();
+    }));
+    controls.querySelectorAll("[data-navigation]").forEach((button) => button.addEventListener("click", () => {
+      const delta = button.dataset.navigation === "back" ? -1 : 1;
+      if (!navigationDisabled(delta < 0 ? "back" : "forward")) history.go(delta);
     }));
     const direction = $("sld-direction");
     if (direction) direction.addEventListener("change", (event) => { switchLayoutProfile(event.target.value, state.layout.root); renderView(); renderCameraControls(); });
@@ -1162,9 +1229,10 @@
   function render() { renderSummary(); renderClassOverview(); renderResultSummary(); renderInventory(); renderInspector(); renderView(); renderCameraControls(); renderMultiHopControls(); }
 
   function parseHash() {
-    const parts = window.location.hash.slice(2).split("/");
-    if (parts[0] && ["geo", "single", "multi", "diagnostics"].includes(parts[0])) state.view = parts[0];
-    if (parts[1] && parts[2]) state.selected = { kind: parts[1], id: decodeURIComponent(parts.slice(2).join("/")) };
+    const entry = navigationEntryFromHash();
+    state.view = entry.view;
+    state.selected = entry.selected;
+    return entry;
   }
 
   function readFile(file) {
@@ -1327,7 +1395,8 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
-    parseHash();
+    const initialNavigation = parseHash();
+    initialiseNavigation(initialNavigation);
     populateExamples();
     $("file-input").addEventListener("change", (event) => { if (event.target.files[0]) readFile(event.target.files[0]); });
     $("result-input").addEventListener("change", (event) => { if (event.target.files[0]) readResultFile(event.target.files[0]); });
@@ -1336,8 +1405,18 @@
     zone.addEventListener("dragover", (event) => { event.preventDefault(); zone.classList.add("dragging"); });
     zone.addEventListener("dragleave", () => zone.classList.remove("dragging"));
     zone.addEventListener("drop", (event) => { event.preventDefault(); zone.classList.remove("dragging"); if (event.dataTransfer.files[0]) readDroppedFile(event.dataTransfer.files[0]); });
-    document.querySelectorAll(".view-tab").forEach((button) => button.addEventListener("click", () => { state.view = button.dataset.view; render(); }));
-    window.addEventListener("hashchange", () => { parseHash(); render(); });
+    document.querySelectorAll(".view-tab").forEach((button) => button.addEventListener("click", () => navigateTo({ view: button.dataset.view, selected: state.selected })));
+    window.addEventListener("popstate", () => {
+      const entry = history.state?.bmopfEntry || navigationEntryFromHash();
+      syncNavigationEntry(entry);
+      applyNavigationEntry(entry);
+    });
+    window.addEventListener("hashchange", () => {
+      if (history.state?.bmopfEntry && navigationHash(history.state.bmopfEntry) === window.location.hash) return;
+      const entry = navigationEntryFromHash();
+      syncNavigationEntry(entry);
+      applyNavigationEntry(entry);
+    });
     const embedded = globalThis.__BMOPF_CASE__;
     const embeddedResult = globalThis.__BMOPF_RESULT__;
     if (embedded) loadDocument(embedded, embedded.name || "Embedded case");

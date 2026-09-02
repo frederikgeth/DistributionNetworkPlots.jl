@@ -335,6 +335,7 @@ interface AppState {
   query: string;
   classFilters: Set<AssetKind>;
   focusRequest: FocusRequest | null;
+  navigation: NavigationState;
   cameras: Record<string, unknown>;
 }
 ```
@@ -352,6 +353,12 @@ Related assets in the inspector are interactive references, not plain strings. E
 - IBR to its connection bus and control record.
 
 Static builds use hash-based URLs so deep links require no server routing. The encoded state includes the active view and stable entity reference. Search/filter state may remain session-local initially.
+
+The shell also records each view/selection transition in the browser history.
+Back and Forward controls use the same history entries as the browser toolbar,
+so a multi-wire path (for example, bus → line → endpoint bus) can be retraced
+without inventing a second navigation model. Loading a new case starts a fresh
+history segment to avoid replaying references from the previous case.
 
 ### 8.3 Tooltip and inspector responsibilities
 
