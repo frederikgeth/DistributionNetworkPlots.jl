@@ -123,6 +123,9 @@ try {
     await page.getByRole("button", { name: "Show full overview", exact: true }).click();
     await page.waitForTimeout(100);
     assert.match(await page.evaluate(() => window.location.hash), /single$/);
+    // The overview action clears the selection, and multi-wire focus mode needs a
+    // selected multi-terminal device, so re-select the line before switching tabs.
+    await page.locator('button[data-kind="line"][data-id="line_main"]').click();
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     const multiText = await page.locator("#canvas").innerText();
     assert.match(multiText, /terminal detail/);
