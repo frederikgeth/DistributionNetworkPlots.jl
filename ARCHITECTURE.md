@@ -322,8 +322,9 @@ transformer conductor labels are kept in the gutter beside the body so phase
 annotations do not sit on top of the transformer symbol or wiring.
 The card includes a compact connection glyph: star topology for WYE, a
 triangle for DELTA, and a two-terminal branch for single-phase or unspecified
-connections. The glyph supplements, rather than replaces, the exact metadata
-and terminal rows.
+connections. Single-bus cards are deliberately topology-first: the exact
+terminal map is shown as a compact line and remains available in the inspector,
+while the repeated horizontal terminal wiring used by branch views is omitted.
 
 Projection rules:
 

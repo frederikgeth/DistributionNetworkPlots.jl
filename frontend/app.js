@@ -1510,17 +1510,16 @@
       const configuration = record.configuration ? `connection: ${String(record.configuration).replaceAll("_", " ")}` : null;
       const model = item.ref.kind === "load" ? `load model: ${String(record.model || "CONSTANT_POWER").replaceAll("_", " ")}${record.model ? "" : " (default)"}` : null;
       const details = [configuration, model].filter(Boolean);
-      const terminalStart = details.length ? 184 : 170;
-      const diagramY = Math.max(330, terminalStart + terminals.length * 42 + 16);
-      const cardHeight = Math.max(300, diagramY - 85 + 100);
-      const footerY = 85 + cardHeight + 34;
+      const diagramY = 290;
+      const cardHeight = 285;
+      const footerY = 404;
       let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))}</text><rect x="180" y="85" width="400" height="${cardHeight}" rx="8" fill="#fffdf9" stroke="${colourOf(item.ref.kind)}" stroke-width="3"/><text x="380" y="125" text-anchor="middle" font-size="15">bus ${escapeHtml(attachment.busId)}</text>`;
       details.forEach((detail, i) => { content += `<text x="380" y="${148 + i * 15}" text-anchor="middle" fill="#70695f" font-size="11">${escapeHtml(detail)}</text>`; });
-      terminals.forEach((terminal, i) => { const y = terminalStart + i * 42; content += `<line x1="250" y1="${y}" x2="510" y2="${y}" stroke="#9a9388" stroke-width="2"/><text x="230" y="${y + 4}" text-anchor="end" fill="#37332c" font-size="13">${escapeHtml(terminal)}</text>`; });
+      content += `<text x="380" y="205" text-anchor="middle" fill="#70695f" font-size="11">terminal map: ${escapeHtml(terminals.join(" · "))}</text>`;
       content += connectionDiagram(item, record.configuration, terminals, 380, diagramY);
       content += `<text x="380" y="${footerY}" text-anchor="middle" fill="#70695f" font-size="12">Single-bus attachment · inspect properties for device details</text>`;
       setMultiStatus(`${terminals.length} attached terminals · ${item.status}`);
-      target.innerHTML = multiShell(content, { size: { width: 760, height: Math.max(500, footerY + 35) } });
+      target.innerHTML = multiShell(content);
       bindSvgSelection(target);
       return;
     }
