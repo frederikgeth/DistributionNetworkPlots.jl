@@ -114,6 +114,9 @@ try {
     assert.match(await page.evaluate(() => window.location.hash), /switch\/switch_open$/);
     await inventorySearch.fill("line_main");
     await page.locator('button[data-kind="line"][data-id="line_main"]').click();
+    await page.getByRole("button", { name: "Show full overview", exact: true }).click();
+    await page.waitForTimeout(100);
+    assert.match(await page.evaluate(() => window.location.hash), /single$/);
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     const multiText = await page.locator("#canvas").innerText();
     assert.match(multiText, /terminal detail/);

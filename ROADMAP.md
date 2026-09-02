@@ -43,6 +43,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Single-line view uses a deterministic source-to-load layered layout, heavy busbars, orthogonal branch routing, explicit device labels, and IEEE/IEC-inspired symbols.
 - [x] Inventory search ranks exact/prefix asset matches and can jump by keyboard; help panel documents views, symbols, and result cues.
 - [x] Add Back/Forward navigation for selection and view changes, preserving multi-wire drill-down history and hash deep links.
+- [x] Add an explicit single-line Overview action for returning from focused selection to the whole-network diagram, including the large-case render gate.
 - [x] Export the active overview view as a standalone SVG.
 - [x] Export the active overview view as a 2× PNG and provide print-oriented styling.
 - [x] Persist versioned single-line bus adjustments per case, with nudge, lock/unlock, and reset-to-computed controls.

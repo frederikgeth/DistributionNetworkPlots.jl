@@ -359,6 +359,10 @@ Back and Forward controls use the same history entries as the browser toolbar,
 so a multi-wire path (for example, bus → line → endpoint bus) can be retraced
 without inventing a second navigation model. Loading a new case starts a fresh
 history segment to avoid replaying references from the previous case.
+The single-line Overview action is the explicit clear-selection affordance: it
+records an unselected single-line entry and returns to the whole-network canvas.
+For cases over the published overview budget, this action re-enters the same
+full-render confirmation used when first opening the overview.
 
 ### 8.3 Tooltip and inspector responsibilities
 

@@ -899,7 +899,8 @@
     controls.hidden = false;
     const layoutControls = state.view === "single"
       ? `<span class="layout-label">Layout:</span><label class="layout-select">Direction<select id="sld-direction" aria-label="Single-line direction"><option value="source-to-load" ${state.layout.direction === "source-to-load" ? "selected" : ""}>Source → load</option><option value="load-to-source" ${state.layout.direction === "load-to-source" ? "selected" : ""}>Load → source</option></select></label><label class="layout-select">Root<select id="sld-root" aria-label="Single-line root bus"><option value="auto" ${state.layout.root === "auto" ? "selected" : ""}>Automatic</option>${state.index.buses.map((bus) => `<option value="${escapeHtml(bus.ref.id)}" ${state.layout.root === bus.ref.id ? "selected" : ""}>${escapeHtml(bus.ref.id)}</option>`).join("")}</select></label><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
-    controls.innerHTML = `<span>View:</span><button data-navigation="back" aria-label="Go back" ${navigationDisabled("back") ? "disabled" : ""}>Back</button><button data-navigation="forward" aria-label="Go forward" ${navigationDisabled("forward") ? "disabled" : ""}>Forward</button><button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export-svg">Export SVG</button><button data-camera="export-png">Export PNG</button>${layoutControls}`;
+    const overviewButton = state.view === "single" ? `<button data-navigation="overview" aria-label="Show full overview" ${state.selected ? "" : "disabled"}>Overview</button>` : "";
+    controls.innerHTML = `<span>View:</span><button data-navigation="back" aria-label="Go back" ${navigationDisabled("back") ? "disabled" : ""}>Back</button><button data-navigation="forward" aria-label="Go forward" ${navigationDisabled("forward") ? "disabled" : ""}>Forward</button>${overviewButton}<button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export-svg">Export SVG</button><button data-camera="export-png">Export PNG</button>${layoutControls}`;
     if (state.view === "single") {
       const elkButton = document.createElement("button"); elkButton.dataset.layout = "elk"; elkButton.textContent = "Apply ELK layout";
       controls.querySelector('[data-layout="left"]')?.before(elkButton);
@@ -915,6 +916,12 @@
       updateCamera();
     }));
     controls.querySelectorAll("[data-navigation]").forEach((button) => button.addEventListener("click", () => {
+      if (button.dataset.navigation === "overview") {
+        const budget = overviewBudget();
+        state.largeCaseDecision = budget.over ? (state.largeCaseBypass ? "full" : "pending") : "full";
+        navigateTo({ view: state.view, selected: null });
+        return;
+      }
       const delta = button.dataset.navigation === "back" ? -1 : 1;
       if (!navigationDisabled(delta < 0 ? "back" : "forward")) history.go(delta);
     }));

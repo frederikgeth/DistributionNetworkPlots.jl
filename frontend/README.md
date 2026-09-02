@@ -38,6 +38,7 @@ be matched for best-effort inspection.
 - Focused multi-wire terminal stacks and conductor pairing for selected buses, lines, switches, and transformers, including phase permutations, explicit neutral/ground cues, and one panel per multi-winding transformer port.
 - One- and two-hop neighbourhood expansion from a selected bus.
 - Back and Forward controls for stepping through selected assets and view changes; browser history and deep links remain supported.
+- The single-line **Overview** control clears the focused asset and returns to the whole-network diagram; on oversized cases it re-enters the full-render confirmation.
 - Pan, zoom, and fit/reset controls for the static SVG views.
 - Shared `renderer-contract-v1` boundary for SVG shells and canonical selectable asset references.
 - Contract-backed `renderers/symbols.js` module for IEEE/IEC-inspired device symbols.
