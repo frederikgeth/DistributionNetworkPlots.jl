@@ -57,6 +57,16 @@ try {
     assert.ok(Object.keys(profilesAfterSwitch).some((key) => key.includes("direction=load-to-source")));
     const profileCount = await page.evaluate(() => Object.values(localStorage).filter((value) => value.includes('"version":3')).length);
     assert.equal(profileCount, 1);
+    const directionControl = page.getByLabel("Single-line direction");
+    const rootControl = page.getByLabel("Single-line root bus");
+    for (const direction of ["source-to-load", "load-to-source"]) {
+      for (const root of ["auto", "source", "feeder", "load_bus", "aux_bus"]) {
+        await directionControl.selectOption(direction);
+        await rootControl.selectOption(root);
+      }
+    }
+    const retainedProfiles = await page.evaluate(() => Object.values(localStorage).map((value) => { try { return JSON.parse(value); } catch (_) { return null; } }).find((value) => value?.version === 3)?.profiles || {});
+    assert.ok(Object.keys(retainedProfiles).length <= 8);
     const inventorySearch = page.getByPlaceholder("Search assets, buses, or result fields");
     await inventorySearch.fill("line_main");
     await page.locator('button[data-kind="line"][data-id="line_main"]').click();
@@ -72,7 +82,7 @@ try {
     const transformerText = await page.locator("#canvas").innerText();
     assert.match(transformerText, /transformer/);
     assert.match(transformerText, /Ordered conductor pairing/);
-    await searchBox.fill("tx_three");
+    await inventorySearch.fill("tx_three");
     await page.locator('button[data-kind="transformer"][data-id="tx_three"]').click();
     const multiWindingText = await page.locator("#canvas").innerText();
     assert.match(multiWindingText, /winding detail/);

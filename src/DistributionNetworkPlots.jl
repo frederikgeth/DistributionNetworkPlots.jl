@@ -59,6 +59,7 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
     template = read(joinpath(FRONTEND_DIR, "index.html"), String)
     examples = read(joinpath(FRONTEND_DIR, "examples.js"), String)
     model = read(joinpath(FRONTEND_DIR, "model.js"), String)
+    renderer_contract = read(joinpath(FRONTEND_DIR, "renderer-contract.js"), String)
     app = read(joinpath(FRONTEND_DIR, "app.js"), String)
     css = read(joinpath(FRONTEND_DIR, "styles.css"), String)
     elk_bundle = read(joinpath(FRONTEND_DIR, "vendor", "elk.bundled.js"), String)
@@ -73,6 +74,7 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
         "<link rel=\"stylesheet\" href=\"styles.css\">" => "<style>$(css)</style>",
         "<script src=\"examples.js\"></script>" => "<script>$(examples)</script>",
         "<script src=\"model.js\"></script>" => "<script>$(model)</script>",
+        "<script src=\"renderer-contract.js\"></script>" => "<script>$(renderer_contract)</script>",
         "<script src=\"app.js\"></script>" => "<script>globalThis.__BMOPF_REPORT_META__ = $(report_metadata); globalThis.__BMOPF_CASE__ = $(embedded); globalThis.__BMOPF_ELK_BUNDLE_SOURCE__ = $(elk_script);$(result_script)</script><script>$(app)</script>",
     )
 

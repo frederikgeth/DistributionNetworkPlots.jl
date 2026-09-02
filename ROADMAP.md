@@ -53,7 +53,8 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Faithful focused multi-wire view shows terminal stacks, phase permutations, neutral/ground cues, open-switch interruptions, and explicit transformer windings.
 - [x] Multi-winding focused view shows one terminal stack per winding with winding metadata and selectable connected buses.
 - [x] Publish an explicit overview SVG budget and switch oversized geospatial/single-line cases to a focused one-hop fallback.
-- [ ] Replace prototype renderer packages and define formal layout-cache retention/eviction policy.
+- [x] Define a renderer/layout contract and bounded eight-profile layout-cache retention policy.
+- [ ] Replace prototype renderer packages with the contract-backed module tree.
 - [x] Add an automated browser end-to-end smoke test and wire it into GitHub Actions.
 
 Time boxes below are indicative for one primary developer. Scope is fixed within a slice; time is not a promise.
@@ -202,7 +203,7 @@ Small realistic cases are legible and explorable in the two overview views.
 - Open/out-of-service styling.
 - Pan, zoom, fit-all, and focus-selection behaviour.
 - Lightweight tooltips and persistent inspector coordination.
-- Layout caching keyed by case identity and layout options (prototype delivered; formal retention/eviction policy remains open).
+- Layout caching keyed by case identity and layout options, with deterministic fallback and bounded eight-profile retention.
 
 ### Acceptance criteria
 

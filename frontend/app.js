@@ -2,6 +2,7 @@
   "use strict";
 
   const LAYOUT_CACHE_VERSION = 3;
+  const LAYOUT_MAX_PROFILES = 8;
   const ELK_VERSION = "0.10.2";
   const LAYOUT_ROUTE_SPACE = "single-svg-v1";
   const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
@@ -94,7 +95,20 @@
     if (!profile || typeof profile !== "object") return { locked: {}, routes: {}, engine: "deterministic" };
     const locked = profile.locked && typeof profile.locked === "object" ? profile.locked : {};
     const routes = profile.routes && typeof profile.routes === "object" ? profile.routes : {};
-    return { locked, routes, engine: profile.engine === "elk" ? "elk" : "deterministic" };
+    const lastUsed = Number.isFinite(Number(profile.lastUsed)) ? Number(profile.lastUsed) : 0;
+    return { locked, routes, engine: profile.engine === "elk" ? "elk" : "deterministic", lastUsed };
+  }
+
+  function pruneLayoutProfiles(profiles, activeKey) {
+    const entries = Object.entries(profiles || {});
+    entries.sort(([keyA, profileA], [keyB, profileB]) => {
+      if (keyA === activeKey) return -1;
+      if (keyB === activeKey) return 1;
+      const usedA = Number.isFinite(Number(profileA?.lastUsed)) ? Number(profileA.lastUsed) : 0;
+      const usedB = Number.isFinite(Number(profileB?.lastUsed)) ? Number(profileB.lastUsed) : 0;
+      return usedB - usedA || keyA.localeCompare(keyB);
+    });
+    return Object.fromEntries(entries.slice(0, LAYOUT_MAX_PROFILES));
   }
 
   function loadLayout() {
@@ -106,8 +120,10 @@
       if (current && current.version === LAYOUT_CACHE_VERSION && current.key === key && current.graphSignature === graphSignature && current.routeSpace === LAYOUT_ROUTE_SPACE && current.elkVersion === ELK_VERSION && current.profiles && typeof current.profiles === "object") {
         const direction = current.direction === "load-to-source" ? current.direction : "source-to-load";
         const root = typeof current.root === "string" ? current.root : "auto";
-        const profile = normaliseLayoutProfile(current.profiles[layoutProfileKey(direction, root)]);
-        return { version: LAYOUT_CACHE_VERSION, key, locked: profile.locked, routes: profile.routes, direction, root, engine: profile.engine, profiles: current.profiles, graphSignature, cacheState: "valid" };
+        const activeProfileKey = layoutProfileKey(direction, root);
+        const profiles = pruneLayoutProfiles(current.profiles, activeProfileKey);
+        const profile = normaliseLayoutProfile(profiles[activeProfileKey]);
+        return { version: LAYOUT_CACHE_VERSION, key, locked: profile.locked, routes: profile.routes, direction, root, engine: profile.engine, profiles, graphSignature, cacheState: "valid" };
       }
       if (current && current.version === LAYOUT_CACHE_VERSION && current.key === key) return defaults("stale");
       const stored = JSON.parse(localStorage.getItem(`bmopf-layout-v2:${key}`) || "null");
@@ -133,7 +149,7 @@
     try {
       const profileKey = layoutProfileKey(state.layout.direction, state.layout.root);
       const graphSignature = layoutGraphSignature();
-      const profiles = { ...(state.layout.profiles || {}), [profileKey]: { graphSignature, optionsSignature: profileKey, routeSpace: LAYOUT_ROUTE_SPACE, elkVersion: ELK_VERSION, locked: state.layout.locked || {}, routes: state.layout.routes || {}, engine: state.layout.engine === "elk" ? "elk" : "deterministic" } };
+      const profiles = pruneLayoutProfiles({ ...(state.layout.profiles || {}), [profileKey]: { graphSignature, optionsSignature: profileKey, routeSpace: LAYOUT_ROUTE_SPACE, elkVersion: ELK_VERSION, locked: state.layout.locked || {}, routes: state.layout.routes || {}, engine: state.layout.engine === "elk" ? "elk" : "deterministic", lastUsed: Date.now() } }, profileKey);
       state.layout.profiles = profiles;
       localStorage.setItem(`bmopf-layout-v3:${state.layout.key}`, JSON.stringify({ version: LAYOUT_CACHE_VERSION, key: state.layout.key, graphSignature, optionsSignature: profileKey, routeSpace: LAYOUT_ROUTE_SPACE, elkVersion: ELK_VERSION, direction: state.layout.direction, root: state.layout.root, profiles }));
     } catch (_) { /* ignore unavailable storage */ }
@@ -809,7 +825,7 @@
     return String(value);
   }
 
-  function svgShell(content) { const camera = state.cameras[state.view]; return `<svg viewBox="0 0 760 500" role="img" aria-label="${escapeHtml(state.view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`; }
+  function svgShell(content) { const rendererContract = globalThis.BMOPFRendererContract; const camera = state.cameras[state.view]; return rendererContract ? rendererContract.svgShell(content, { camera, view: state.view, escapeHtml }) : `<svg viewBox="0 0 760 500" role="img" aria-label="${escapeHtml(state.view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`; }
 
   function updateCamera() {
     const viewport = $("canvas").querySelector("#viewport");
@@ -1280,9 +1296,9 @@
       node.setAttribute("tabindex", "0");
       node.setAttribute("role", "button");
       node.setAttribute("aria-label", `${node.dataset.kind.replaceAll("_", " ")} ${node.dataset.id}`);
-      node.addEventListener("click", () => select({ kind: node.dataset.kind, id: node.dataset.id }));
+      node.addEventListener("click", () => select(globalThis.BMOPFRendererContract?.assetRef(node) || { kind: node.dataset.kind, id: node.dataset.id }));
       node.addEventListener("keydown", (event) => {
-        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select({ kind: node.dataset.kind, id: node.dataset.id }); }
+        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(globalThis.BMOPFRendererContract?.assetRef(node) || { kind: node.dataset.kind, id: node.dataset.id }); }
       });
     });
   }

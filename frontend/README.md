@@ -24,6 +24,8 @@ inspector, alongside a raw result-record view.
 - Focused multi-wire terminal stacks and conductor pairing for selected buses, lines, switches, and transformers, including phase permutations, explicit neutral/ground cues, and one panel per multi-winding transformer port.
 - One- and two-hop neighbourhood expansion from a selected bus.
 - Pan, zoom, and fit/reset controls for the static SVG views.
+- Shared `renderer-contract-v1` boundary for SVG shells and canonical selectable asset references.
+- Versioned layout profiles with deterministic fallback and bounded local retention (eight profiles per case).
 - Distinct single-wire symbols for supported device classes and state styling.
 - Reusable geospatial line geometry when supplied, with deterministic endpoint fallback.
 - Focus selection frames the selected bus or device in geospatial and single-wire views.

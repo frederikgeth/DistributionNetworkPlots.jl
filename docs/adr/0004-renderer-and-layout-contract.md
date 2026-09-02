@@ -47,8 +47,9 @@ geometry is used. Manual bus positions and routes belong to the selected case
 profile; they are not shared between cases.
 
 Until a measured large-case workload requires more, one browser storage record
-per case is sufficient. Future retention work must add an explicit bounded
-profile count and eviction rule rather than silently growing local storage.
+per case with at most eight recently used profiles is sufficient. Any future
+increase must be justified by measured workload evidence rather than silently
+growing local storage.
 
 ## Consequences
 
