@@ -72,6 +72,9 @@ try {
     await page.getByPlaceholder("Search assets, buses, or result fields").fill("rooftop_ibr");
     await page.locator('button[data-kind="ibr"][data-id="rooftop_ibr"]').click();
     assert.match(await page.locator("#inspector").innerText(), /s_max[\s\S]*35000 VA/);
+    assert.ok(await page.locator("#inspector .copy-button").count() > 0);
+    assert.equal(await page.locator('#inspector [data-copy-target="pre.raw"]').count(), 1);
+    assert.equal(await page.locator("#inspector .property-table tr").count(), await page.locator("#inspector .property-table tr .copy-button").count());
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     await page.getByPlaceholder("Search assets, buses, or result fields").fill("load_three_phase");
     await page.locator('button[data-kind="load"][data-id="load_three_phase"]').click();
@@ -106,6 +109,7 @@ try {
     const multiDetailPane = page.locator("#multi-detail-panel");
     assert.equal(await multiDetailPane.isVisible(), true);
     assert.match(await page.locator("#multi-detail-canvas").innerText(), /terminal detail|Π branch model/);
+    assert.equal(await page.locator('#multi-detail-canvas [data-copy-text][aria-label="Copy branch matrices"]').count(), 1);
     const busGroups = page.locator('#multi-detail-canvas g[data-kind="bus"]');
     assert.ok(await busGroups.count() >= 2);
     assert.equal(await busGroups.locator("rect").count(), 0);

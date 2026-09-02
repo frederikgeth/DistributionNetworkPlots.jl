@@ -35,6 +35,7 @@ be matched for best-effort inspection.
 - Asset inventory and search.
 - Source-property inspection and raw-record display.
 - Inspector values use SI base units where BMOPF semantics are known (for example V, A, W, var, VA, Ω, Ω/m, S, m, Hz, and p.u.); engineering angles and geographic coordinates retain degrees. Unknown or model-dependent fields remain visibly unmodified and the raw record is always available.
+- Copy controls are available on inspector property/port/result rows, raw component/result/comparison records, diagnostics, and branch impedance/admittance matrices. Values copy in readable text with units; raw records copy formatted JSON.
 - Endpoint links from devices to buses.
 - Geospatial and schematic single-wire projections.
 - Focused multi-wire terminal stacks and conductor pairing for selected buses, lines, switches, and transformers, including phase permutations, explicit neutral/ground cues, one switch blade per conductor, one panel per multi-winding transformer port, and compact WYE/DELTA/single-phase connection glyphs plus model annotations for nodal devices (for example constant-power/current/impedance/ZIP loads). Bus terminals are shown as labelled dots on a vertical dotted bus spine, without a surrounding panel box. Phase conductors terminate at the WYE/DELTA connection points using the same A/B/C red/green/blue convention as the rest of the multi-wire view; neutral and ground remain patterned grey. Single-bus devices use a compact topology-first card; their exact terminal map remains in the card and inspector.

@@ -206,6 +206,16 @@ body.resizing-column, body.resizing-column * { cursor: col-resize !important; us
 .property-table { width: 100%; border-collapse: collapse; font-size: 12px; }
 .property-table th, .property-table td { border-bottom: 1px solid #eee9e1; padding: 5px 3px; vertical-align: top; text-align: left; }
 .property-table th { width: 42%; color: var(--muted); font-weight: 500; }
+.copyable-value-text { display: inline-block; max-width: calc(100% - 30px); overflow-wrap: anywhere; vertical-align: top; }
+.copy-button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: 5px; border: 1px solid transparent; border-radius: 4px; padding: 2px; color: var(--muted); background: transparent; cursor: pointer; vertical-align: middle; }
+.copy-button svg { display: block; width: 15px; height: 15px; }
+.copy-button:hover, .copy-button:focus-visible { border-color: #b9cfe5; color: var(--accent); background: var(--accent-soft); outline: none; }
+.copy-button.copied { border-color: #b9d6be; color: #3f754b; background: #eef7ef; }
+.property-table th .copy-button { float: right; margin-top: -2px; }
+.property-table td .copy-button { float: right; margin-top: -2px; }
+.copyable-details summary { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.copy-button-svg { cursor: pointer; }
+.copy-button-svg:hover rect:first-child, .copy-button-svg:focus-visible rect:first-child { fill: var(--accent-soft); stroke: var(--accent); }
 .related { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
 .link-button { border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; color: var(--accent); background: var(--panel); cursor: pointer; font-size: 12px; }
 pre.raw { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 9px; border-radius: 5px; background: #f1eee7; font-size: 11px; white-space: pre-wrap; word-break: break-word; }

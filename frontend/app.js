@@ -17,6 +17,71 @@
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const titleOf = (item) => `${item.ref.kind.replaceAll("_", " ")} ${item.ref.id}`;
   const colourOf = (kind) => ({ line: "#8a8378", switch: "#c26a27", transformer: "#4f789f", load: "#a75a1b", generator: "#4a8f5f", ibr: "#789e46", shunt: "#8a6ca8", capacitor: "#8a6ca8", voltage_source: "#3f6fb9" }[kind] || "#9a9388");
+  const copyIcon = `<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="5" y="2" width="8" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="5" width="8" height="9" rx="1.5" fill="var(--panel)" stroke="currentColor" stroke-width="1.3"/></svg>`;
+
+  async function copyToClipboard(text) {
+    const value = String(text ?? "");
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+        return true;
+      }
+    } catch (_) { /* fall back for file:// and non-secure origins */ }
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.append(textarea);
+    textarea.select();
+    let copied = false;
+    try { copied = document.execCommand("copy"); } catch (_) { copied = false; }
+    textarea.remove();
+    return copied;
+  }
+
+  function copyButton(text, label = "Copy") {
+    return `<button type="button" class="copy-button" data-copy-text="${escapeHtml(text)}" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${copyIcon}</button>`;
+  }
+
+  function copyTargetButton(label = "Copy") {
+    return `<button type="button" class="copy-button" data-copy-target="pre.raw" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">${copyIcon}</button>`;
+  }
+
+  function copySvgButton(x, y, text, label = "Copy") {
+    return `<g class="copy-button copy-button-svg" data-copy-text="${escapeHtml(text)}" role="button" tabindex="0" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}"><rect x="${x}" y="${y}" width="16" height="16" rx="3" fill="#fffdf9" stroke="#c9c1b4"/><g transform="translate(${x} ${y})">${copyIcon}</g></g>`;
+  }
+
+  function bindCopyButtons(root = document) {
+    root.querySelectorAll?.("[data-copy-text], [data-copy-target]").forEach((button) => {
+      if (button.dataset.copyBound === "true") return;
+      button.dataset.copyBound = "true";
+      const originalLabel = button.getAttribute("aria-label") || "Copy";
+      const feedback = (message, success) => {
+        button.classList.toggle("copied", success);
+        button.setAttribute("aria-label", message);
+        button.setAttribute("title", message);
+        window.clearTimeout(button._copyFeedbackTimer);
+        button._copyFeedbackTimer = window.setTimeout(() => {
+          button.classList.remove("copied");
+          button.setAttribute("aria-label", originalLabel);
+          button.setAttribute("title", originalLabel);
+        }, 1400);
+      };
+      const activate = async (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const target = button.dataset.copyTarget ? button.closest("details")?.querySelector(button.dataset.copyTarget) : null;
+        const text = button.dataset.copyText ?? target?.textContent ?? "";
+        const copied = await copyToClipboard(text);
+        feedback(copied ? "Copied" : "Copy unavailable", copied);
+      };
+      button.addEventListener("click", activate);
+      button.addEventListener("keydown", (event) => {
+        if (["Enter", " "].includes(event.key)) activate(event);
+      });
+    });
+  }
   const symbolRenderer = globalThis.BMOPFRenderers?.createSymbolRenderer({ escapeHtml, colourOf, sameRef, resultStatus, resultTooltip, titleOf });
 
   function setStatus(text) { $("view-status").textContent = text || ""; }
@@ -1204,7 +1269,7 @@
     }
     const uniqueRelated = related.filter((ref, i, all) => all.findIndex((candidate) => candidate.kind === ref.kind && candidate.id === ref.id) === i && itemFor(ref));
     const relatedHtml = uniqueRelated.length ? `<h3>Related</h3><div class="related">${uniqueRelated.map((r) => `<button class="link-button" data-related-kind="${escapeHtml(r.kind)}" data-related-id="${escapeHtml(r.id)}">${escapeHtml(r.kind)} ${escapeHtml(r.id)}</button>`).join("")}</div>` : "";
-    const portHtml = item.ports?.length ? `<h3>Ports</h3><table class="property-table">${item.ports.map((p) => `<tr><th>${escapeHtml(p.role || p.id)}</th><td>${escapeHtml(p.busId)} · [${p.terminals.map(escapeHtml).join(", ")}]</td></tr>`).join("")}</table>` : "";
+    const portHtml = item.ports?.length ? `<h3>Ports</h3><table class="property-table">${item.ports.map((p) => { const role = p.role || p.id; const value = `${p.busId} · [${p.terminals.join(", ")}]`; return `<tr><th>${escapeHtml(role)}</th><td><span class="copyable-value-text">${escapeHtml(value)}</span>${copyButton(`${role}: ${value}`, `Copy ${role} port`)}</td></tr>`; }).join("")}</table>` : "";
     const result = state.result ? resultRecordFor(item) : null;
     const comparison = state.resultCompare ? comparisonRecordFor(item) : null;
     const resultKeys = ["vm", "va", "v_magnitude", "v_angle", "voltage_deviation", "vm_deviation", "v_deviation", "p", "q", "pg", "qg", "loading", "status", "in_service", "residual"];
@@ -1215,20 +1280,25 @@
     const metricRows = metricKeys.map((key) => {
       const current = result?.[key]; const other = comparison?.[key]; const delta = comparisonDelta(current, other);
       const unitContext = { kind: item.ref.kind, source: "result" };
-      return `<tr><th>${escapeHtml(key)}</th><td>${current === undefined ? "—" : escapeHtml(formatInspectorValue(current, key, unitContext))}</td>${state.resultCompare ? `<td>${other === undefined ? "—" : escapeHtml(formatInspectorValue(other, key, unitContext))}</td><td>${delta === null ? "—" : escapeHtml(formatInspectorValue(delta, key, unitContext))}</td>` : ""}</tr>`;
+      const currentText = current === undefined ? "—" : formatInspectorValue(current, key, unitContext);
+      const otherText = other === undefined ? "—" : formatInspectorValue(other, key, unitContext);
+      const deltaText = delta === null ? "—" : formatInspectorValue(delta, key, unitContext);
+      const rowText = state.resultCompare ? `${key}\tcurrent: ${currentText}\tcomparison: ${otherText}\tΔ: ${deltaText}` : `${key}: ${currentText}`;
+      return `<tr><th>${escapeHtml(key)}${copyButton(rowText, `Copy ${key} result row`)}</th><td>${escapeHtml(currentText)}</td>${state.resultCompare ? `<td>${escapeHtml(otherText)}</td><td>${escapeHtml(deltaText)}</td>` : ""}</tr>`;
     }).join("");
     const resultColspan = state.resultCompare ? 4 : 2;
-    const comparisonRaw = state.resultCompare ? `<details><summary>Raw comparison record</summary><pre class="raw comparison-raw"></pre></details>` : "";
-    const resultHtml = state.result ? (result ? `<h3 class="result-heading">Simulation / optimisation result${state.resultCompare ? " · comparison" : ""}</h3><table class="property-table result-table">${comparisonHeader}${metricRows || `<tr><td colspan="${resultColspan}" class="muted">No recognised metrics were found for this record.</td></tr>`}</table><details><summary>Raw result record</summary><pre class="raw result-raw"></pre></details>${comparisonRaw}` : `<p class="muted result-missing">No result record found for this asset.</p>`) : "";
+    const comparisonRaw = state.resultCompare ? `<details class="copyable-details"><summary>Raw comparison record ${copyTargetButton("Copy raw comparison record")}</summary><pre class="raw comparison-raw"></pre></details>` : "";
+    const resultHtml = state.result ? (result ? `<h3 class="result-heading">Simulation / optimisation result${state.resultCompare ? " · comparison" : ""}</h3><table class="property-table result-table">${comparisonHeader}${metricRows || `<tr><td colspan="${resultColspan}" class="muted">No recognised metrics were found for this record.</td></tr>`}</table><details class="copyable-details"><summary>Raw result record ${copyTargetButton("Copy raw result record")}</summary><pre class="raw result-raw"></pre></details>${comparisonRaw}` : `<p class="muted result-missing">No result record found for this asset.</p>`) : "";
     const unitContext = { kind: item.ref.kind, source: "case" };
-    const propertyRows = keys.map((key) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatInspectorValue(record[key], key, unitContext))}</td></tr>`).join("");
-    $("inspector").innerHTML = `<h3>${escapeHtml(titleOf(item))}</h3><p class="muted">status: ${escapeHtml(item.status)} · support: ${escapeHtml(item.support || "raw-only")}</p><p class="support-note">${escapeHtml(supportNote)}</p><p class="support-note inspector-units-note">Physical quantities are displayed in SI base units (without automatic scaling); engineering angles and geographic coordinates retain their degree convention. Unknown fields remain in their source form.</p>${relatedHtml}${portHtml}${resultHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${propertyRows}</table><details><summary>Raw record</summary><pre class="raw"></pre></details>`;
-    $("inspector").querySelector(".raw").textContent = JSON.stringify(record, null, 2);
+    const propertyRows = keys.map((key) => { const value = formatInspectorValue(record[key], key, unitContext); return `<tr><th>${escapeHtml(key)}</th><td><span class="copyable-value-text">${escapeHtml(value)}</span>${copyButton(`${key}: ${value}`, `Copy ${key} property`)}</td></tr>`; }).join("");
+    $("inspector").innerHTML = `<h3>${escapeHtml(titleOf(item))}</h3><p class="muted">status: ${escapeHtml(item.status)} · support: ${escapeHtml(item.support || "raw-only")}</p><p class="support-note">${escapeHtml(supportNote)}</p><p class="support-note inspector-units-note">Physical quantities are displayed in SI base units (without automatic scaling); engineering angles and geographic coordinates retain their degree convention. Unknown fields remain in their source form.</p>${relatedHtml}${portHtml}${resultHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${propertyRows}</table><details class="copyable-details"><summary>Raw record ${copyTargetButton("Copy raw component record")}</summary><pre class="raw component-raw"></pre></details>`;
+    $("inspector").querySelector(".component-raw").textContent = JSON.stringify(record, null, 2);
     const resultRaw = $("inspector").querySelector(".result-raw");
     if (resultRaw) resultRaw.textContent = JSON.stringify(result, null, 2);
     const comparisonRawNode = $("inspector").querySelector(".comparison-raw");
     if (comparisonRawNode) comparisonRawNode.textContent = JSON.stringify(comparison, null, 2);
     $("inspector").querySelectorAll("[data-related-kind]").forEach((button) => button.addEventListener("click", () => select({ kind: button.dataset.relatedKind, id: button.dataset.relatedId })));
+    bindCopyButtons($("inspector"));
   }
 
   function formatValue(value) {
@@ -1517,6 +1587,7 @@
       content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Select an incident device to expand its conductor pairing</text>`;
       setMultiStatus(`${item.terminals.length} terminals · ${incident.length} assets across ${neighbourhood.buses.size} buses · ${state.multiHops}-hop`);
       target.innerHTML = multiShell(content);
+      bindCopyButtons(target);
       bindSvgSelection(target);
       return;
     }
@@ -1554,6 +1625,7 @@
       content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Each winding keeps its bus and terminal stack; no false direct bus-to-bus edges are drawn</text>`;
       setMultiStatus(`${item.ports.length} winding ports · ${item.status}`);
       target.innerHTML = multiShell(content);
+      bindCopyButtons(target);
       bindSvgSelection(target);
       return;
     }
@@ -1579,6 +1651,7 @@
       content += `<text x="380" y="${footerY}" text-anchor="middle" fill="#70695f" font-size="12">Single-bus attachment · inspect properties for device details</text>`;
       setMultiStatus(`${terminals.length} attached terminals · ${item.status}`);
       target.innerHTML = multiShell(content);
+      bindCopyButtons(target);
       bindSvgSelection(target);
       return;
     }
@@ -1609,6 +1682,7 @@
       content += `<text x="380" y="${Math.max(365, rowY[rowY.length - 1] + 58)}" text-anchor="middle" fill="#70695f" font-size="12">${item.status === "open" ? "Open switch: each conductor path is interrupted independently" : "Closed switch: each conductor path is switched independently"}</text>`;
       setMultiStatus(`${pairs.length} conductor switches · ${item.status}`);
       target.innerHTML = multiShell(content, { size: { width: 760, height: Math.max(500, rowY[rowY.length - 1] + 90) } });
+      bindCopyButtons(target);
       bindSvgSelection(target);
       return;
     }
@@ -1624,6 +1698,8 @@
       const header = labels.map((label, i) => `<text x="${boxX + 55 + i * columnStep}" y="${boxY + 47}" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(label)}</text>`).join("");
       const matrixRows = branch.series.map((row, i) => `<text x="${boxX + 18}" y="${boxY + 68 + i * 28}" fill="#37332c" font-size="9">${escapeHtml(labels[i] || String(i + 1))}</text>${row.map((entry, j) => `<text x="${boxX + 55 + j * columnStep}" y="${boxY + 68 + i * 28}" text-anchor="middle" fill="#37332c" font-size="9">${escapeHtml(formatComplex(entry))}</text>`).join("")}`).join("");
       const formatAdmittance = (entry) => entry.g === null && entry.b === null ? "—" : `${entry.g === null ? "—" : formatImpedance(entry.g)}${entry.b === null ? "" : ` + j${formatImpedance(entry.b)}`} S`;
+      const matrixText = (name, matrix, formatter) => `${name}\nterminal\t${labels.join("\t")}\n${matrix.map((row, i) => `${labels[i] || String(i + 1)}\t${row.map(formatter).join("\t")}`).join("\n")}`;
+      const branchCopyText = [`${titleOf(item)}\t${branch.source}`, matrixText("Series impedance Zs [Ω]", branch.series, formatComplex), branch.shuntPresent ? matrixText("Shunt admittance Yfrom [S]", branch.shunt.from, formatAdmittance) : "Pure series branch · shunt admittance omitted", branch.shuntPresent ? matrixText("Shunt admittance Yto [S]", branch.shunt.to, formatAdmittance) : ""].filter(Boolean).join("\n\n");
       const matrixBox = (side, x, y, width) => {
         const matrix = branch.shunt[side] || [];
         const step = Math.min(42, (width - 48) / Math.max(pairs.length - 1, 1));
@@ -1634,7 +1710,7 @@
       const shuntY = boxY + boxHeight + 18;
       const shuntHeight = 48 + pairs.length * 20 + 76;
       const branchHeight = branch.shuntPresent ? shuntY + shuntHeight + 42 : boxY + boxHeight + 58;
-      content += `<g data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><rect x="${boxX}" y="${boxY}" width="${boxWidth}" height="${boxHeight}" rx="10" fill="#f4f1ea" stroke="${colourOf(item.ref.kind)}" stroke-width="2"/><text x="${boxX + boxWidth / 2}" y="${boxY + 20}" text-anchor="middle" fill="#37332c" font-size="12" font-weight="700">Π branch model</text><text x="${boxX + boxWidth / 2}" y="${boxY + 34}" text-anchor="middle" fill="#70695f" font-size="9">Series Zs [Ω] · ${escapeHtml(branch.source)}</text>${header}${matrixRows}${branch.shuntPresent ? "" : `<text x="${boxX + boxWidth / 2}" y="${boxY + boxHeight - 14}" text-anchor="middle" fill="#70695f" font-size="10">Pure series branch · shunt admittance omitted</text>`}</g>`;
+      content += `<g data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><rect x="${boxX}" y="${boxY}" width="${boxWidth}" height="${boxHeight}" rx="10" fill="#f4f1ea" stroke="${colourOf(item.ref.kind)}" stroke-width="2"/><text x="${boxX + boxWidth / 2}" y="${boxY + 20}" text-anchor="middle" fill="#37332c" font-size="12" font-weight="700">Π branch model</text><text x="${boxX + boxWidth / 2}" y="${boxY + 34}" text-anchor="middle" fill="#70695f" font-size="9">Series Zs [Ω] · ${escapeHtml(branch.source)}</text>${copySvgButton(boxX + boxWidth - 24, boxY + 7, branchCopyText, "Copy branch matrices")}${header}${matrixRows}${branch.shuntPresent ? "" : `<text x="${boxX + boxWidth / 2}" y="${boxY + boxHeight - 14}" text-anchor="middle" fill="#70695f" font-size="10">Pure series branch · shunt admittance omitted</text>`}</g>`;
       if (branch.shuntPresent) content += `<g>${matrixBox("from", boxX, shuntY, 190)}${matrixBox("to", boxX + 210, shuntY, 190)}</g>`;
       pairs.forEach(([a, b], i) => {
         const yLeft = leftPanel.rowY[i] || (142 + i * 34); const yRight = rightPanel.rowY[i] || (142 + i * 34); const visual = conductorVisual(a, b, left.busId, right.busId, i);
@@ -1644,6 +1720,7 @@
       content += `<text x="470" y="${branch.shuntPresent ? branchHeight - 16 : branchHeight - 16}" text-anchor="middle" fill="#70695f" font-size="10">R and X are absolute series impedance entries in Ω; shunt G/B entries are absolute admittance values in S.</text>`;
       setMultiStatus(`${pairs.length} conductor pairs · ${item.status} · ${branch.shuntPresent ? "Π series + shunt model" : "pure series model"}`);
       target.innerHTML = multiShell(content, { size: { width: canvasWidth, height: Math.max(510, branchHeight) } });
+      bindCopyButtons(target);
       bindSvgSelection(target);
       return;
     }
@@ -1675,6 +1752,7 @@
     content += `${mappingNote}<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">${item.status === "open" ? "Open switch: conductor paths are intentionally interrupted" : "Ordered conductor pairing from source terminal maps"}</text>`;
     setMultiStatus(`${pairs.length} conductor pairs · ${item.status}${connection.warning ? " · terminal-map warning" : ""}`);
     target.innerHTML = multiShell(content);
+    bindCopyButtons(target);
     bindSvgSelection(target);
   }
 
@@ -1734,11 +1812,12 @@
         ? '<button class="diagnostic-target" data-kind="' + escapeHtml(diagnostic.kind) + '" data-id="' + escapeHtml(diagnostic.id) + '">' + escapeHtml(diagnostic.kind.replaceAll("_", " ")) + ' ' + escapeHtml(diagnostic.id) + '</button>'
         : '<span class="muted">No linked asset</span>';
       const category = diagnostic.category ? '<span class="diagnostic-category">' + escapeHtml(diagnostic.category) + '</span>' : "";
-      return '<article class="diagnostic-card ' + severity + '"><div class="diagnostic-heading"><span class="diagnostic-severity">' + escapeHtml(severity) + '</span>' + category + target + '</div><p>' + escapeHtml(diagnostic.message) + '</p><details><summary>Diagnostic data</summary><pre class="raw">' + escapeHtml(JSON.stringify(diagnostic.raw, null, 2)) + '</pre></details></article>';
+      return '<article class="diagnostic-card ' + severity + '"><div class="diagnostic-heading"><span class="diagnostic-severity">' + escapeHtml(severity) + '</span>' + category + target + '</div><p>' + escapeHtml(diagnostic.message) + '</p><details class="copyable-details"><summary>Diagnostic data ' + copyTargetButton("Copy diagnostic data") + '</summary><pre class="raw">' + escapeHtml(JSON.stringify(diagnostic.raw, null, 2)) + '</pre></details></article>';
     }).join("");
     $("canvas").innerHTML = '<div class="diagnostics-view"><div class="diagnostics-heading"><h2>Result diagnostics</h2><span class="muted">' + (diagnostics.length === allDiagnostics.length ? diagnostics.length : diagnostics.length + ' of ' + allDiagnostics.length) + ' finding' + (allDiagnostics.length === 1 ? "" : "s") + '</span></div>' + filterControls + cards + '</div>';
     setStatus(diagnostics.length + ' result diagnostic' + (diagnostics.length === 1 ? "" : "s") + (state.resultScenario ? ' · ' + state.resultScenario : ""));
     bindDiagnosticFilters();
+    bindCopyButtons($("canvas"));
     bindSvgSelection();
   }
 
