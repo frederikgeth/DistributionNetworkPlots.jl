@@ -235,6 +235,7 @@
 
   let elkWorker = null;
   let elkBusy = false;
+  let elkMainThread = false;
   function elkErrorMessage(error) {
     const message = error && error.message ? String(error.message) : String(error || "unknown error");
     return /worker.*not a constructor|_worker/i.test(message) ? "Web Workers are not available in this browser." : message;
@@ -242,18 +243,29 @@
   function ensureElkWorker() {
     const WorkerCtor = typeof globalThis.Worker === "function" ? globalThis.Worker : null;
     const createObjectURL = globalThis.URL && typeof globalThis.URL.createObjectURL === "function" ? globalThis.URL.createObjectURL.bind(globalThis.URL) : null;
-    if (!WorkerCtor || !createObjectURL) throw new Error("Web Workers are not available in this browser.");
+    if (!WorkerCtor) throw new Error("Web Workers are not available in this browser.");
     if (elkWorker) return elkWorker;
     const handler = 'self.onmessage = async function(event) { try { const result = await new self.ELK().layout(event.data); self.postMessage({ ok: true, result: result }); } catch (error) { self.postMessage({ ok: false, error: error && error.message ? error.message : String(error) }); } };';
     const embeddedBundle = typeof globalThis.__BMOPF_ELK_BUNDLE_SOURCE__ === "string" ? globalThis.__BMOPF_ELK_BUNDLE_SOURCE__ : null;
-    const bundleUrl = (() => { try { return new URL("vendor/elk.bundled.js", document.baseURI).href; } catch (_) { return "vendor/elk.bundled.js"; } })();
-    const source = embeddedBundle ? `${embeddedBundle}\n${handler}` : `importScripts(${JSON.stringify(bundleUrl)});${handler}`;
+    if (!embeddedBundle) {
+      // A blob worker cannot import a file:// URL in Chromium. Use the
+      // adjacent classic worker script for source-mode and static builds.
+      elkWorker = new WorkerCtor(new URL("vendor/elk.worker.js", document.baseURI).href);
+      return elkWorker;
+    }
+    if (!createObjectURL) throw new Error("Blob URLs are not available in this browser.");
+    const source = `${embeddedBundle}\n${handler}`;
     const blobUrl = createObjectURL(new Blob([source], { type: "text/javascript" }));
     elkWorker = new WorkerCtor(blobUrl); setTimeout(() => globalThis.URL.revokeObjectURL(blobUrl), 1000);
     return elkWorker;
   }
 
   function layoutWithElkWorker(graph) {
+    const localFileMode = /^file:/i.test(String(document.baseURI || ""));
+    if (localFileMode && typeof globalThis.__BMOPF_ELK_BUNDLE_SOURCE__ !== "string") {
+      elkMainThread = true;
+      return loadElkMainThread().then(() => new globalThis.ELK().layout(graph));
+    }
     const worker = ensureElkWorker();
     return new Promise((resolve, reject) => {
       const cleanup = () => { worker.removeEventListener("message", receive); worker.removeEventListener("error", fail); worker.removeEventListener("messageerror", fail); };
@@ -263,6 +275,20 @@
       worker.addEventListener("error", fail);
       worker.addEventListener("messageerror", fail);
       try { worker.postMessage(graph); } catch (error) { fail(error); }
+    });
+  }
+
+  function loadElkMainThread() {
+    if (typeof globalThis.ELK === "function") return Promise.resolve();
+    const existing = document.querySelector("script[data-bmopf-elk]");
+    if (existing) return new Promise((resolve, reject) => { existing.addEventListener("load", resolve, { once: true }); existing.addEventListener("error", () => reject(new Error("The local ELK bundle could not be loaded.")), { once: true }); });
+    return new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.dataset.bmopfElk = "true";
+      script.src = new URL("vendor/elk.bundled.js", document.baseURI).href;
+      script.onload = resolve;
+      script.onerror = () => reject(new Error("The local ELK bundle could not be loaded."));
+      document.head.appendChild(script);
     });
   }
 
@@ -310,7 +336,7 @@
         if (points.length >= 2) nextRoutes[String(edge.id)] = points;
       });
       state.layout.locked = nextLocked; state.layout.routes = nextRoutes; state.layout.engine = "elk"; saveLayout(); renderView(); renderCameraControls();
-      setStatus(`ELK layered layout applied in a worker to ${children.length} buses; positions are now locally persisted.`);
+      setStatus(`ELK layered layout applied ${elkMainThread ? "on the main thread for local-file mode" : "in a worker"} to ${children.length} buses; positions are now locally persisted.`);
     } catch (error) {
       setStatus(`ELK layout unavailable: ${elkErrorMessage(error)}`);
       state.layout.engine = "deterministic";

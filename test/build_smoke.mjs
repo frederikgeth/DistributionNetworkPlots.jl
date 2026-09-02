@@ -12,6 +12,7 @@ const result = await buildStatic({ rootDir: projectRoot, outDir });
 const index = await readFile(join(outDir, "index.html"), "utf8");
 const bundle = await readFile(join(outDir, "assets", "bmopf-explorer.js"), "utf8");
 const elk = await readFile(join(outDir, "vendor", "elk.bundled.js"), "utf8");
+const worker = await readFile(join(outDir, "vendor", "elk.worker.js"), "utf8");
 const deterministicSource = await readFile(join(projectRoot, "frontend", "layout", "deterministic.js"), "utf8");
 const manifest = JSON.parse(await readFile(join(outDir, "build-manifest.json"), "utf8"));
 
@@ -28,6 +29,7 @@ assert.match(bundle, /BMOPFLayouts/);
 assert.match(bundle, /Geospatial/);
 assert.match(bundle, /Single-line diagram/);
 assert.match(elk, /ELK/);
+assert.match(worker, /importScripts\("elk\.bundled\.js"\)/);
 
 const sandbox = { globalThis: {} };
 vm.runInNewContext(deterministicSource, sandbox);

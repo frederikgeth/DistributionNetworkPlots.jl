@@ -478,6 +478,11 @@ from Julia report generation: `render_case` embeds source modules directly so
 its single-file reports remain self-contained and do not depend on a generated
 `dist/` directory.
 
+ELK uses the adjacent worker entrypoint for hosted source/static pages. A
+`file://` source page cannot import a file URL from a blob worker, so it falls
+back to loading the pinned bundle on the main thread when the user explicitly
+requests ELK; embedded Julia reports retain their in-document worker path.
+
 ## 11. Quality attributes
 
 ### 11.1 Correctness

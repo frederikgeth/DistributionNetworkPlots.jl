@@ -72,6 +72,11 @@ not equipment protection limits.
 
 The prototype intentionally has no external basemap or runtime backend. Its layout is deterministic by default. Dense single-line cases use a content-sized, scrollable canvas and preserve a minimum gap between buses in the same topology layer, rather than compressing every layer into the viewport. The Single-wire controls can optionally load the vendored ELK Layered browser bundle (`elkjs@0.10.2`) in a Web Worker and persist the resulting bus positions and orthogonal edge sections. Layout profiles are cached per case identity, direction, and root bus; selecting a root passes a fixed-root preference to ELK. Manual bus nudges invalidate routed sections and use deterministic paths until ELK is applied again. If workers or the bundle are unavailable, the deterministic layout remains usable offline.
 
+Source-mode and `dist/` pages use the adjacent `vendor/elk.worker.js` entrypoint,
+which avoids the `file://` import restriction that affects blob workers. When
+the page itself is opened with `file://`, the viewer loads ELK on the main
+thread as a local-file fallback; hosted pages continue to use the worker.
+
 Generated Julia reports embed the pinned ELK bundle in the HTML so the optional
 layout remains available without a network connection.
 

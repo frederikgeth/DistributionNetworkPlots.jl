@@ -51,6 +51,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Optional ELK Layered layout can be applied from the browser and persisted, with deterministic offline fallback.
 - [x] Run optional ELK layout computation in a Web Worker so the browser UI remains responsive during layout.
 - [x] Vendor the pinned ELK browser bundle, embed it in Julia reports, and cache layout profiles by case and layout options.
+- [x] Add a local-file ELK fallback that loads the pinned bundle on the main thread when browser security blocks worker imports.
 - [x] Apply ELK orthogonal edge sections to single-line SVG paths and pass the selected root as a fixed ELK processing root.
 - [x] Use content-sized, minimum-gap single-line canvases for dense feeders, with scrollable overflow and invalidated legacy routed profiles.
 - [x] Faithful focused multi-wire view shows terminal stacks, phase permutations, neutral/ground cues, open-switch interruptions, and explicit transformer windings.
