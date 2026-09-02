@@ -321,6 +321,7 @@ try {
     assert.match(multiWindingText, /galvanically isolated windings/);
     assert.ok(await page.locator('#canvas g[aria-label="left WYE winding"] circle').count() >= 3);
     assert.ok(await page.locator('#canvas g[aria-label="right WYE winding"] circle').count() >= 4);
+    assert.ok(await page.locator('#canvas g[aria-label="bottom DELTA winding"] circle').count() >= 3);
     assert.match(multiWindingText, /Each winding keeps its bus and terminal stack/);
     await page.locator("#file-input").setInputFiles({ name: "large-browser-smoke-case.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(largeCase)) });
     await page.locator("#case-summary h2").waitFor({ state: "visible" });

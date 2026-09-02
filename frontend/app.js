@@ -1259,10 +1259,14 @@
     const phaseColours = ["#c2564b", "#4a8f5f", "#3f6fb9"];
     const neutralIndex = terminals.findIndex((terminal) => /^(n|neutral|g|pe|ground|earth)$/i.test(String(terminal)));
     const phaseEntries = terminals.map((terminal, index) => ({ terminal, index })).filter(({ index }) => index !== neutralIndex).slice(0, 3);
+    const horizontalEdge = side === "top" || side === "bottom";
     const edgeX = side === "left" ? body.x : body.x + body.width;
-    const terminalPoints = terminals.map((_, index) => [edgeX, body.y + 28 + index * ((body.height - 56) / Math.max(terminals.length - 1, 1))]);
-    const cx = side === "left" ? body.x + 53 : body.x + body.width - 53;
-    const cy = body.y + body.height / 2 + 4;
+    const edgeY = side === "top" ? body.y : body.y + body.height;
+    const terminalPoints = horizontalEdge
+      ? terminals.map((_, index) => [body.x + 28 + index * ((body.width - 56) / Math.max(terminals.length - 1, 1)), edgeY])
+      : terminals.map((_, index) => [edgeX, body.y + 28 + index * ((body.height - 56) / Math.max(terminals.length - 1, 1))]);
+    const cx = side === "left" ? body.x + 53 : side === "right" ? body.x + body.width - 53 : body.x + body.width / 2;
+    const cy = side === "top" ? body.y + 53 : side === "bottom" ? body.y + body.height - 53 : body.y + body.height / 2 + 4;
     const dotHtml = terminalPoints.map(([px, py], index) => {
       const visual = conductorVisual(terminals[index], terminals[index], busId, busId, index);
       return `<circle cx="${px}" cy="${py}" r="4" fill="#fffdf9" stroke="${visual.colour}" stroke-width="2"/>`;
@@ -1284,7 +1288,8 @@
       }
       return `<path d="${path}" fill="none" stroke="${colour}" stroke-width="2.6" stroke-linecap="round"/>`;
     };
-    let html = `<g aria-label="${escapeHtml(side)} ${escapeHtml(configLabel || "terminal")} winding"><text x="${cx}" y="${body.y + 18}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">${escapeHtml(`${sideLabel}${configLabel || "terminal"}`)}</text>${dotHtml}`;
+    const labelY = side === "bottom" ? body.y + body.height - 10 : body.y + 18;
+    let html = `<g aria-label="${escapeHtml(side)} ${escapeHtml(configLabel || "terminal")} winding"><text x="${cx}" y="${labelY}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">${escapeHtml(`${sideLabel}${configLabel || "terminal"}`)}</text>${dotHtml}`;
     if (config === "DELTA" && phaseEntries.length >= 3) {
       const points = [[cx, cy - 29], [cx - 25, cy + 17], [cx + 25, cy + 17]];
       html += `<path d="M${points[0][0]} ${points[0][1]}L${points[1][0]} ${points[1][1]}L${points[2][0]} ${points[2][1]}Z" fill="none" stroke="#4f789f" stroke-width="2"/>`;
@@ -1319,11 +1324,10 @@
     return { html, terminalPoints };
   }
 
-  function transformerIsolationAndCoils(body) {
+  function transformerIsolationAndCoils(body, isolationBottom = body.y + body.height - 28) {
     const mid = body.x + body.width / 2;
     const top = body.y + 32;
-    const bottom = body.y + body.height - 28;
-    return `<line x1="${mid - 5}" y1="${top}" x2="${mid - 5}" y2="${bottom}" stroke="#4f789f" stroke-width="2"/><line x1="${mid + 5}" y1="${top}" x2="${mid + 5}" y2="${bottom}" stroke="#4f789f" stroke-width="2"/>`;
+    return `<line x1="${mid - 5}" y1="${top}" x2="${mid - 5}" y2="${isolationBottom}" stroke="#4f789f" stroke-width="2"/><line x1="${mid + 5}" y1="${top}" x2="${mid + 5}" y2="${isolationBottom}" stroke="#4f789f" stroke-width="2"/>`;
   }
 
   function singleDeviceConnectionDiagram(item, configuration, terminals, x, y) {
@@ -1684,23 +1688,23 @@
       return;
     }
     if (item.ref.kind === "transformer" && item.ports?.length > 2) {
-      const body = { x: 280, y: 140, width: 200, height: 190 };
+      const body = { x: 280, y: 100, width: 200, height: 240 };
       const layouts = item.ports.map((_, i) => {
         if (i === 0) return { x: 25, y: 78, width: 205, side: "left" };
         if (i === 1) return { x: 530, y: 78, width: 205, side: "right" };
         const count = item.ports.length - 2;
         const width = Math.min(205, Math.max(150, 680 / Math.max(count, 1)));
         const x = 380 - (width * count) / 2 + (i - 2) * width;
-        return { x, y: 335, width, side: "top" };
+        return { x, y: 370, width, side: "top" };
       });
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · winding detail</tspan></text><rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="10" fill="#e8f0f8" stroke="#4f789f" stroke-width="3"/><text x="380" y="${body.y + 28}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">galvanically isolated windings</text>${transformerIsolationAndCoils(body)}`;
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · winding detail</tspan></text><rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="10" fill="#e8f0f8" stroke="#4f789f" stroke-width="3"/><text x="380" y="${body.y + 28}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">galvanically isolated windings</text>${transformerIsolationAndCoils(body, body.y + body.height - 105)}`;
       item.ports.forEach((winding, i) => {
         const layout = layouts[i];
         const bus = state.index.buses.find((candidate) => candidate.ref.id === winding.busId) || { ref: { id: winding.busId }, groundedTerminals: [] };
         const windingRecord = item.sourceRecord?.windings?.[i] || {};
         const panel = multiWindingPanel(bus, winding, layout.x, layout.y, layout.width, layout.side);
         content += panel.html;
-        const interior = i < 2 ? transformerWindingInterior(windingRecord.configuration, body, i === 0 ? "left" : "right", winding.terminals || [], winding.busId, null, { coil: true }) : null;
+        const interior = i < 3 ? transformerWindingInterior(windingRecord.configuration, body, i === 0 ? "left" : i === 1 ? "right" : "bottom", winding.terminals || [], winding.busId, null, { coil: true }) : null;
         if (interior) content += interior.html;
         panel.anchors.forEach((anchor, terminalIndex) => {
           const terminal = winding.terminals[terminalIndex] || "?";
@@ -1713,9 +1717,9 @@
         const details = [windingRecord.configuration, windingRecord.v_nom === undefined ? null : `V ${formatValue(windingRecord.v_nom)}`].filter(Boolean).join(" · ");
         content += `<text x="${layout.side === "left" ? layout.x + layout.width + 8 : layout.side === "right" ? layout.x - 8 : layout.x + layout.width / 2}" y="${layout.side === "top" ? layout.y + 78 : layout.y + 42}" text-anchor="${layout.side === "left" ? "start" : layout.side === "right" ? "end" : "middle"}" fill="#70695f" font-size="10">${escapeHtml(details || winding.role)}</text>`;
       });
-      content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Each winding keeps its bus and terminal stack; no false direct bus-to-bus edges are drawn</text>`;
+      content += `<text x="380" y="535" text-anchor="middle" fill="#70695f" font-size="12">Each winding keeps its bus and terminal stack; no false direct bus-to-bus edges are drawn</text>`;
       setMultiStatus(`${item.ports.length} winding ports · ${item.status}`);
-      target.innerHTML = multiShell(content);
+      target.innerHTML = multiShell(content, { size: { width: 760, height: 580 } });
       bindCopyButtons(target);
       bindSvgSelection(target);
       return;
