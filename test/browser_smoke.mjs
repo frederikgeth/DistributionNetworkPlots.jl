@@ -83,11 +83,13 @@ try {
     await page.locator('button[data-kind="line"][data-id="line_main"]').click();
     const draggableLine = page.locator('g.sld-draggable[data-kind="line"][data-id="line_main"]');
     assert.equal(await draggableLine.count(), 1);
-    const lineBox = await draggableLine.boundingBox();
-    assert.ok(lineBox);
-    await page.mouse.move(lineBox.x + lineBox.width / 2, lineBox.y + lineBox.height / 2);
+    // The symbol group spans its glyph and the label below it, so the bounding-box
+    // centre falls in the gap between them and hits nothing. Grab the glyph, which
+    // is drawn around the group's own translate origin.
+    const lineOrigin = await draggableLine.evaluate((node) => { const ctm = node.getScreenCTM(); return { x: ctm.e, y: ctm.f }; });
+    await page.mouse.move(lineOrigin.x, lineOrigin.y);
     await page.mouse.down();
-    await page.mouse.move(lineBox.x + lineBox.width / 2 + 18, lineBox.y + lineBox.height / 2 + 8);
+    await page.mouse.move(lineOrigin.x + 18, lineOrigin.y + 8);
     await page.mouse.up();
     const layoutAfterDeviceDrag = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:example-complete-feeder")));
     assert.ok(Object.values(layoutAfterDeviceDrag.profiles).some((profile) => Array.isArray(profile.positions?.["line:line_main"])));
