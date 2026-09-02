@@ -209,7 +209,9 @@ try {
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     const multiText = await page.locator("#canvas").innerText();
     assert.match(multiText, /terminal detail/);
-    assert.match(multiText, /Ordered conductor pairing/);
+    // A line renders the Pi branch model detail and returns before the generic
+    // conductor view, so the ordered-pairing note is asserted on the transformer.
+    assert.match(multiText, /\u03a0 branch model/);
     await inventorySearch.fill("switch_open");
     await page.locator('button[data-kind="switch"][data-id="switch_open"]').click();
     assert.match(await page.locator("#canvas").innerText(), /Open switch/);
