@@ -34,6 +34,7 @@ be matched for best-effort inspection.
 
 - Asset inventory and search.
 - Source-property inspection and raw-record display.
+- Inspector values use SI base units where BMOPF semantics are known (for example V, A, W, var, VA, Ω, Ω/m, S, m, Hz, and p.u.); engineering angles and geographic coordinates retain degrees. Unknown or model-dependent fields remain visibly unmodified and the raw record is always available.
 - Endpoint links from devices to buses.
 - Geospatial and schematic single-wire projections.
 - Focused multi-wire terminal stacks and conductor pairing for selected buses, lines, switches, and transformers, including phase permutations, explicit neutral/ground cues, one switch blade per conductor, and one panel per multi-winding transformer port.

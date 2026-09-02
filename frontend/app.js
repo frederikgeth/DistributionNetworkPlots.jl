@@ -1132,12 +1132,15 @@
     const comparisonHeader = state.resultCompare ? `<tr><th>metric</th><th>current</th><th>comparison</th><th>Δ</th></tr>` : "";
     const metricRows = metricKeys.map((key) => {
       const current = result?.[key]; const other = comparison?.[key]; const delta = comparisonDelta(current, other);
-      return `<tr><th>${escapeHtml(key)}</th><td>${current === undefined ? "—" : escapeHtml(formatValue(current))}</td>${state.resultCompare ? `<td>${other === undefined ? "—" : escapeHtml(formatValue(other))}</td><td>${delta === null ? "—" : escapeHtml(formatValue(delta))}</td>` : ""}</tr>`;
+      const unitContext = { kind: item.ref.kind, source: "result" };
+      return `<tr><th>${escapeHtml(key)}</th><td>${current === undefined ? "—" : escapeHtml(formatInspectorValue(current, key, unitContext))}</td>${state.resultCompare ? `<td>${other === undefined ? "—" : escapeHtml(formatInspectorValue(other, key, unitContext))}</td><td>${delta === null ? "—" : escapeHtml(formatInspectorValue(delta, key, unitContext))}</td>` : ""}</tr>`;
     }).join("");
     const resultColspan = state.resultCompare ? 4 : 2;
     const comparisonRaw = state.resultCompare ? `<details><summary>Raw comparison record</summary><pre class="raw comparison-raw"></pre></details>` : "";
     const resultHtml = state.result ? (result ? `<h3 class="result-heading">Simulation / optimisation result${state.resultCompare ? " · comparison" : ""}</h3><table class="property-table result-table">${comparisonHeader}${metricRows || `<tr><td colspan="${resultColspan}" class="muted">No recognised metrics were found for this record.</td></tr>`}</table><details><summary>Raw result record</summary><pre class="raw result-raw"></pre></details>${comparisonRaw}` : `<p class="muted result-missing">No result record found for this asset.</p>`) : "";
-    $("inspector").innerHTML = `<h3>${escapeHtml(titleOf(item))}</h3><p class="muted">status: ${escapeHtml(item.status)} · support: ${escapeHtml(item.support || "raw-only")}</p><p class="support-note">${escapeHtml(supportNote)}</p>${relatedHtml}${portHtml}${resultHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${keys.map((key) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatValue(record[key]))}</td></tr>`).join("")}</table><details><summary>Raw record</summary><pre class="raw"></pre></details>`;
+    const unitContext = { kind: item.ref.kind, source: "case" };
+    const propertyRows = keys.map((key) => `<tr><th>${escapeHtml(key)}</th><td>${escapeHtml(formatInspectorValue(record[key], key, unitContext))}</td></tr>`).join("");
+    $("inspector").innerHTML = `<h3>${escapeHtml(titleOf(item))}</h3><p class="muted">status: ${escapeHtml(item.status)} · support: ${escapeHtml(item.support || "raw-only")}</p><p class="support-note">${escapeHtml(supportNote)}</p><p class="support-note inspector-units-note">Physical quantities are displayed in SI base units (without automatic scaling); engineering angles and geographic coordinates retain their degree convention. Unknown fields remain in their source form.</p>${relatedHtml}${portHtml}${resultHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${propertyRows}</table><details><summary>Raw record</summary><pre class="raw"></pre></details>`;
     $("inspector").querySelector(".raw").textContent = JSON.stringify(record, null, 2);
     const resultRaw = $("inspector").querySelector(".result-raw");
     if (resultRaw) resultRaw.textContent = JSON.stringify(result, null, 2);
@@ -1150,6 +1153,44 @@
     if (Array.isArray(value)) return `[${value.map(formatValue).join(", ")}]`;
     if (value && typeof value === "object") return JSON.stringify(value);
     return String(value);
+  }
+
+  // Inspector values use the BMOPF convention of SI base units. The mapping is
+  // deliberately conservative: fields whose semantics vary by model (for
+  // example objective values or residuals) are left unlabelled rather than
+  // receiving an invented unit. Arrays receive one suffix for the whole value.
+  function unitForField(key, context = {}) {
+    const field = String(key || "").toLowerCase();
+    const kind = String(context.kind || "").toLowerCase();
+    if (!field) return null;
+    if (field === "base_frequency" || field === "frequency" || field.endsWith("_frequency")) return "Hz";
+    if (field === "length" || field === "distance" || field.endsWith("_length")) return "m";
+    if (field === "longitude" || field === "latitude") return "°";
+    if (field === "voltage_deviation" || field === "vm_deviation" || field === "v_deviation" || field.endsWith("_voltage_deviation")) return "p.u.";
+    if (field === "loading" || field.endsWith("_loading")) return "p.u.";
+    if (field === "x_sc" || field === "per_unit" || field.endsWith("_per_unit")) return "p.u.";
+    if (field === "va" || field === "v_angle" || field === "angle" || field.endsWith("_angle")) return "°";
+    if (field === "vm" || field === "v_magnitude" || field === "voltage" || field.startsWith("v_nom") || field.endsWith("_voltage")) return "V";
+    if (field === "i_max" || field === "i_nom" || field === "current" || field === "ampacity" || field.endsWith("_current")) return "A";
+    if (field === "s_rating" || field === "s_nom" || field === "apparent_power" || field.endsWith("_apparent_power")) return "VA";
+    if (field === "p" || field === "p_nom" || field === "p_min" || field === "p_max" || field === "pg" || field === "p_from" || field === "p_to" || field === "active_power" || field.endsWith("_active_power")) return "W";
+    if (field === "q" || field === "q_nom" || field === "q_min" || field === "q_max" || field === "qg" || field === "q_from" || field === "q_to" || field === "reactive_power" || field.endsWith("_reactive_power")) return "var";
+    if (/^(r|x)_series(?:_|$)/.test(field) || field === "impedance" || field.endsWith("_impedance")) return kind === "linecode" ? "Ω/m" : "Ω";
+    if (/^(g|b)(?:_|$)/.test(field) || field === "admittance" || field.endsWith("_admittance")) return "S";
+    return null;
+  }
+
+  function formatInspectorValue(value, key, context = {}) {
+    const unit = unitForField(key, context);
+    if (Array.isArray(value)) {
+      const content = value.map((entry) => entry && typeof entry === "object" ? formatInspectorValue(entry, "", context) : formatValue(entry)).join(", ");
+      return `[${content}]${unit ? ` ${unit}` : ""}`;
+    }
+    if (value && typeof value === "object") {
+      const content = Object.entries(value).map(([childKey, childValue]) => `${childKey}: ${formatInspectorValue(childValue, childKey, context)}`).join(", ");
+      return `{${content}}${unit ? ` ${unit}` : ""}`;
+    }
+    return `${formatValue(value)}${unit ? ` ${unit}` : ""}`;
   }
 
   function svgShell(content, options = {}) { const rendererContract = globalThis.BMOPFRendererContract; const camera = options.camera || state.cameras[state.view]; const shellOptions = { camera, view: state.view, escapeHtml, ...options }; return rendererContract ? rendererContract.svgShell(content, shellOptions) : `<svg${options.className ? ` class="${escapeHtml(options.className)}"` : ""}${options.size ? ` width="${Math.ceil(options.size.width)}" height="${Math.ceil(options.size.height)}" style="width:${Math.ceil(options.size.width)}px;height:${Math.ceil(options.size.height)}px;max-width:none"` : ""} viewBox="0 0 ${Math.ceil(options.size?.width || 760)} ${Math.ceil(options.size?.height || 500)}" role="img" aria-label="${escapeHtml(state.view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`; }

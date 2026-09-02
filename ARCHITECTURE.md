@@ -401,6 +401,11 @@ The inspector is driven by an asset presentation registry that declares:
 - Optional specialised sections.
 
 Every inspector includes an expandable, safely escaped raw-record view.
+Known physical fields are rendered with SI base-unit suffixes in the inspector
+(for example V, A, W, var, VA, Ω, Ω/m, S, m, Hz, and p.u.). Engineering angles
+and geographic coordinates retain their degree convention. The formatter is
+conservative: model-dependent or unknown fields are left unlabelled, while the
+raw record remains available for exact source values.
 
 ### 8.4 Asset-class overview
 
