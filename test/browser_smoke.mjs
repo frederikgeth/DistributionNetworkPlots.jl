@@ -62,6 +62,8 @@ try {
     assert.equal(await displayOptions.isVisible(), true);
     await displayOptions.locator("summary").click();
     assert.equal(await displayOptions.locator('input[data-display-option="showBusLabels"]').isChecked(), true);
+    assert.equal(await displayOptions.locator('input[data-display-option="showDeviceLabels"]').isChecked(), false);
+    assert.equal(await displayOptions.locator('input[data-display-option="showArrows"]').isChecked(), false);
     await displayOptions.locator('input[data-display-option="showDeviceLabels"]').uncheck();
     assert.equal(await displayOptions.locator('input[data-display-option="showDeviceLabels"]').isChecked(), false);
     await displayOptions.locator('input[data-display-option="showDeviceLabels"]').check();

@@ -10,7 +10,7 @@
   const SIDEBAR_WIDTH_DEFAULT = 360;
   const SIDEBAR_WIDTH_MIN = 280;
   const SIDEBAR_WIDTH_MAX = 640;
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusLabels: true, showDeviceLabels: true, showArrows: true, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusLabels: true, showDeviceLabels: false, showArrows: false, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -560,7 +560,7 @@
     if (!visible) return;
     pane.querySelectorAll("[data-display-option]").forEach((input) => {
       const option = input.dataset.displayOption;
-      const defaultValue = option === "labelsSelectedOnly" ? false : true;
+      const defaultValue = option === "showBusLabels";
       input.checked = state.singleDisplay?.[option] ?? defaultValue;
       input.onchange = () => {
         state.singleDisplay[option] = input.checked;
@@ -729,7 +729,7 @@
       const resultRange = state.result ? `load ${range(loading)} · ΔV ${range(voltage)}` : "—";
       return `<tr><th><button class="class-filter ${state.activeKind === kind ? "selected" : ""}" data-kind-filter="${escapeHtml(kind)}">${escapeHtml(kind.replaceAll("_", " "))}</button></th><td>${items.length}</td><td>${support.full || 0}/${support.focused || 0}/${support["raw-only"] || 0}</td><td>${escapeHtml(resultRange)}</td></tr>`;
     }).join("");
-    panel.innerHTML = `<div class="panel-heading"><h2>Class overview</h2><span class="muted">full / focused / raw</span></div><table class="property-table class-overview-table resizable-table" data-resizable-table="class-overview"><thead><tr><th>class</th><th>count</th><th>support</th><th>result ranges</th></tr></thead><tbody>${rows}</tbody></table>`;
+    panel.innerHTML = `<div class="panel-heading"><h2>Class overview</h2><span class="muted">full / focused / raw</span></div><p class="support-meta">Support counts renderer coverage in this view: <strong>full</strong> = overview and focused, <strong>focused</strong> = selected-detail view, <strong>partial</strong> = some semantics, <strong>raw-only</strong> = inspector only.</p><table class="property-table class-overview-table resizable-table" data-resizable-table="class-overview"><thead><tr><th>class</th><th>count</th><th title="Renderer coverage: full / focused / partial / raw-only">support</th><th>result ranges</th></tr></thead><tbody>${rows}</tbody></table>`;
     bindResizableTable(panel.querySelector(".resizable-table"));
     panel.querySelectorAll("[data-kind-filter]").forEach((button) => button.addEventListener("click", () => {
       state.activeKind = state.activeKind === button.dataset.kindFilter ? null : button.dataset.kindFilter;

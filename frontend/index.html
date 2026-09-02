@@ -36,8 +36,8 @@
         <summary>Display options</summary>
         <div class="display-options-list">
           <label><input type="checkbox" data-display-option="showBusLabels" checked> Show bus IDs</label>
-          <label><input type="checkbox" data-display-option="showDeviceLabels" checked> Show device IDs</label>
-          <label><input type="checkbox" data-display-option="showArrows" checked> Show connection arrows</label>
+          <label><input type="checkbox" data-display-option="showDeviceLabels"> Show device IDs</label>
+          <label><input type="checkbox" data-display-option="showArrows"> Show connection arrows</label>
           <label><input type="checkbox" data-display-option="labelsSelectedOnly"> Show labels only for the selected asset</label>
         </div>
         <p class="muted">These Single-wire-only switches are temporary page-session settings. Tooltips and selection still work when visual labels are hidden.</p>
@@ -91,6 +91,10 @@
               <li>Result overlays use green for nominal, amber for moderate, and red for high loading or voltage deviation; patterns and text repeat the meaning.</li>
               <li>A faint dashed leader in Single-wire connects a manually moved symbol to its computed electrical anchor.</li>
             </ul>
+          </details>
+          <details>
+            <summary>Class overview support</summary>
+            <p>The <strong>support</strong> column counts how much of each asset class the renderers cover: <strong>full</strong> means it appears in both the overview and focused views; <strong>focused</strong> means it is rendered when selected in a detail view; <strong>partial</strong> means only some semantics are rendered; and <strong>raw-only</strong> means the record is preserved in the inspector without a diagram renderer.</p>
           </details>
           <details>
             <summary>Data and units</summary>
