@@ -83,30 +83,18 @@ try {
     await page.locator('button[data-kind="line"][data-id="line_main"]').click();
     const draggableLine = page.locator('g.sld-draggable[data-kind="line"][data-id="line_main"]');
     assert.equal(await draggableLine.count(), 1);
-    // The symbol group spans its glyph and the label below it, so the bounding-box
-    // centre falls in the gap between them and hits nothing. Grab the glyph, which
-    // is drawn around the group's own translate origin.
+    // page.mouse takes raw viewport coordinates and does not scroll, so bring the
+    // symbol into view first. Grab it at its translate origin, where the glyph is
+    // drawn: the group's bounding box also spans the label 27px below, so the box
+    // centre falls in the unpainted gap between the two and hits nothing.
+    await draggableLine.scrollIntoViewIfNeeded();
     const lineOrigin = await draggableLine.evaluate((node) => { const ctm = node.getScreenCTM(); return { x: ctm.e, y: ctm.f }; });
+    assert.ok(lineOrigin.x > 0 && lineOrigin.y > 0);
     await page.mouse.move(lineOrigin.x, lineOrigin.y);
     await page.mouse.down();
     await page.mouse.move(lineOrigin.x + 18, lineOrigin.y + 8);
     await page.mouse.up();
     const layoutAfterDeviceDrag = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:example-complete-feeder")));
-    console.log("DIAG layout:", JSON.stringify(layoutAfterDeviceDrag));
-    console.log("DIAG origin:", JSON.stringify(lineOrigin));
-    console.log("DIAG probe:", JSON.stringify(await page.evaluate(({ x, y }) => {
-      const el = document.elementFromPoint(x, y);
-      const g = document.querySelector('g.sld-draggable[data-kind="line"][data-id="line_main"]');
-      const events = [];
-      ["pointerdown", "pointermove", "pointerup"].forEach((type) => g.addEventListener(type, () => events.push(type)));
-      return {
-        hitTag: el?.tagName, hitKind: el?.dataset?.kind, hitId: el?.dataset?.id,
-        hitParentTag: el?.parentElement?.tagName, hitParentKind: el?.parentElement?.dataset?.kind, hitParentId: el?.parentElement?.dataset?.id,
-        gTransform: g?.getAttribute("transform"), gIsHit: g === el || g === el?.parentElement,
-        pointerEventsStyle: el ? getComputedStyle(el).pointerEvents : null,
-        gPointerEvents: g ? getComputedStyle(g).pointerEvents : null
-      };
-    }, lineOrigin)));
     assert.ok(Object.values(layoutAfterDeviceDrag.profiles).some((profile) => Array.isArray(profile.positions?.["line:line_main"])));
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     assert.match(await page.locator("#canvas").innerText(), /Π branch model/);
