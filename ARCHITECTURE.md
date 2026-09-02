@@ -453,6 +453,12 @@ DistributionNetworkPlots.jl/
 
 If the browser core later becomes useful outside Julia, it may move to a publishable package without changing its API boundary.
 
+The current static entrypoint is intentionally transitional: `frontend/app.js`
+still orchestrates state and projections, while `frontend/renderer-contract.js`
+and `frontend/renderers/symbols.js` are the first extracted contract-backed
+modules. Further extraction should preserve the same browser script order and
+the Julia embedding boundary.
+
 ## 11. Quality attributes
 
 ### 11.1 Correctness

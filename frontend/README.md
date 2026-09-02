@@ -25,6 +25,7 @@ inspector, alongside a raw result-record view.
 - One- and two-hop neighbourhood expansion from a selected bus.
 - Pan, zoom, and fit/reset controls for the static SVG views.
 - Shared `renderer-contract-v1` boundary for SVG shells and canonical selectable asset references.
+- Contract-backed `renderers/symbols.js` module for IEEE/IEC-inspired device symbols.
 - Versioned layout profiles with deterministic fallback and bounded local retention (eight profiles per case).
 - Distinct single-wire symbols for supported device classes and state styling.
 - Reusable geospatial line geometry when supplied, with deterministic endpoint fallback.

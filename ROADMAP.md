@@ -54,6 +54,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Multi-winding focused view shows one terminal stack per winding with winding metadata and selectable connected buses.
 - [x] Publish an explicit overview SVG budget and switch oversized geospatial/single-line cases to a focused one-hop fallback.
 - [x] Define a renderer/layout contract and bounded eight-profile layout-cache retention policy.
+- [x] Extract the shared device-symbol renderer behind the contract-backed `frontend/renderers/` boundary.
 - [ ] Replace prototype renderer packages with the contract-backed module tree.
 - [x] Add an automated browser end-to-end smoke test and wire it into GitHub Actions.
 
