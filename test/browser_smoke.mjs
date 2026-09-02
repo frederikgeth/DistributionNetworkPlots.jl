@@ -55,8 +55,12 @@ try {
     assert.equal(await page.locator('script[src="renderers/single-wire.js"]').count(), 1);
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "example-complete-feeder");
-    assert.match(await page.locator("#view-status").textContent(), /Geographic coordinates used for 4\/4 buses/);
     assert.match(await page.locator("#case-summary").innerText(), /Coordinate provenance: synthetic illustrative coordinates/);
+    // #view-status is an aria-live region and loading an example announces the
+    // example itself, so re-enter the geospatial view to read its own status.
+    await page.getByRole("tab", { name: "Single-wire" }).click();
+    await page.getByRole("tab", { name: "Geospatial" }).click();
+    assert.match(await page.locator("#view-status").textContent(), /Geographic coordinates used for 4\/4 buses/);
     const helpPanel = page.locator(".help-panel");
     await helpPanel.locator("summary").first().click();
     assert.match(await helpPanel.innerText(), /Quick start/);
@@ -79,14 +83,19 @@ try {
     await page.locator('button[data-kind="line"][data-id="line_main"]').click();
     const draggableLine = page.locator('g.sld-draggable[data-kind="line"][data-id="line_main"]');
     assert.equal(await draggableLine.count(), 1);
-    const lineBox = await draggableLine.boundingBox();
-    assert.ok(lineBox);
-    await page.mouse.move(lineBox.x + lineBox.width / 2, lineBox.y + lineBox.height / 2);
+    // page.mouse takes raw viewport coordinates and does not scroll, so bring the
+    // symbol into view first. Grab it at its translate origin, where the glyph is
+    // drawn: the group's bounding box also spans the label 27px below, so the box
+    // centre falls in the unpainted gap between the two and hits nothing.
+    await draggableLine.scrollIntoViewIfNeeded();
+    const lineOrigin = await draggableLine.evaluate((node) => { const ctm = node.getScreenCTM(); return { x: ctm.e, y: ctm.f }; });
+    assert.ok(lineOrigin.x > 0 && lineOrigin.y > 0);
+    await page.mouse.move(lineOrigin.x, lineOrigin.y);
     await page.mouse.down();
-    await page.mouse.move(lineBox.x + lineBox.width / 2 + 18, lineBox.y + lineBox.height / 2 + 8);
+    await page.mouse.move(lineOrigin.x + 18, lineOrigin.y + 8);
     await page.mouse.up();
     const layoutAfterDeviceDrag = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:example-complete-feeder")));
-    assert.ok(Object.values(layoutAfterDeviceDrag.profiles).some((profile) => Array.isArray(profile.positions?.line_main)));
+    assert.ok(Object.values(layoutAfterDeviceDrag.profiles).some((profile) => Array.isArray(profile.positions?.["line:line_main"])));
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     assert.match(await page.locator("#canvas").innerText(), /Π branch model/);
     assert.match(await page.locator("#canvas").innerText(), /Series Zs \[Ω\]/);
@@ -145,7 +154,11 @@ try {
     await page.getByRole("button", { name: "Apply ELK layout" }).click();
     await page.locator("#view-status").waitFor({ state: "visible" });
     await page.waitForFunction(() => document.querySelector("#view-status")?.textContent.includes("ELK layered layout applied"), null, { timeout: 15000 });
-    const cache = await page.evaluate(() => Object.entries(localStorage).find(([key]) => key.startsWith("bmopf-layout-v3:"))?.[1] || "");
+    // Dragging in the example case persists its own layout entry, so address this
+    // case's cache by key rather than taking whichever entry comes first.
+    const microLayoutKey = "bmopf-layout-v3:micro-bmopf";
+    const readLayout = (key) => page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey) || "null"), key);
+    const cache = await page.evaluate((storageKey) => localStorage.getItem(storageKey) || "", microLayoutKey);
     const parsedCache = JSON.parse(cache);
     assert.equal(parsedCache.version, 3);
     assert.equal(parsedCache.routeSpace, "single-svg-v2");
@@ -157,10 +170,12 @@ try {
     assert.ok(Object.keys(primaryProfile.routes || {}).length > 0);
     await page.locator("#sld-direction").selectOption("load-to-source");
     await page.locator("#sld-direction").selectOption("source-to-load");
-    const profilesAfterSwitch = await page.evaluate(() => Object.values(localStorage).map((value) => { try { return JSON.parse(value); } catch (_) { return null; } }).find((value) => value?.version === 3)?.profiles || {});
+    const profilesAfterSwitch = (await readLayout(microLayoutKey))?.profiles || {};
     assert.ok(Object.keys(profilesAfterSwitch).some((key) => key.includes("direction=load-to-source")));
-    const profileCount = await page.evaluate(() => Object.values(localStorage).filter((value) => value.includes('"version":3')).length);
-    assert.equal(profileCount, 1);
+    // Direction and root permutations live as profiles inside one entry per case,
+    // so the set of layout entries stays exactly one per case that was opened.
+    const layoutKeys = await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("bmopf-layout-v3:")).sort());
+    assert.deepEqual(layoutKeys, ["bmopf-layout-v3:example-complete-feeder", microLayoutKey].sort());
     const directionControl = page.getByLabel("Single-line direction");
     const rootControl = page.getByLabel("Single-line root bus");
     for (const direction of ["source-to-load", "load-to-source"]) {
@@ -169,7 +184,7 @@ try {
         await rootControl.selectOption(root);
       }
     }
-    const retainedProfiles = await page.evaluate(() => Object.values(localStorage).map((value) => { try { return JSON.parse(value); } catch (_) { return null; } }).find((value) => value?.version === 3)?.profiles || {});
+    const retainedProfiles = (await readLayout(microLayoutKey))?.profiles || {};
     assert.ok(Object.keys(retainedProfiles).length <= 8);
     const inventorySearch = page.getByPlaceholder("Search assets, buses, or result fields");
     await inventorySearch.fill("line_main");
@@ -194,7 +209,9 @@ try {
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     const multiText = await page.locator("#canvas").innerText();
     assert.match(multiText, /terminal detail/);
-    assert.match(multiText, /Ordered conductor pairing/);
+    // A line renders the Pi branch model detail and returns before the generic
+    // conductor view, so the ordered-pairing note is asserted on the transformer.
+    assert.match(multiText, /\u03a0 branch model/);
     await inventorySearch.fill("switch_open");
     await page.locator('button[data-kind="switch"][data-id="switch_open"]').click();
     assert.match(await page.locator("#canvas").innerText(), /Open switch/);
