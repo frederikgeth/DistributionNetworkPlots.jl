@@ -55,8 +55,12 @@ try {
     assert.equal(await page.locator('script[src="renderers/single-wire.js"]').count(), 1);
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "example-complete-feeder");
-    assert.match(await page.locator("#view-status").textContent(), /Geographic coordinates used for 4\/4 buses/);
     assert.match(await page.locator("#case-summary").innerText(), /Coordinate provenance: synthetic illustrative coordinates/);
+    // #view-status is an aria-live region and loading an example announces the
+    // example itself, so re-enter the geospatial view to read its own status.
+    await page.getByRole("tab", { name: "Single-wire" }).click();
+    await page.getByRole("tab", { name: "Geospatial" }).click();
+    assert.match(await page.locator("#view-status").textContent(), /Geographic coordinates used for 4\/4 buses/);
     const helpPanel = page.locator(".help-panel");
     await helpPanel.locator("summary").first().click();
     assert.match(await helpPanel.innerText(), /Quick start/);
