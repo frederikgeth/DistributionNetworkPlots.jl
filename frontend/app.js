@@ -1254,6 +1254,57 @@
     return `<g transform="translate(${x} ${y})" aria-label="${escapeHtml(caption)} transformer winding"><title>${escapeHtml(caption)} transformer winding</title><text x="0" y="-52" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(caption)}</text>${shape}</g>`;
   }
 
+  function transformerWindingInterior(configuration, body, side, terminals, busId) {
+    const config = String(configuration || "").toUpperCase();
+    const phaseColours = ["#c2564b", "#4a8f5f", "#3f6fb9"];
+    const neutralIndex = terminals.findIndex((terminal) => /^(n|neutral|g|pe|ground|earth)$/i.test(String(terminal)));
+    const phaseEntries = terminals.map((terminal, index) => ({ terminal, index })).filter(({ index }) => index !== neutralIndex).slice(0, 3);
+    const edgeX = side === "left" ? body.x : body.x + body.width;
+    const terminalPoints = terminals.map((_, index) => [edgeX, body.y + 28 + index * ((body.height - 56) / Math.max(terminals.length - 1, 1))]);
+    const cx = side === "left" ? body.x + 53 : body.x + body.width - 53;
+    const cy = body.y + body.height / 2 + 4;
+    const dotHtml = terminalPoints.map(([px, py], index) => {
+      const visual = conductorVisual(terminals[index], terminals[index], busId, busId, index);
+      return `<circle cx="${px}" cy="${py}" r="4" fill="#fffdf9" stroke="${visual.colour}" stroke-width="2"/>`;
+    }).join("");
+    const configLabel = config.replaceAll("_", " ");
+    const sideLabel = side === "left" ? "from: " : side === "right" ? "to: " : "";
+    let html = `<g aria-label="${escapeHtml(side)} ${escapeHtml(configLabel || "terminal")} winding"><text x="${cx}" y="${body.y + 18}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">${escapeHtml(`${sideLabel}${configLabel || "terminal"}`)}</text>${dotHtml}`;
+    if (config === "DELTA" && phaseEntries.length >= 3) {
+      const points = [[cx, cy - 29], [cx - 25, cy + 17], [cx + 25, cy + 17]];
+      html += `<path d="M${points[0][0]} ${points[0][1]}L${points[1][0]} ${points[1][1]}L${points[2][0]} ${points[2][1]}Z" fill="none" stroke="#4f789f" stroke-width="2"/>`;
+      phaseEntries.forEach(({ index }, phaseIndex) => {
+        const [px, py] = points[phaseIndex]; const [tx, ty] = terminalPoints[index]; const colour = phaseColours[phaseIndex];
+        html += `<path d="M${tx} ${ty}L${px} ${py}" fill="none" stroke="${colour}" stroke-width="2.5"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/>`;
+      });
+    } else if (config === "WYE" && phaseEntries.length >= 2) {
+      const points = [[cx - 25, cy - 17], [cx, cy - 28], [cx + 25, cy - 17]];
+      const centre = [cx, cy + 5];
+      phaseEntries.forEach(({ index }, phaseIndex) => {
+        const [px, py] = points[phaseIndex]; const [tx, ty] = terminalPoints[index]; const colour = phaseColours[phaseIndex];
+        html += `<path d="M${tx} ${ty}L${px} ${py}M${px} ${py}L${centre[0]} ${centre[1]}" fill="none" stroke="${colour}" stroke-width="2.5"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/>`;
+      });
+      html += `<circle cx="${centre[0]}" cy="${centre[1]}" r="3" fill="#fffdf9" stroke="#4f789f" stroke-width="1.5"/>`;
+      if (neutralIndex >= 0) {
+        const [tx, ty] = terminalPoints[neutralIndex];
+        html += `<path d="M${tx} ${ty}L${centre[0]} ${centre[1]}" fill="none" stroke="#5d574d" stroke-width="2" stroke-dasharray="4 3"/>`;
+      }
+    } else if (terminals.length >= 2) {
+      const [left] = terminalPoints; const right = terminalPoints[terminalPoints.length - 1];
+      html += `<path d="M${left[0]} ${left[1]}L${cx - 17} ${cy}M${cx + 17} ${cy}L${right[0]} ${right[1]}" fill="none" stroke="#4f789f" stroke-width="2"/>`;
+    }
+    html += `</g>`;
+    return { html, terminalPoints };
+  }
+
+  function transformerIsolationAndCoils(body) {
+    const mid = body.x + body.width / 2;
+    const top = body.y + 32;
+    const bottom = body.y + body.height - 28;
+    const coil = (x, direction) => `<path d="M${x} ${top + 8}c${direction * 14} 0 ${direction * 14} 12 0 12s${-direction * 14} 12 0 12 ${direction * 14} 0 ${direction * 14} 12 0 12s${-direction * 14} 12 0 12 ${direction * 14} 0 ${direction * 14} 12 0 12s${-direction * 14} 12 0 12" fill="none" stroke="#4f789f" stroke-width="2.5"/>`;
+    return `${coil(mid - 27, 1)}${coil(mid + 27, -1)}<line x1="${mid - 5}" y1="${top}" x2="${mid - 5}" y2="${bottom}" stroke="#4f789f" stroke-width="2"/><line x1="${mid + 5}" y1="${top}" x2="${mid + 5}" y2="${bottom}" stroke="#4f789f" stroke-width="2"/>`;
+  }
+
   function renderInspector() {
     const item = itemFor(state.selected);
     $("selection-label").innerHTML = item ? entityLabelHtml(item.ref.kind, item.ref.id) : "Nothing selected";
@@ -1598,7 +1649,7 @@
       return;
     }
     if (item.ref.kind === "transformer" && item.ports?.length > 2) {
-      const body = { x: 280, y: 165, width: 200, height: 125 };
+      const body = { x: 280, y: 140, width: 200, height: 190 };
       const layouts = item.ports.map((_, i) => {
         if (i === 0) return { x: 25, y: 78, width: 205, side: "left" };
         if (i === 1) return { x: 530, y: 78, width: 205, side: "right" };
@@ -1607,26 +1658,25 @@
         const x = 380 - (width * count) / 2 + (i - 2) * width;
         return { x, y: 335, width, side: "top" };
       });
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · winding detail</tspan></text><rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="10" fill="#e8f0f8" stroke="#4f789f" stroke-width="3"/><path d="M345 188c-16 0-16 28 0 28s16 28 0 28 16 28 0 28M415 188c16 0 16 28 0 28s-16 28 0 28-16 28 0 28" fill="none" stroke="#4f789f" stroke-width="3"/><text x="380" y="232" text-anchor="middle" font-size="14">multi-winding body</text>`;
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · winding detail</tspan></text><rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="10" fill="#e8f0f8" stroke="#4f789f" stroke-width="3"/><text x="380" y="${body.y + 28}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">galvanically isolated windings</text>${transformerIsolationAndCoils(body)}`;
       item.ports.forEach((winding, i) => {
         const layout = layouts[i];
         const bus = state.index.buses.find((candidate) => candidate.ref.id === winding.busId) || { ref: { id: winding.busId }, groundedTerminals: [] };
+        const windingRecord = item.sourceRecord?.windings?.[i] || {};
         const panel = multiWindingPanel(bus, winding, layout.x, layout.y, layout.width, layout.side);
         content += panel.html;
+        const interior = i < 2 ? transformerWindingInterior(windingRecord.configuration, body, i === 0 ? "left" : "right", winding.terminals || [], winding.busId) : null;
+        if (interior) content += interior.html;
         panel.anchors.forEach((anchor, terminalIndex) => {
           const terminal = winding.terminals[terminalIndex] || "?";
           const visual = conductorVisual(terminal, terminal, winding.busId, winding.busId, terminalIndex);
-          const target = layout.side === "left" ? [body.x, body.y + 28 + terminalIndex * 22]
+          const target = interior?.terminalPoints?.[terminalIndex] || (layout.side === "left" ? [body.x, body.y + 28 + terminalIndex * 22]
             : layout.side === "right" ? [body.x + body.width, body.y + 28 + terminalIndex * 22]
-              : [body.x + 38 + terminalIndex * 42, body.y + body.height];
+              : [body.x + 38 + terminalIndex * 42, body.y + body.height]);
           content += focusedPath([anchor, target], visual, "unknown");
         });
-        const windingRecord = item.sourceRecord?.windings?.[i] || {};
         const details = [windingRecord.configuration, windingRecord.v_nom === undefined ? null : `V ${formatValue(windingRecord.v_nom)}`].filter(Boolean).join(" · ");
         content += `<text x="${layout.side === "left" ? layout.x + layout.width + 8 : layout.side === "right" ? layout.x - 8 : layout.x + layout.width / 2}" y="${layout.side === "top" ? layout.y + 78 : layout.y + 42}" text-anchor="${layout.side === "left" ? "start" : layout.side === "right" ? "end" : "middle"}" fill="#70695f" font-size="10">${escapeHtml(details || winding.role)}</text>`;
-        const glyphX = layout.side === "left" ? 252 : layout.side === "right" ? 508 : layout.x + layout.width / 2;
-        const glyphY = layout.side === "top" ? 312 : 158;
-        content += transformerWindingGlyph(windingRecord.configuration, glyphX, glyphY, `winding ${i + 1}`);
       });
       content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Each winding keeps its bus and terminal stack; no false direct bus-to-bus edges are drawn</text>`;
       setMultiStatus(`${item.ports.length} winding ports · ${item.status}`);
@@ -1688,6 +1738,31 @@
       content += `<text x="380" y="${Math.max(365, rowY[rowY.length - 1] + 58)}" text-anchor="middle" fill="#70695f" font-size="12">${item.status === "open" ? "Open switch: each conductor path is interrupted independently" : "Closed switch: each conductor path is switched independently"}</text>`;
       setMultiStatus(`${pairs.length} conductor switches · ${item.status}`);
       target.innerHTML = multiShell(content, { size: { width: 760, height: Math.max(500, rowY[rowY.length - 1] + 90) } });
+      bindCopyButtons(target);
+      bindSvgSelection(target);
+      return;
+    }
+    if (item.ref.kind === "transformer") {
+      const body = { x: 280, y: 88, width: 200, height: 300 };
+      const fromConfiguration = transformerConfiguration(item, 0);
+      const toConfiguration = transformerConfiguration(item, 1);
+      const leftInterior = transformerWindingInterior(fromConfiguration, body, "left", left.terminals || [], left.busId);
+      const rightInterior = transformerWindingInterior(toConfiguration, body, "right", right.terminals || [], right.busId);
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · transformer winding detail</tspan></text>${leftPanel.html}${rightPanel.html}<rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="10" fill="#e8f0f8" stroke="${colourOf(item.ref.kind)}" stroke-width="2.5"/><text x="380" y="${body.y + 28}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">galvanically isolated windings</text>${transformerIsolationAndCoils(body)}${leftInterior.html}${rightInterior.html}`;
+      pairs.forEach(([a, b], i) => {
+        const yLeft = leftPanel.rowY[i] || (142 + i * 34);
+        const yRight = rightPanel.rowY[i] || (142 + i * 34);
+        const visual = conductorVisual(a, b, left.busId, right.busId, i);
+        const fromPoint = leftInterior.terminalPoints[i] || [body.x, yLeft];
+        const toPoint = rightInterior.terminalPoints[i] || [body.x + body.width, yRight];
+        content += focusedPath([[220, yLeft], fromPoint], visual, item.status);
+        content += focusedPath([toPoint, [520, yRight]], visual, item.status);
+        content += `<text x="276" y="${Math.min(405, Math.max(yLeft, yRight) - 7)}" text-anchor="end" fill="#70695f" font-size="10" data-role="conductor-label">${escapeHtml(visual.label)} · ${escapeHtml(visual.kind)}</text>`;
+      });
+      const mappingNote = connection.warning ? `<text x="380" y="430" text-anchor="middle" fill="#8a4d20" font-size="12">${escapeHtml(connection.warning)} Inspect raw maps before relying on this pairing.</text>` : "";
+      content += `${mappingNote}<text x="380" y="445" text-anchor="middle" fill="#70695f" font-size="12">Terminal dots sit on the transformer enclosure; coloured conductors show phase continuity</text><text x="380" y="462" text-anchor="middle" fill="#70695f" font-size="11">Ordered conductor pairing from source terminal maps</text>`;
+      setMultiStatus(`${pairs.length} conductor pairs · ${item.status}${connection.warning ? " · terminal-map warning" : ""}`);
+      target.innerHTML = multiShell(content, { size: { width: 760, height: 510 } });
       bindCopyButtons(target);
       bindSvgSelection(target);
       return;
