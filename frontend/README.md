@@ -8,8 +8,8 @@ From the repository root:
 python3 -m http.server 8765 --directory frontend
 ```
 
-Open <http://127.0.0.1:8765/> and choose a built-in example, or drop
-`fixtures/micro/micro_bmopf.json` onto the page. The prototype supports the
+Open <http://127.0.0.1:8765/> and choose a built-in example, or drop a BMOPF
+case such as `fixtures/micro/micro_bmopf.json` onto the page. The prototype supports the
 features listed below.
 
 For a single-directory distribution build, run `npm run build` from the
@@ -25,6 +25,11 @@ opening a case. Raw result dictionaries and wrappers with an embedded
 `case`/`network` are accepted. Run status/objective metadata appears in the
 Results panel; recognised values for the selected asset appear in the
 inspector, alongside a raw result-record view.
+
+The same result files can be dropped onto the drop zone after a case is open.
+The viewer keeps the open case, attaches the result, and warns when available
+case IDs or fingerprints do not match; it still exposes whatever records can
+be matched for best-effort inspection.
 
 - Asset inventory and search.
 - Source-property inspection and raw-record display.

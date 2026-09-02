@@ -41,6 +41,7 @@ The prototype supports:
 - Local-only case loading with no runtime backend.
 - Browser-side guardrails for invalid JSON and oversized case files.
 - Optional BMOPFTools-style result JSON sidecars with objective/status summary and asset-level metrics.
+- Result JSON sidecars can be dropped onto an open case; pairing mismatches are surfaced as warnings while metrics remain available for best-effort inspection.
 - Diagnostics view for filterable result validation/profile findings, clickable linked assets, and explicit case/result pairing status.
 - Result-aware overview cues for loading, explicit bus voltage deviation, and open/out-of-service state, with non-colour legend guidance.
 - Built-in example cases that can be loaded directly from the frontend for repeatable demonstrations and semantic smoke tests.

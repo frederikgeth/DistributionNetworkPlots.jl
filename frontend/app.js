@@ -420,12 +420,14 @@
 
   function resultIdentity() {
     const root = resultRoot();
-    return root?.case_fingerprint ?? root?.meta?.case_fingerprint ?? root?.case_id ?? root?.meta?.case_id ?? null;
+    const embeddedCase = state.result ? globalThis.BMOPFModel.resultCase(state.result) : null;
+    return root?.case_fingerprint ?? root?.meta?.case_fingerprint ?? root?.case_id ?? root?.meta?.case_id ?? embeddedCase?.meta?.case_fingerprint ?? embeddedCase?.meta?.case_id ?? null;
   }
 
   function resultFingerprint() {
     const root = resultRoot();
-    return root?.case_fingerprint ?? root?.meta?.case_fingerprint ?? null;
+    const embeddedCase = state.result ? globalThis.BMOPFModel.resultCase(state.result) : null;
+    return root?.case_fingerprint ?? root?.meta?.case_fingerprint ?? embeddedCase?.meta?.case_fingerprint ?? null;
   }
 
   function openCaseFingerprint() {
@@ -1189,16 +1191,63 @@
     reader.readAsText(file);
   }
 
+  const RESULT_ROOT_MARKERS = new Set(["termination_status", "objective", "objective_value", "solver", "solution_info", "solution_profile", "profile", "diagnostics", "validation", "residuals", "bound_violations", "near_active_bounds", "case_fingerprint", "case_fingerprint_algorithm", "case_id"]);
+  const RESULT_RECORD_MARKERS = new Set(["loading", "vm", "v_magnitude", "voltage_magnitude", "voltage_deviation", "p_from", "q_from", "pg", "qg", "dual", "shadow_price", "cost", "residual"]);
+
+  function looksLikeResultDocument(document, label = "") {
+    if (!document || typeof document !== "object" || Array.isArray(document)) return false;
+    if (globalThis.BMOPFModel.resultCase(document) || document.result || document.results) return true;
+    const root = globalThis.BMOPFModel.resultRoot(document);
+    if (Object.keys(root).some((key) => RESULT_ROOT_MARKERS.has(key))) return true;
+    for (const table of Object.values(root)) {
+      if (!table || typeof table !== "object" || Array.isArray(table)) continue;
+      for (const record of Object.values(table)) {
+        if (record && typeof record === "object" && !Array.isArray(record) && Object.keys(record).some((key) => RESULT_RECORD_MARKERS.has(key))) return true;
+      }
+    }
+    return /(?:result|solution|scenario|output)/i.test(String(label));
+  }
+
+  function readDroppedFile(file) {
+    if (file.size > MAX_FILE_BYTES) {
+      const message = `The dropped file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`;
+      if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      let parsed;
+      try { parsed = JSON.parse(reader.result); }
+      catch (error) {
+        const message = "The dropped file is not valid JSON. Check the file syntax and try again.";
+        if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
+        return;
+      }
+      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
+        const message = `The dropped file contains more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`;
+        if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
+        return;
+      }
+      if (looksLikeResultDocument(parsed, file.name)) loadResultDocument(parsed, file.name, { preserveCase: Boolean(state.index) });
+      else loadDocument(parsed, file.name);
+    };
+    reader.onerror = () => {
+      const message = "The browser could not read the dropped file. Check its permissions and try again.";
+      if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
+    };
+    reader.readAsText(file);
+  }
+
   function showResultError(message, label) {
     state.resultError = message;
     renderResultSummary();
     setStatus(label ? `${label} was not attached.` : "Results were not attached.");
   }
 
-  function loadResultDocument(resultDocument, label) {
+  function loadResultDocument(resultDocument, label, options = {}) {
     try {
       const embeddedCase = globalThis.BMOPFModel.resultCase(resultDocument);
-      if (embeddedCase) loadDocument(embeddedCase, `${label || "Results"} · embedded case`);
+      if (embeddedCase && (!state.index || !options.preserveCase)) loadDocument(embeddedCase, `${label || "Results"} · embedded case`);
       globalThis.BMOPFModel.resultRoot(resultDocument);
       state.result = resultDocument;
       state.resultLabel = label || "Results JSON";
@@ -1208,7 +1257,11 @@
       const scenarios = globalThis.BMOPFModel.resultScenarios(resultDocument);
       state.resultScenario = scenarios.length === 1 ? scenarios[0] : null;
       render();
-      setStatus(embeddedCase ? "Results attached with embedded case." : "Results attached to the current case.");
+      const pairing = state.index ? resultPairingStatus() : null;
+      const pairingNote = pairing?.kind === "mismatch"
+        ? " Case/result identity mismatch; metrics are shown for best-effort inspection."
+        : pairing?.kind === "unverified" ? " Case/result identity could not be verified; metrics are shown for best-effort inspection." : "";
+      setStatus(`${embeddedCase && !options.preserveCase ? "Results attached with embedded case." : "Results attached to the current case."}${pairingNote}`);
     } catch (error) {
       showResultError(error.message, label);
     }
@@ -1282,7 +1335,7 @@
     const zone = $("drop-zone");
     zone.addEventListener("dragover", (event) => { event.preventDefault(); zone.classList.add("dragging"); });
     zone.addEventListener("dragleave", () => zone.classList.remove("dragging"));
-    zone.addEventListener("drop", (event) => { event.preventDefault(); zone.classList.remove("dragging"); if (event.dataTransfer.files[0]) readFile(event.dataTransfer.files[0]); });
+    zone.addEventListener("drop", (event) => { event.preventDefault(); zone.classList.remove("dragging"); if (event.dataTransfer.files[0]) readDroppedFile(event.dataTransfer.files[0]); });
     document.querySelectorAll(".view-tab").forEach((button) => button.addEventListener("click", () => { state.view = button.dataset.view; render(); }));
     window.addEventListener("hashchange", () => { parseHash(); render(); });
     const embedded = globalThis.__BMOPF_CASE__;

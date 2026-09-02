@@ -32,6 +32,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Multi-wire phase, neutral, and ground cues use both line patterns and visible labels.
 - [x] Terminal-map length mismatches are surfaced as case and focused-view diagnostics.
 - [x] Results JSON can be attached as a sidecar and selected asset metrics are visible in the inspector.
+- [x] Drop-zone accepts result sidecars after case load, preserving the case and warning on identity mismatch while retaining best-effort metrics.
 - [x] Normalised line-loading results are visible in overview stroke colour/width, legend, and tooltips.
 - [x] Diagnostics view normalises result validation/profile findings and links linked findings back to assets.
 - [x] Diagnostics findings can be filtered by severity and text while preserving the total finding count.

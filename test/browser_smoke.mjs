@@ -6,7 +6,10 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const frontendRoot = resolve(fileURLToPath(new URL("../frontend/", import.meta.url)));
+const fixtureRoot = resolve(fileURLToPath(new URL("../fixtures/micro/", import.meta.url)));
 const contentTypes = { ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".html": "text/html" };
+const resultFixture = await readFile(resolve(fixtureRoot, "micro_bmopf_result.json"), "utf8");
+const mismatchedResult = JSON.stringify({ ...JSON.parse(resultFixture), meta: { ...JSON.parse(resultFixture).meta, case_fingerprint: "not-the-open-case" } });
 
 function startStaticServer() {
   const server = createServer(async (request, response) => {
@@ -43,6 +46,24 @@ try {
     assert.equal(await page.locator('script[src="layout/deterministic.js"]').count(), 1);
     assert.equal(await page.locator('script[src="renderers/geospatial.js"]').count(), 1);
     assert.equal(await page.locator('script[src="renderers/single-wire.js"]').count(), 1);
+    await page.locator("#file-input").setInputFiles(resolve(fixtureRoot, "micro_bmopf.json"));
+    await page.locator("#case-summary h2").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");
+    const dropJson = async (text, name) => page.evaluate(({ text: content, name: filename }) => {
+      const file = new File([content], filename, { type: "application/json" });
+      const transfer = new DataTransfer();
+      transfer.items.add(file);
+      document.querySelector("#drop-zone").dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }));
+    }, { text, name });
+    await dropJson(resultFixture, "micro_bmopf_result.json");
+    await page.waitForTimeout(100);
+    assert.match(await page.locator("#result-summary").innerText(), /Pairing matched/);
+    assert.match(await page.locator("#view-status").textContent(), /Results attached to the current case/);
+    await dropJson(mismatchedResult, "mismatch_result.json");
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");
+    assert.match(await page.locator("#result-summary").innerText(), /Pairing mismatch/);
+    assert.match(await page.locator("#view-status").textContent(), /identity mismatch/);
     await page.getByRole("tab", { name: "Single-wire" }).click();
     await page.getByRole("button", { name: "Apply ELK layout" }).click();
     await page.locator("#view-status").waitFor({ state: "visible" });
