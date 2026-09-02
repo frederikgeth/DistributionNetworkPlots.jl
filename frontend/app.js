@@ -1109,18 +1109,30 @@
     const neutralIndex = terminals.findIndex((terminal) => /^(n|neutral|g|pe|ground|earth)$/i.test(String(terminal)));
     const phaseTerminals = terminals.filter((_, index) => index !== neutralIndex).slice(0, 3);
     const label = (terminal) => escapeHtml(String(terminal));
+    const phaseColour = (index) => ["#c2564b", "#4a8f5f", "#3f6fb9"][index % 3];
     const device = item.ref.kind === "load"
       ? `<rect x="-14" y="-10" width="28" height="20" rx="2" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><path d="M-7 0h14M4-5l6 5-6 5" fill="none" stroke="${colour}" stroke-width="1.5"/>`
       : item.ref.kind === "ibr" ? `<circle cx="0" cy="0" r="14" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="0" y="4" text-anchor="middle" fill="${colour}" font-size="8">IBR</text>`
         : `<circle cx="0" cy="0" r="14" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="0" y="4" text-anchor="middle" fill="${colour}" font-size="10">G</text>`;
     const configLabel = config.replaceAll("_", " ");
-    let html = `<g transform="translate(${x} ${y})"><text x="0" y="-54" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(configLabel || "terminal")} connection</text>`;
+    let html = `<g transform="translate(${x} ${y})"><text x="0" y="-68" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(configLabel || "terminal")} connection</text>`;
     if (config === "DELTA" && phaseTerminals.length >= 3) {
       const points = [[-58, -16], [58, -16], [0, 42]];
-      html += `<path d="M${points[0][0]} ${points[0][1]}L${points[1][0]} ${points[1][1]}L${points[2][0]} ${points[2][1]}Z" fill="none" stroke="${colour}" stroke-width="2"/>${points.map(([px, py], index) => `<circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/><text x="${px}" y="${py + (py > 0 ? 17 : -8)}" text-anchor="middle" fill="#37332c" font-size="10">${label(phaseTerminals[index])}</text>`).join("")}<g transform="translate(0 2)">${device}</g>`;
+      const endpoints = [[-82, -16], [82, -16], [0, 62]];
+      const wires = points.map(([px, py], index) => {
+        const [ex, ey] = endpoints[index];
+        const textY = ey > py ? ey + 15 : ey - 7;
+        return `<line x1="${ex}" y1="${ey}" x2="${px}" y2="${py}" stroke="${phaseColour(index)}" stroke-width="2.5"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${phaseColour(index)}" stroke-width="1.5"/><circle cx="${ex}" cy="${ey}" r="2.5" fill="#fffdf9" stroke="${phaseColour(index)}" stroke-width="1.5"/><text x="${ex}" y="${textY}" text-anchor="middle" fill="#37332c" font-size="10">${label(phaseTerminals[index])}</text>`;
+      }).join("");
+      html += `<path d="M${points[0][0]} ${points[0][1]}L${points[1][0]} ${points[1][1]}L${points[2][0]} ${points[2][1]}Z" fill="none" stroke="${colour}" stroke-width="2"/>${wires}<g transform="translate(0 2)">${device}</g>`;
     } else if (config === "WYE" && phaseTerminals.length >= 2) {
       const points = phaseTerminals.map((terminal, index) => [-58 + index * (phaseTerminals.length === 1 ? 0 : 58), -22]);
-      html += `${points.map(([px, py], index) => `<line x1="${px}" y1="${py}" x2="0" y2="0" stroke="${colour}" stroke-width="2"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/><text x="${px}" y="${py - 8}" text-anchor="middle" fill="#37332c" font-size="10">${label(phaseTerminals[index])}</text>`).join("")}<g>${device}</g>${neutralIndex >= 0 ? `<line x1="0" y1="14" x2="0" y2="42" stroke="#5d574d" stroke-width="2" stroke-dasharray="4 3"/><circle cx="0" cy="42" r="3" fill="#fffdf9" stroke="#5d574d" stroke-width="1.5"/><text x="8" y="46" fill="#37332c" font-size="10">${label(terminals[neutralIndex])}</text>` : ""}`;
+      const wires = points.map(([px, py], index) => {
+        const ex = px;
+        const ey = py - 20;
+        return `<line x1="${ex}" y1="${ey}" x2="${px}" y2="${py}" stroke="${phaseColour(index)}" stroke-width="2.5"/><line x1="${px}" y1="${py}" x2="0" y2="0" stroke="${phaseColour(index)}" stroke-width="2"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${phaseColour(index)}" stroke-width="1.5"/><circle cx="${ex}" cy="${ey}" r="2.5" fill="#fffdf9" stroke="${phaseColour(index)}" stroke-width="1.5"/><text x="${ex}" y="${ey - 7}" text-anchor="middle" fill="#37332c" font-size="10">${label(phaseTerminals[index])}</text>`;
+      }).join("");
+      html += `${wires}<g>${device}</g>${neutralIndex >= 0 ? `<line x1="0" y1="14" x2="0" y2="42" stroke="#5d574d" stroke-width="2" stroke-dasharray="4 3"/><circle cx="0" cy="42" r="3" fill="#fffdf9" stroke="#5d574d" stroke-width="1.5"/><text x="8" y="46" fill="#37332c" font-size="10">${label(terminals[neutralIndex])}</text>` : ""}`;
     } else if (terminals.length >= 2) {
       html += `<line x1="-62" y1="0" x2="-14" y2="0" stroke="${colour}" stroke-width="2"/><line x1="14" y1="0" x2="62" y2="0" stroke="${colour}" stroke-width="2"/><circle cx="-62" cy="0" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/><circle cx="62" cy="0" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/><text x="-62" y="-8" text-anchor="middle" fill="#37332c" font-size="10">${label(terminals[0])}</text><text x="62" y="-8" text-anchor="middle" fill="#37332c" font-size="10">${label(terminals[1])}</text><g>${device}</g>`;
     } else {
@@ -1145,19 +1157,32 @@
     const config = String(configuration || "").toUpperCase();
     if (!config) return "";
     const colour = "#4f789f";
+    const phaseColours = ["#c2564b", "#4a8f5f", "#3f6fb9"];
     const label = config.replaceAll("_", " ");
     const caption = side ? `${side}: ${label}` : label;
     let shape = "";
     if (config === "DELTA") {
-      shape = `<path d="M-25 14L25 14L0-22Z" fill="none" stroke="${colour}" stroke-width="2"/><circle cx="-25" cy="14" r="2.5" fill="#fffdf9" stroke="${colour}"/><circle cx="25" cy="14" r="2.5" fill="#fffdf9" stroke="${colour}"/><circle cx="0" cy="-22" r="2.5" fill="#fffdf9" stroke="${colour}"/>`;
+      const points = [[0, -22], [-25, 14], [25, 14]];
+      const endpoints = [[0, -38], [-41, 14], [41, 14]];
+      const phaseWires = points.map(([px, py], index) => {
+        const [ex, ey] = endpoints[index];
+        return `<line x1="${ex}" y1="${ey}" x2="${px}" y2="${py}" stroke="${phaseColours[index]}" stroke-width="2.5"/><circle cx="${ex}" cy="${ey}" r="2.3" fill="#fffdf9" stroke="${phaseColours[index]}" stroke-width="1.2"/><circle cx="${px}" cy="${py}" r="2.5" fill="#fffdf9" stroke="${phaseColours[index]}" stroke-width="1.3"/>`;
+      }).join("");
+      shape = `<path d="M-25 14L25 14L0-22Z" fill="none" stroke="${colour}" stroke-width="2"/>${phaseWires}`;
     } else if (config === "WYE") {
-      shape = `<line x1="-25" y1="-14" x2="0" y2="0" stroke="${colour}" stroke-width="2"/><line x1="0" y1="-25" x2="0" y2="0" stroke="${colour}" stroke-width="2"/><line x1="25" y1="-14" x2="0" y2="0" stroke="${colour}" stroke-width="2"/><line x1="0" y1="0" x2="0" y2="23" stroke="#5d574d" stroke-width="2" stroke-dasharray="4 3"/><circle cx="0" cy="0" r="3" fill="#fffdf9" stroke="${colour}"/><circle cx="-25" cy="-14" r="2.5" fill="#fffdf9" stroke="${colour}"/><circle cx="0" cy="-25" r="2.5" fill="#fffdf9" stroke="${colour}"/><circle cx="25" cy="-14" r="2.5" fill="#fffdf9" stroke="${colour}"/><circle cx="0" cy="23" r="2.5" fill="#fffdf9" stroke="#5d574d"/>`;
+      const points = [[-25, -14], [0, -25], [25, -14]];
+      const endpoints = [[-41, -14], [0, -41], [41, -14]];
+      const phaseWires = points.map(([px, py], index) => {
+        const [ex, ey] = endpoints[index];
+        return `<line x1="${ex}" y1="${ey}" x2="${px}" y2="${py}" stroke="${phaseColours[index]}" stroke-width="2.5"/><line x1="${px}" y1="${py}" x2="0" y2="0" stroke="${phaseColours[index]}" stroke-width="2"/><circle cx="${ex}" cy="${ey}" r="2.3" fill="#fffdf9" stroke="${phaseColours[index]}" stroke-width="1.2"/><circle cx="${px}" cy="${py}" r="2.5" fill="#fffdf9" stroke="${phaseColours[index]}" stroke-width="1.3"/>`;
+      }).join("");
+      shape = `${phaseWires}<line x1="0" y1="0" x2="0" y2="23" stroke="#5d574d" stroke-width="2" stroke-dasharray="4 3"/><circle cx="0" cy="0" r="3" fill="#fffdf9" stroke="${colour}"/><circle cx="0" cy="23" r="2.5" fill="#fffdf9" stroke="#5d574d"/>`;
     } else if (config === "SINGLE_PHASE" || config === "CENTER_TAP") {
       shape = `<line x1="-25" y1="0" x2="-8" y2="0" stroke="${colour}" stroke-width="2"/><line x1="8" y1="0" x2="25" y2="0" stroke="${colour}" stroke-width="2"/><circle cx="-8" cy="0" r="8" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><circle cx="8" cy="0" r="8" fill="#fffdf9" stroke="${colour}" stroke-width="2"/>`;
     } else {
       return "";
     }
-    return `<g transform="translate(${x} ${y})" aria-label="${escapeHtml(caption)} transformer winding"><title>${escapeHtml(caption)} transformer winding</title><text x="0" y="-38" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(caption)}</text>${shape}</g>`;
+    return `<g transform="translate(${x} ${y})" aria-label="${escapeHtml(caption)} transformer winding"><title>${escapeHtml(caption)} transformer winding</title><text x="0" y="-52" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(caption)}</text>${shape}</g>`;
   }
 
   function renderInspector() {

@@ -77,9 +77,13 @@ try {
     await page.locator('button[data-kind="load"][data-id="load_three_phase"]').click();
     assert.match(await page.locator("#canvas").innerText(), /DELTA connection/);
     assert.match(await page.locator("#canvas").innerText(), /load model: ZIP/);
+    const deltaPhaseStrokes = await page.locator("#canvas line").evaluateAll((lines) => [...new Set(lines.map((line) => line.getAttribute("stroke")))]);
+    assert.ok(["#c2564b", "#4a8f5f", "#3f6fb9"].every((stroke) => deltaPhaseStrokes.includes(stroke)));
     await page.getByPlaceholder("Search assets, buses, or result fields").fill("utility_ibr_three_phase");
     await page.locator('button[data-kind="ibr"][data-id="utility_ibr_three_phase"]').click();
     assert.match(await page.locator("#canvas").innerText(), /WYE connection/);
+    const wyePhaseStrokes = await page.locator("#canvas line").evaluateAll((lines) => [...new Set(lines.map((line) => line.getAttribute("stroke")))]);
+    assert.ok(["#c2564b", "#4a8f5f", "#3f6fb9"].every((stroke) => wyePhaseStrokes.includes(stroke)));
     await page.getByRole("tab", { name: "Single-wire" }).click();
     const attachedTransforms = await page.locator('#canvas g[data-kind="load"], #canvas g[data-kind="ibr"], #canvas g[data-kind="capacitor"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("transform")));
     assert.equal(new Set(attachedTransforms).size, attachedTransforms.length);
