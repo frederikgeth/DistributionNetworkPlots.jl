@@ -5,7 +5,7 @@
   const LAYOUT_MAX_PROFILES = 8;
   const ELK_VERSION = "0.10.2";
   const LAYOUT_ROUTE_SPACE = "single-svg-v2";
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -124,6 +124,8 @@
       state.layout = loadLayout();
       state.selected = requestedSelection && itemFor(requestedSelection) ? requestedSelection : null;
       state.activeKind = null;
+      const budget = overviewBudget();
+      state.largeCaseDecision = budget.over ? (state.largeCaseBypass ? "full" : "pending") : "full";
       navigationReset({ view: state.view, selected: state.selected });
       render();
       if (label) globalThis.document.title = `${label} · BMOPF Explorer`;
@@ -404,11 +406,23 @@
     const support = index.supportCounts || {};
     const supportHtml = `<p class="support-meta">Support: ${support.full || 0} full · ${support.focused || 0} focused · ${support["raw-only"] || 0} raw-only</p>`;
     const budget = overviewBudget();
-    const budgetHtml = budget.over
+    const budgetHtml = budget.over && state.largeCaseDecision !== "full"
       ? `<p class="budget-warning"><strong>Focused overview mode</strong> · ${escapeHtml(budget.message)} Select an asset to render its one-hop context.</p>`
+      : budget.over ? `<p class="budget-meta"><strong>Full overview enabled</strong> · ${escapeHtml(budget.message)}</p>`
       : `<p class="budget-meta">Overview budget: ${budget.elements.toLocaleString()} estimated SVG elements of ${budget.limit.toLocaleString()}.</p>`;
+    const largeCasePrompt = budget.over && state.largeCaseDecision === "pending"
+      ? `<div id="large-case-dialog" class="large-case-dialog" role="dialog" aria-labelledby="large-case-title"><strong id="large-case-title">This is a large case</strong><p>${escapeHtml(budget.message)} Rendering the full geospatial or single-wire overview may be slow in this browser.</p><label><input id="large-case-bypass" type="checkbox"> Continue without asking again while this page remains open</label><div class="large-case-actions"><button id="large-case-continue">Render full overview</button><button id="large-case-focused">Keep focused view</button></div></div>`
+      : budget.over && state.largeCaseDecision === "focused"
+        ? `<div class="large-case-dialog"><strong>Focused overview enabled</strong><p>Full overview rendering is paused for this case.</p><button id="large-case-continue">Render full overview</button></div>` : "";
     $("case-summary").className = "panel";
-    $("case-summary").innerHTML = `<div class="panel-heading"><h2>${escapeHtml(index.name)}</h2><span class="muted">${index.schema ? "schema" : "JSON"}</span></div><div class="stats">${stats.map(([n, label]) => `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`).join("")}</div>${supportHtml}${budgetHtml}${reportHtml}${warningHtml}`;
+    $("case-summary").innerHTML = `<div class="panel-heading"><h2>${escapeHtml(index.name)}</h2><span class="muted">${index.schema ? "schema" : "JSON"}</span></div><div class="stats">${stats.map(([n, label]) => `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`).join("")}</div>${supportHtml}${budgetHtml}${largeCasePrompt}${reportHtml}${warningHtml}`;
+    $("case-summary").querySelector("#large-case-bypass")?.addEventListener("change", (event) => { state.largeCaseBypass = event.target.checked; });
+    $("case-summary").querySelector("#large-case-continue")?.addEventListener("click", () => {
+      if ($("case-summary").querySelector("#large-case-bypass")?.checked) state.largeCaseBypass = true;
+      state.largeCaseDecision = "full";
+      render();
+    });
+    $("case-summary").querySelector("#large-case-focused")?.addEventListener("click", () => { state.largeCaseDecision = "focused"; render(); });
   }
 
   function overviewBudget() {
@@ -1207,7 +1221,7 @@
   function renderView() {
     if (!state.index) { $("canvas").innerHTML = `<div class="message">Open a BMOPF JSON case to see its views.</div>`; return; }
     const budget = overviewBudget();
-    if (budget.over && ["geo", "single"].includes(state.view) && !state.selected) {
+    if (budget.over && state.largeCaseDecision !== "full" && ["geo", "single"].includes(state.view) && !state.selected) {
       setStatus(`Focused overview mode: ${budget.message} Select a bus or device from the inventory to render nearby topology.`);
       $("canvas").innerHTML = `<div class="message"><strong>This case is larger than the overview budget.</strong><p>${escapeHtml(budget.message)}</p><p>Select an asset in the inventory to render its focused one-hop context. The full index and Diagnostics remain available.</p></div>`;
       document.querySelectorAll(".view-tab").forEach((button) => { const active = button.dataset.view === state.view; button.classList.toggle("active", active); button.setAttribute("aria-selected", String(active)); button.setAttribute("tabindex", active ? "0" : "-1"); });

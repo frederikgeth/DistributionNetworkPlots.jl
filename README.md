@@ -56,6 +56,7 @@ The prototype supports:
 - Optional worker-backed, vendored ELK Layered layout enhancement with fixed-root preference and orthogonal edge routing; deterministic offline fallback remains available and generated reports embed the pinned bundle.
 - Class overview with asset counts, support-level breakdowns, and result ranges; class links filter the explorer.
 - Explicit overview SVG budgets with a focused one-hop fallback for oversized cases.
+- Large cases can be opened after a browser confirmation; the warning can be bypassed for the current page, or the focused neighbourhood view can be retained.
 
 ## Build a distributable static site
 

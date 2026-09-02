@@ -10,6 +10,12 @@ const fixtureRoot = resolve(fileURLToPath(new URL("../fixtures/micro/", import.m
 const contentTypes = { ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".html": "text/html" };
 const resultFixture = await readFile(resolve(fixtureRoot, "micro_bmopf_result.json"), "utf8");
 const mismatchedResult = JSON.stringify({ ...JSON.parse(resultFixture), meta: { ...JSON.parse(resultFixture).meta, case_fingerprint: "not-the-open-case" } });
+const largeCase = {
+  name: "large-browser-smoke-case",
+  bus: Object.fromEntries(Array.from({ length: 501 }, (_, index) => [`bus_${index}`, { terminal_names: ["1", "n"] }])),
+  voltage_source: { source: { bus: "bus_0", terminal_map: ["1", "n"] } },
+  line: Object.fromEntries(Array.from({ length: 500 }, (_, index) => [`line_${index}`, { bus_from: `bus_${index}`, bus_to: `bus_${index + 1}`, terminal_map_from: ["1", "n"], terminal_map_to: ["1", "n"] }]))
+};
 
 function startStaticServer() {
   const server = createServer(async (request, response) => {
@@ -127,6 +133,16 @@ try {
     assert.match(multiWindingText, /WYE/);
     assert.match(multiWindingText, /DELTA/);
     assert.match(multiWindingText, /Each winding keeps its bus and terminal stack/);
+    await page.locator("#file-input").setInputFiles({ name: "large-browser-smoke-case.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(largeCase)) });
+    await page.locator("#case-summary h2").waitFor({ state: "visible" });
+    await page.getByRole("tab", { name: "Single-wire" }).click();
+    await page.locator("#large-case-dialog").waitFor({ state: "visible" });
+    assert.match(await page.locator("#large-case-dialog").innerText(), /large case/i);
+    await page.locator("#large-case-bypass").check();
+    await page.locator("#large-case-continue").click();
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator("#large-case-dialog").count(), 0);
+    assert.ok(Number(await page.locator("#canvas svg").getAttribute("width")) > 760);
     assert.deepEqual(consoleErrors, []);
   } finally {
     await browser.close();

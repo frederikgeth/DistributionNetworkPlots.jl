@@ -55,7 +55,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Use content-sized, minimum-gap single-line canvases for dense feeders, with scrollable overflow and invalidated legacy routed profiles.
 - [x] Faithful focused multi-wire view shows terminal stacks, phase permutations, neutral/ground cues, open-switch interruptions, and explicit transformer windings.
 - [x] Multi-winding focused view shows one terminal stack per winding with winding metadata and selectable connected buses.
-- [x] Publish an explicit overview SVG budget and switch oversized geospatial/single-line cases to a focused one-hop fallback.
+- [x] Publish an explicit overview SVG budget and gate oversized geospatial/single-line cases behind confirmation with a focused one-hop fallback.
 - [x] Define a renderer/layout contract and bounded eight-profile layout-cache retention policy.
 - [x] Extract the shared device-symbol renderer behind the contract-backed `frontend/renderers/` boundary.
 - [x] Extract the multi-wire projection helpers and deterministic single-wire layout adapter behind contract-backed module boundaries.
@@ -439,6 +439,7 @@ A slice is done only when:
 - [x] Persist versioned layouts keyed by case fingerprint, including per-bus lock/unlock and reset-to-computed controls.
 - [x] Add ranked search suggestions across buses, devices, diagnostics, and result metrics.
 - [x] Publish measured SVG/interaction budgets and an explicit focused-neighbourhood fallback for cases above them.
+- [x] Keep over-budget cases loadable behind a confirmation prompt with page-session bypass and focused-mode fallback.
 - [x] Add an accessible help/legend panel for symbols, conductor cues, and result encodings.
 
 ### Later: explicitly outside the alpha

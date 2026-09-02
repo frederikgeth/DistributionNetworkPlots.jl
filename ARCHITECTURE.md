@@ -497,7 +497,8 @@ its single-file reports remain self-contained and do not depend on a generated
 
 The browser prototype publishes a conservative initial budget of 500 buses or
 5,000 estimated SVG elements. Cases above either threshold keep the indexed
-inventory available but switch geospatial and single-wire views to a selected
+inventory available but ask for confirmation before rendering full geospatial
+or single-wire overviews. Until confirmed, those views switch to a selected
 asset's one-hop context. Final budgets should be recalibrated from measured
 micro, small-real, and large fixtures before a production renderer is chosen.
 

@@ -53,6 +53,7 @@ be matched for best-effort inspection.
 - Multi-wire conductor rows show phase, neutral, and ground cues with colour, patterns, and labels.
 - Terminal-map length mismatches are reported instead of silently padded in focused views.
 - Clear load errors for invalid JSON, oversized files, and oversized JSON documents.
+- Cases above the overview budget remain loadable. The viewer asks for confirmation before full geospatial or single-line rendering, with a page-session bypass checkbox and a focused-mode option.
 - Schema-identifier diagnostics when a case omits or does not identify BMOPF.
 - A Diagnostics view normalises result validation/profile findings and links each linked finding back to its asset.
 - Built-in authored examples for the complete AC feeder and sparse/DC support-boundary cases; selecting one loads it without a file round-trip.
