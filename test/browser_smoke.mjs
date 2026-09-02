@@ -132,6 +132,14 @@ try {
     assert.match(await page.locator("#canvas").innerText(), /Series Zs \[Ω\]/);
     assert.match(await page.locator("#canvas").innerText(), /0\.054/);
     assert.match(await page.locator("#canvas").innerText(), /Pure series branch · shunt admittance omitted/);
+    await inventorySearch.fill("load_a");
+    await page.locator('button[data-kind="load"][data-id="load_a"]').click();
+    const loadText = await page.locator("#canvas").innerText();
+    assert.match(loadText, /connection: SINGLE PHASE/);
+    assert.match(loadText, /load model: CONSTANT POWER \(default\)/);
+    await inventorySearch.fill("backup_gen");
+    await page.locator('button[data-kind="generator"][data-id="backup_gen"]').click();
+    assert.match(await page.locator("#canvas").innerText(), /connection: WYE/);
     await page.locator("#file-input").setInputFiles(resolve(fixtureRoot, "micro_bmopf.json"));
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");
@@ -252,6 +260,8 @@ try {
     const transformerText = await page.locator("#canvas").innerText();
     assert.match(transformerText, /transformer/);
     assert.match(transformerText, /Ordered conductor pairing/);
+    const transformerLabelXs = await page.locator('#canvas text[data-role="conductor-label"]').evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute("x"))));
+    assert.ok(transformerLabelXs.length >= 3 && transformerLabelXs.every((x) => x < 285));
     await inventorySearch.fill("tx_three");
     await page.locator('button[data-kind="transformer"][data-id="tx_three"]').click();
     const multiWindingText = await page.locator("#canvas").innerText();

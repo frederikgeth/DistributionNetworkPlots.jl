@@ -1480,8 +1480,14 @@
         return;
       }
       const terminals = attachment.terminals.length ? attachment.terminals : ["(no terminal map)"];
+      const record = item.sourceRecord || {};
+      const configuration = record.configuration ? `connection: ${String(record.configuration).replaceAll("_", " ")}` : null;
+      const model = item.ref.kind === "load" ? `load model: ${String(record.model || "CONSTANT_POWER").replaceAll("_", " ")}${record.model ? "" : " (default)"}` : null;
+      const details = [configuration, model].filter(Boolean);
       let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))}</text><rect x="180" y="85" width="400" height="300" rx="8" fill="#fffdf9" stroke="${colourOf(item.ref.kind)}" stroke-width="3"/><text x="380" y="125" text-anchor="middle" font-size="15">bus ${escapeHtml(attachment.busId)}</text>`;
-      terminals.forEach((terminal, i) => { const y = 170 + i * 42; content += `<line x1="250" y1="${y}" x2="510" y2="${y}" stroke="#9a9388" stroke-width="2"/><text x="230" y="${y + 4}" text-anchor="end" fill="#37332c" font-size="13">${escapeHtml(terminal)}</text>`; });
+      details.forEach((detail, i) => { content += `<text x="380" y="${148 + i * 15}" text-anchor="middle" fill="#70695f" font-size="11">${escapeHtml(detail)}</text>`; });
+      const terminalStart = details.length ? 184 : 170;
+      terminals.forEach((terminal, i) => { const y = terminalStart + i * 42; content += `<line x1="250" y1="${y}" x2="510" y2="${y}" stroke="#9a9388" stroke-width="2"/><text x="230" y="${y + 4}" text-anchor="end" fill="#37332c" font-size="13">${escapeHtml(terminal)}</text>`; });
       content += `<text x="380" y="430" text-anchor="middle" fill="#70695f" font-size="12">Single-bus attachment · inspect properties for device details</text>`;
       setMultiStatus(`${terminals.length} attached terminals · ${item.status}`);
       target.innerHTML = multiShell(content);
@@ -1563,7 +1569,9 @@
       } else {
         content += focusedPath([[240, yLeft], [380, bodyY], [520, yRight]], visual, item.status);
       }
-      content += `<text x="380" y="${Math.min(405, Math.max(yLeft, yRight) - 7)}" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(visual.label)} · ${escapeHtml(visual.kind)}</text>`;
+      const labelX = item.ref.kind === "transformer" ? 276 : 380;
+      const labelAnchor = item.ref.kind === "transformer" ? "end" : "middle";
+      content += `<text x="${labelX}" y="${Math.min(405, Math.max(yLeft, yRight) - 7)}" text-anchor="${labelAnchor}" fill="#70695f" font-size="10"${item.ref.kind === "transformer" ? " data-role=\"conductor-label\"" : ""}>${escapeHtml(visual.label)} · ${escapeHtml(visual.kind)}</text>`;
     });
     content += singleSymbol(item, 380, bodyY);
     const mappingNote = connection.warning ? `<text x="380" y="438" text-anchor="middle" fill="#8a4d20" font-size="12">${escapeHtml(connection.warning)} Inspect raw maps before relying on this pairing.</text>` : "";

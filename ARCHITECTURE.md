@@ -315,6 +315,11 @@ The on-screen Single-wire legend is an HTML overlay anchored to the view rather 
 ### 7.3 Multi-wire projection
 
 The multi-wire projection expands ports into terminal-level connections. In the browser UI it is available both as a standalone focused view and as a resizable component-detail pane alongside Single-wire. Single-wire remains the primary network context; the pane reuses the same renderer and follows the canonical selected `AssetRef`. Selecting a related bus or device in the pane updates the Single-wire selection, while Collapse and Open full view provide explicit control over the detail mode. The pane uses its own neutral camera so network zoom/pan does not distort component detail, and it stacks below the SLD on narrow screens.
+For single-bus nodal devices, the focused card also surfaces the declared
+connection configuration and, for loads, the declared load model (defaulting
+visibly to `CONSTANT_POWER` when the optional field is absent). Two-terminal
+transformer conductor labels are kept in the gutter beside the body so phase
+annotations do not sit on top of the transformer symbol or wiring.
 
 Projection rules:
 

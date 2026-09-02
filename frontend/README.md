@@ -37,7 +37,7 @@ be matched for best-effort inspection.
 - Inspector values use SI base units where BMOPF semantics are known (for example V, A, W, var, VA, Ω, Ω/m, S, m, Hz, and p.u.); engineering angles and geographic coordinates retain degrees. Unknown or model-dependent fields remain visibly unmodified and the raw record is always available.
 - Endpoint links from devices to buses.
 - Geospatial and schematic single-wire projections.
-- Focused multi-wire terminal stacks and conductor pairing for selected buses, lines, switches, and transformers, including phase permutations, explicit neutral/ground cues, one switch blade per conductor, and one panel per multi-winding transformer port.
+- Focused multi-wire terminal stacks and conductor pairing for selected buses, lines, switches, and transformers, including phase permutations, explicit neutral/ground cues, one switch blade per conductor, one panel per multi-winding transformer port, and connection/model annotations for nodal devices (for example WYE/DELTA/SINGLE_PHASE and constant-power/current/impedance/ZIP loads).
 - One- and two-hop neighbourhood expansion from a selected bus.
 - Back and Forward controls for stepping through selected assets and view changes; browser history and deep links remain supported.
 - The single-line **Overview** control clears the focused asset and returns to the whole-network diagram; on oversized cases it re-enters the full-render confirmation.
