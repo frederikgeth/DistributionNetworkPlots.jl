@@ -61,6 +61,8 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
     model = read(joinpath(FRONTEND_DIR, "model.js"), String)
     renderer_contract = read(joinpath(FRONTEND_DIR, "renderer-contract.js"), String)
     symbols_renderer = read(joinpath(FRONTEND_DIR, "renderers", "symbols.js"), String)
+    multi_wire_projection = read(joinpath(FRONTEND_DIR, "projections", "multi-wire.js"), String)
+    deterministic_layout = read(joinpath(FRONTEND_DIR, "layout", "deterministic.js"), String)
     app = read(joinpath(FRONTEND_DIR, "app.js"), String)
     css = read(joinpath(FRONTEND_DIR, "styles.css"), String)
     elk_bundle = read(joinpath(FRONTEND_DIR, "vendor", "elk.bundled.js"), String)
@@ -77,6 +79,8 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
         "<script src=\"model.js\"></script>" => "<script>$(model)</script>",
         "<script src=\"renderer-contract.js\"></script>" => "<script>$(renderer_contract)</script>",
         "<script src=\"renderers/symbols.js\"></script>" => "<script>$(symbols_renderer)</script>",
+        "<script src=\"projections/multi-wire.js\"></script>" => "<script>$(multi_wire_projection)</script>",
+        "<script src=\"layout/deterministic.js\"></script>" => "<script>$(deterministic_layout)</script>",
         "<script src=\"app.js\"></script>" => "<script>globalThis.__BMOPF_REPORT_META__ = $(report_metadata); globalThis.__BMOPF_CASE__ = $(embedded); globalThis.__BMOPF_ELK_BUNDLE_SOURCE__ = $(elk_script);$(result_script)</script><script>$(app)</script>",
     )
 

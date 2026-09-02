@@ -703,66 +703,19 @@
     return { assets, buses: seenBuses };
   }
 
-  function conductorVisual(terminal, otherTerminal, busId, otherBusId, index) {
-    const name = String(terminal).toLowerCase(); const otherName = String(otherTerminal).toLowerCase();
-    const bus = state.index.buses.find((candidate) => candidate.ref.id === busId);
-    const otherBus = state.index.buses.find((candidate) => candidate.ref.id === otherBusId);
-    const grounded = Boolean(bus?.groundedTerminals.includes(String(terminal)) || otherBus?.groundedTerminals.includes(String(otherTerminal)) || /^(g|pe|ground|earth)$/.test(name) || /^(g|pe|ground|earth)$/.test(otherName));
-    const neutral = name === "n" || name === "neutral" || otherName === "n" || otherName === "neutral";
-    if (grounded && neutral) return { colour: "#5d574d", dash: "4 3", label: "N⏚", kind: "grounded neutral" };
-    if (grounded) return { colour: "#5d574d", dash: "2 4", label: "⏚", kind: "ground" };
-    if (neutral) return { colour: "#787266", dash: "10 5", label: "N", kind: "neutral" };
-    const phaseIndex = { a: 0, p1: 0, phase1: 0, "1": 0, b: 1, p2: 1, phase2: 1, "2": 1, c: 2, p3: 2, phase3: 2, "3": 2 }[name] ?? { a: 0, p1: 0, phase1: 0, "1": 0, b: 1, p2: 1, phase2: 1, "2": 1, c: 2, p3: 2, phase3: 2, "3": 2 }[otherName] ?? index % 3;
-    return { colour: ["#c2564b", "#4a8f5f", "#3f6fb9"][phaseIndex], dash: "", label: ["A", "B", "C"][phaseIndex], kind: "phase" };
-  }
-
-  function terminalNames(port) {
-    return port?.terminals?.length ? port.terminals.map(String) : ["? (terminal map unavailable)"];
-  }
-
-  function multiBusPanel(bus, port, x, y, width, side) {
-    const terminals = terminalNames(port);
-    const rowY = terminals.map((_, i) => y + 72 + i * 34);
-    let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><rect x="${x}" y="${y}" width="${width}" height="${Math.max(190, 112 + terminals.length * 34)}" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><text x="${x + width / 2}" y="${y + 28}" text-anchor="middle" fill="#25231f" font-size="14">bus ${escapeHtml(bus.ref.id)}</text>`;
-    terminals.forEach((terminal, i) => {
-      const grounded = bus.groundedTerminals.includes(terminal) || /^(g|pe|ground|earth)$/i.test(terminal);
-      const label = grounded ? `${terminal} · ⏚` : terminal;
-      const lineStart = side === "left" ? x + width - 18 : x + 18;
-      const textX = side === "left" ? x + 14 : x + width - 14;
-      html += `<line x1="${lineStart}" y1="${rowY[i]}" x2="${side === "left" ? x + width - 4 : x + 4}" y2="${rowY[i]}" stroke="${grounded ? "#5d574d" : "#9a9388"}" stroke-width="${grounded ? 3 : 2}"${grounded ? " stroke-dasharray=\"2 4\"" : ""}/><text x="${textX}" y="${rowY[i] + 4}" text-anchor="${side === "left" ? "start" : "end"}" fill="#37332c" font-size="12">${escapeHtml(label)}</text>`;
-    });
-    html += `</g>`;
-    return { html, rowY };
-  }
-
-  function multiWindingPanel(bus, port, x, y, width, side) {
-    const terminals = terminalNames(port);
-    const height = side === "top" ? 92 : Math.max(150, 78 + terminals.length * 28);
-    const anchors = [];
-    let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><rect x="${x}" y="${y}" width="${width}" height="${height}" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><text x="${x + width / 2}" y="${y + 24}" text-anchor="middle" fill="#25231f" font-size="13">bus ${escapeHtml(bus.ref.id)}</text>`;
-    terminals.forEach((terminal, i) => {
-      const grounded = (bus.groundedTerminals || []).includes(terminal) || /^(g|pe|ground|earth)$/i.test(terminal);
-      const label = grounded ? `${terminal} · ⏚` : terminal;
-      if (side === "top") {
-        const point = terminals.length === 1 ? x + width / 2 : x + 24 + i * ((width - 48) / (terminals.length - 1));
-        anchors.push([point, y]);
-        html += `<line x1="${point}" y1="${y}" x2="${point}" y2="${y + 15}" stroke="${grounded ? "#5d574d" : "#9a9388"}" stroke-width="${grounded ? 3 : 2}"${grounded ? " stroke-dasharray=\"2 4\"" : ""}/><text x="${point}" y="${y + 39}" text-anchor="middle" fill="#37332c" font-size="11">${escapeHtml(label)}</text>`;
-      } else {
-        const rowY = y + 54 + i * 28;
-        const lineStart = side === "left" ? x + width - 18 : x + 18;
-        const lineEnd = side === "left" ? x + width - 4 : x + 4;
-        anchors.push([lineEnd, rowY]);
-        html += `<line x1="${lineStart}" y1="${rowY}" x2="${lineEnd}" y2="${rowY}" stroke="${grounded ? "#5d574d" : "#9a9388"}" stroke-width="${grounded ? 3 : 2}"${grounded ? " stroke-dasharray=\"2 4\"" : ""}/><text x="${side === "left" ? x + 12 : x + width - 12}" y="${rowY + 4}" text-anchor="${side === "left" ? "start" : "end"}" fill="#37332c" font-size="11">${escapeHtml(label)}</text>`;
-      }
-    });
-    html += `</g>`;
-    return { html, anchors };
-  }
-
-  function focusedPath(points, visual, status) {
-    const dash = [visual.dash, status === "open" ? "8 6" : ""].filter(Boolean).join(" ");
-    return `<path d="M${points.map((point) => `${point[0]} ${point[1]}`).join("L")}" fill="none" stroke="${visual.colour}" stroke-width="3"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
-  }
+  const multiWireProjection = globalThis.BMOPFProjections?.createMultiWireProjection({
+    escapeHtml,
+    findBus: (id) => state.index?.buses.find((bus) => bus.ref.id === id)
+  });
+  const deterministicLayout = globalThis.BMOPFLayouts?.createDeterministicLayout({
+    getIndex: () => state.index,
+    getLayout: () => state.layout
+  });
+  function conductorVisual(...args) { return multiWireProjection.conductorVisual(...args); }
+  function terminalNames(...args) { return multiWireProjection.terminalNames(...args); }
+  function multiBusPanel(...args) { return multiWireProjection.multiBusPanel(...args); }
+  function multiWindingPanel(...args) { return multiWireProjection.multiWindingPanel(...args); }
+  function focusedPath(...args) { return multiWireProjection.focusedPath(...args); }
 
   function renderMultiHopControls() {
     const controls = $("multi-hop-controls");
@@ -947,52 +900,7 @@
     return { positions, geographic: source.length >= 2, project, unmapped: buses.filter((bus) => source.length >= 2 && !bus.coordinates) };
   }
 
-  function singlePositions() {
-    const buses = state.index.buses;
-    const adjacency = new Map(buses.map((bus) => [bus.ref.id, new Set()]));
-    for (const item of state.index.assets) {
-      const ports = item.ports || [];
-      if (ports.length < 2) continue;
-      const anchor = ports[0].busId;
-      for (const port of ports.slice(1)) {
-        if (!adjacency.has(anchor)) adjacency.set(anchor, new Set());
-        if (!adjacency.has(port.busId)) adjacency.set(port.busId, new Set());
-        adjacency.get(anchor).add(port.busId);
-        adjacency.get(port.busId).add(anchor);
-      }
-    }
-    const roots = state.index.assets
-      .filter((item) => item.ref.kind === "voltage_source" && item.ports?.[0])
-      .map((item) => item.ports[0].busId)
-      .filter((id, i, all) => all.indexOf(id) === i);
-    const depth = new Map();
-    const configuredRoot = state.layout?.root && state.layout.root !== "auto" && buses.some((bus) => bus.ref.id === state.layout.root) ? state.layout.root : null;
-    const queue = configuredRoot ? [configuredRoot] : (roots.length ? roots : (buses[0] ? [buses[0].ref.id] : []));
-    queue.forEach((id) => depth.set(id, 0));
-    for (let cursor = 0; cursor < queue.length; cursor += 1) {
-      const id = queue[cursor];
-      for (const next of adjacency.get(id) || []) {
-        if (!depth.has(next)) { depth.set(next, depth.get(id) + 1); queue.push(next); }
-      }
-    }
-    let maxDepth = Math.max(0, ...depth.values());
-    buses.forEach((bus) => { if (!depth.has(bus.ref.id)) { maxDepth += 1; depth.set(bus.ref.id, maxDepth); } });
-    const xStep = Math.min(180, 650 / Math.max(maxDepth, 1));
-    const byDepth = new Map();
-    buses.forEach((bus) => { const d = depth.get(bus.ref.id) || 0; if (!byDepth.has(d)) byDepth.set(d, []); byDepth.get(d).push(bus); });
-    const positions = new Map();
-    for (const [d, level] of byDepth.entries()) {
-      level.sort((a, b) => a.ref.id.localeCompare(b.ref.id));
-      const spacing = Math.min(96, 360 / Math.max(level.length, 1));
-      const start = 250 - ((level.length - 1) * spacing) / 2;
-      const column = state.layout?.direction === "load-to-source" ? maxDepth - d : d;
-      level.forEach((bus, i) => positions.set(bus.ref.id, [70 + column * xStep, start + i * spacing]));
-    }
-    for (const [id, point] of Object.entries(state.layout?.locked || {})) {
-      if (Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) positions.set(id, [point[0], point[1]]);
-    }
-    return positions;
-  }
+  function singlePositions() { return deterministicLayout.singlePositions(); }
 
   function focusSelection() {
     const item = itemFor(state.selected); if (!item || !state.index || ["multi", "diagnostics"].includes(state.view)) return;

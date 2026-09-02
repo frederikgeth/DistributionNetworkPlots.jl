@@ -39,6 +39,8 @@ try {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
     assert.equal(await page.locator('script[src="renderer-contract.js"]').count(), 1);
     assert.equal(await page.locator('script[src="renderers/symbols.js"]').count(), 1);
+    assert.equal(await page.locator('script[src="projections/multi-wire.js"]').count(), 1);
+    assert.equal(await page.locator('script[src="layout/deterministic.js"]').count(), 1);
     await page.getByRole("tab", { name: "Single-wire" }).click();
     await page.getByRole("button", { name: "Apply ELK layout" }).click();
     await page.locator("#view-status").waitFor({ state: "visible" });

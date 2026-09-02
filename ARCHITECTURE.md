@@ -456,8 +456,10 @@ If the browser core later becomes useful outside Julia, it may move to a publish
 The current static entrypoint is intentionally transitional: `frontend/app.js`
 still orchestrates state and projections, while `frontend/renderer-contract.js`
 and `frontend/renderers/symbols.js` are the first extracted contract-backed
-modules. Further extraction should preserve the same browser script order and
-the Julia embedding boundary.
+modules. `frontend/projections/multi-wire.js` and
+`frontend/layout/deterministic.js` now extract the terminal projection and
+deterministic positioning adapters as well. Further extraction should preserve
+the same browser script order and the Julia embedding boundary.
 
 ## 11. Quality attributes
 

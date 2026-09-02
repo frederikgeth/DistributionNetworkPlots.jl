@@ -55,6 +55,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Publish an explicit overview SVG budget and switch oversized geospatial/single-line cases to a focused one-hop fallback.
 - [x] Define a renderer/layout contract and bounded eight-profile layout-cache retention policy.
 - [x] Extract the shared device-symbol renderer behind the contract-backed `frontend/renderers/` boundary.
+- [x] Extract the multi-wire projection helpers and deterministic single-wire layout adapter behind contract-backed module boundaries.
 - [ ] Replace prototype renderer packages with the contract-backed module tree.
 - [x] Add an automated browser end-to-end smoke test and wire it into GitHub Actions.
 
