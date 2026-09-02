@@ -67,6 +67,8 @@ try {
     await displayOptions.locator('input[data-display-option="showDeviceLabels"]').check();
     const attachedTransforms = await page.locator('#canvas g[data-kind="load"], #canvas g[data-kind="ibr"], #canvas g[data-kind="capacitor"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("transform")));
     assert.equal(new Set(attachedTransforms).size, attachedTransforms.length);
+    assert.equal(await page.locator("#floating-legend").isVisible(), true);
+    assert.match(await page.locator("#floating-legend").innerText(), /busbar/);
     assert.match(await page.locator("#case-summary").innerText(), /Coordinate provenance: synthetic illustrative coordinates/);
     // #view-status is an aria-live region and loading an example announces the
     // example itself, so re-enter the geospatial view to read its own status.

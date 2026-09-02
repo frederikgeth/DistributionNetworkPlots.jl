@@ -933,6 +933,26 @@
     return `<g transform="translate(20 18)" aria-label="Result visualisation legend">${rows.join("")}</g>`;
   }
 
+  function floatingLegendHtml() {
+    const symbols = `<div class="floating-legend-section"><strong>Symbols</strong><div class="floating-legend-row"><span class="legend-line busbar"></span><span>busbar</span></div><div class="floating-legend-row"><span>○</span><span>source or generator</span></div><div class="floating-legend-row"><span>paired coils</span><span>transformer</span></div><div class="floating-legend-row"><span>□</span><span>load</span></div><div class="floating-legend-row"><span>║</span><span>capacitor</span></div><div class="floating-legend-row"><span>⏚</span><span>shunt / grounding</span></div><div class="floating-legend-row"><span class="legend-line open"></span><span>open switch or interrupted path</span></div><p class="legend-note">A dashed leader marks a manually moved symbol. Hover or select an asset for its full tooltip.</p></div>`;
+    const hasLoading = state.result && visibleAssets().some((item) => resultScalar(item, "loading") !== null);
+    const hasVoltage = state.result && state.index.buses.some((item) => resultVoltageDeviation(item) !== null);
+    const hasState = state.result && visibleAssets().some((item) => resultStatus(item) !== item.status || ["open", "out_of_service"].includes(item.status));
+    if (!hasLoading && !hasVoltage && !hasState) return symbols;
+    const result = `<div class="floating-legend-section"><strong>Result overlays</strong>${hasLoading ? `<div class="floating-legend-row"><span class="legend-line result-nominal"></span><span>loading &lt; 0.70</span></div><div class="floating-legend-row"><span class="legend-line result-moderate"></span><span>loading 0.70–0.90</span></div><div class="floating-legend-row"><span class="legend-line result-high"></span><span>loading &gt; 0.90</span></div>` : ""}${hasVoltage ? `<div class="floating-legend-row"><span class="legend-dot"></span><span>nominal voltage</span></div><div class="floating-legend-row"><span class="legend-dot moderate"></span><span>moderate voltage deviation</span></div><div class="floating-legend-row"><span class="legend-dot high"></span><span>high voltage deviation</span></div>` : ""}${hasState ? `<div class="floating-legend-row"><span class="legend-line open"></span><span>open</span></div><div class="floating-legend-row"><span class="legend-line" style="opacity:.35"></span><span>out of service</span></div>` : ""}</div>`;
+    return symbols + result;
+  }
+
+  function renderFloatingLegend() {
+    const panel = $("floating-legend");
+    if (!panel) return;
+    const visible = Boolean(state.index && state.view === "single");
+    panel.hidden = !visible;
+    if (!visible) return;
+    const content = panel.querySelector(".floating-legend-content");
+    if (content) content.innerHTML = floatingLegendHtml();
+  }
+
   function renderResultSummary() {
     const panel = $("result-summary");
     if (!state.result) {
@@ -1670,7 +1690,7 @@
     bindCamera();
   }
 
-  function render() { renderSummary(); renderClassOverview(); renderResultSummary(); renderInventory(); renderInspector(); renderView(); renderMultiDetail(); renderCameraControls(); renderMultiHopControls(); renderDisplayOptions(); }
+  function render() { renderSummary(); renderClassOverview(); renderResultSummary(); renderInventory(); renderInspector(); renderView(); renderMultiDetail(); renderCameraControls(); renderMultiHopControls(); renderDisplayOptions(); renderFloatingLegend(); }
 
   function parseHash() {
     const entry = navigationEntryFromHash();

@@ -310,6 +310,8 @@ ELK layered layout is the default candidate because it supports explicit ports a
 
 Single-wire also exposes page-session display toggles for semantic decluttering: bus IDs, device IDs, connection arrows, and a selected-asset-only label mode can be enabled independently. These affect only the SVG presentation; titles/tooltips, selectable asset groups, and source data remain available when labels are hidden. The initial defaults keep all labels and arrows visible until usability review on larger feeders is complete.
 
+The on-screen Single-wire legend is an HTML overlay anchored to the view rather than diagram coordinates, so it remains readable during pan and zoom. The SVG renderer keeps a presentation-hidden embedded legend for standalone export and print, preserving self-contained report output.
+
 ### 7.3 Multi-wire projection
 
 The multi-wire projection expands ports into terminal-level connections. In the browser UI it is available both as a standalone focused view and as a resizable component-detail pane alongside Single-wire. Single-wire remains the primary network context; the pane reuses the same renderer and follows the canonical selected `AssetRef`. Selecting a related bus or device in the pane updates the Single-wire selection, while Collapse and Open full view provide explicit control over the detail mode. The pane uses its own neutral camera so network zoom/pan does not distort component detail, and it stacks below the SLD on narrow screens.
