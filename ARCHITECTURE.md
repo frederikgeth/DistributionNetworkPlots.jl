@@ -463,6 +463,14 @@ deterministic positioning adapters as well. Overview composition now lives in
 Further extraction should preserve the same browser script order and the Julia
 embedding boundary.
 
+The production browser distribution is assembled by
+`scripts/build-static.mjs`. It preserves that script order in one static
+bundle, copies the stylesheet and pinned ELK worker, and writes a small
+`build-manifest.json` for inspection. This assembler is intentionally separate
+from Julia report generation: `render_case` embeds source modules directly so
+its single-file reports remain self-contained and do not depend on a generated
+`dist/` directory.
+
 ## 11. Quality attributes
 
 ### 11.1 Correctness

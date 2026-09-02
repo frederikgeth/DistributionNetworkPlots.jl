@@ -9,7 +9,16 @@ python3 -m http.server 8765 --directory frontend
 ```
 
 Open <http://127.0.0.1:8765/> and choose a built-in example, or drop
-`fixtures/micro/micro_bmopf.json` onto the page. The prototype supports:
+`fixtures/micro/micro_bmopf.json` onto the page. The prototype supports the
+features listed below.
+
+For a single-directory distribution build, run `npm run build` from the
+repository root. This writes `dist/` with a bundled `index.html`, stylesheet,
+ordered explorer script, `build-manifest.json`, and the vendored ELK worker.
+Serve that directory with `python3 -m http.server 8765 --directory dist`.
+The generated site is runtime-dependency-free and can be copied to any static
+host. The source-mode page above remains the preferred development loop, while
+Julia reports continue to embed their own runtime independently.
 
 Attach a BMOPFTools-style result JSON with the secondary file control after
 opening a case. Raw result dictionaries and wrappers with an embedded

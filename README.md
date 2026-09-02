@@ -55,6 +55,27 @@ The prototype supports:
 - Class overview with asset counts, support-level breakdowns, and result ranges; class links filter the explorer.
 - Explicit overview SVG budgets with a focused one-hop fallback for oversized cases.
 
+## Build a distributable static site
+
+The source-mode prototype is convenient for development. To assemble a
+publishable, dependency-free site, run:
+
+```sh
+npm install
+npm run build
+python3 -m http.server 8765 --directory dist
+```
+
+The generated `dist/` directory contains an `index.html`, one ordered browser
+bundle, the stylesheet, the pinned offline ELK worker bundle, and a
+`build-manifest.json` describing the bundle contents. The output is ignored by
+Git because it is reproducible; copy or publish `dist/` as a complete
+directory. The site has no runtime Node.js requirement.
+
+Julia-generated reports remain a separate self-contained distribution format:
+`render_case` embeds the source modules and vendor assets directly in one HTML
+file, so the static assembler is not required for reports.
+
 ## Generate a static Julia report
 
 ```julia
@@ -87,6 +108,13 @@ Optional browser end-to-end smoke test (requires Node.js and Playwright):
 npm install
 npx playwright install chromium
 npm run test:browser
+```
+
+The static assembler has a fast smoke test that checks bundle ordering,
+asset references, and the offline vendor path:
+
+```bash
+npm run test:build
 ```
 
 GitHub Actions runs both the Julia suite and this browser smoke test on pushes

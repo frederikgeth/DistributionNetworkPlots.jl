@@ -57,6 +57,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Extract the shared device-symbol renderer behind the contract-backed `frontend/renderers/` boundary.
 - [x] Extract the multi-wire projection helpers and deterministic single-wire layout adapter behind contract-backed module boundaries.
 - [x] Extract the geospatial and single-wire overview renderers behind contract-backed renderer modules.
+- [x] Add a dependency-light static distribution assembler with an ordered browser bundle, offline vendor assets, and a build manifest.
 - [ ] Replace prototype renderer packages with the contract-backed module tree.
 - [x] Add an automated browser end-to-end smoke test and wire it into GitHub Actions.
 

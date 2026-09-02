@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "node scripts/build-static.mjs",
+    "test:build": "node --test test/build_smoke.mjs",
     "test:browser": "node --test test/browser_smoke.mjs"
   },
   "devDependencies": {
