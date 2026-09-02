@@ -145,6 +145,9 @@ try {
     await page.locator('button[data-kind="generator"][data-id="backup_gen"]').click();
     assert.match(await page.locator("#canvas").innerText(), /connection: WYE/);
     assert.match(await page.locator("#canvas").innerText(), /WYE connection/);
+    await page.getByRole("tab", { name: "Single-wire" }).click();
+    assert.ok(await page.locator("#multi-detail-canvas").evaluate((node) => node.scrollWidth <= node.clientWidth + 1));
+    await page.getByRole("tab", { name: "Multi-wire" }).click();
     await page.locator("#file-input").setInputFiles(resolve(fixtureRoot, "micro_bmopf.json"));
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");
