@@ -92,6 +92,21 @@ try {
     await page.mouse.move(lineOrigin.x + 18, lineOrigin.y + 8);
     await page.mouse.up();
     const layoutAfterDeviceDrag = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:example-complete-feeder")));
+    console.log("DIAG layout:", JSON.stringify(layoutAfterDeviceDrag));
+    console.log("DIAG origin:", JSON.stringify(lineOrigin));
+    console.log("DIAG probe:", JSON.stringify(await page.evaluate(({ x, y }) => {
+      const el = document.elementFromPoint(x, y);
+      const g = document.querySelector('g.sld-draggable[data-kind="line"][data-id="line_main"]');
+      const events = [];
+      ["pointerdown", "pointermove", "pointerup"].forEach((type) => g.addEventListener(type, () => events.push(type)));
+      return {
+        hitTag: el?.tagName, hitKind: el?.dataset?.kind, hitId: el?.dataset?.id,
+        hitParentTag: el?.parentElement?.tagName, hitParentKind: el?.parentElement?.dataset?.kind, hitParentId: el?.parentElement?.dataset?.id,
+        gTransform: g?.getAttribute("transform"), gIsHit: g === el || g === el?.parentElement,
+        pointerEventsStyle: el ? getComputedStyle(el).pointerEvents : null,
+        gPointerEvents: g ? getComputedStyle(g).pointerEvents : null
+      };
+    }, lineOrigin)));
     assert.ok(Object.values(layoutAfterDeviceDrag.profiles).some((profile) => Array.isArray(profile.positions?.["line:line_main"])));
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     assert.match(await page.locator("#canvas").innerText(), /Π branch model/);
