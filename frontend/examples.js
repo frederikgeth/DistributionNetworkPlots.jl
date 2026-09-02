@@ -25,7 +25,18 @@
     ibr: { rooftop_ibr: { bus: "load_bus", terminal_map: ["2", "n"], p_max: [30000], q_max: [10000] } },
     shunt: { grounding: { bus: "feeder", terminal_map: ["n"], G_1_1: 0.1 } },
     capacitor: { cap_bank: { bus: "load_bus", terminal_map: ["1", "2", "3"], q_nom: [5000, 5000, 5000] } },
-    linecode: { lc_main: { i_max: [300, 300, 300, 300] } }
+    linecode: { lc_main: {
+      source: "synthetic illustrative series values in Ω/m",
+      R_series_1_1: 0.00045, R_series_1_2: 0.00005, R_series_1_3: 0.00005, R_series_1_4: 0.00003,
+      R_series_2_1: 0.00005, R_series_2_2: 0.00046, R_series_2_3: 0.00005, R_series_2_4: 0.00003,
+      R_series_3_1: 0.00005, R_series_3_2: 0.00005, R_series_3_3: 0.00047, R_series_3_4: 0.00003,
+      R_series_4_1: 0.00003, R_series_4_2: 0.00003, R_series_4_3: 0.00003, R_series_4_4: 0.00120,
+      X_series_1_1: 0.00095, X_series_1_2: 0.00018, X_series_1_3: 0.00018, X_series_1_4: 0.00012,
+      X_series_2_1: 0.00018, X_series_2_2: 0.00096, X_series_2_3: 0.00018, X_series_2_4: 0.00012,
+      X_series_3_1: 0.00018, X_series_3_2: 0.00018, X_series_3_3: 0.00097, X_series_3_4: 0.00012,
+      X_series_4_1: 0.00012, X_series_4_2: 0.00012, X_series_4_3: 0.00012, X_series_4_4: 0.00180,
+      i_max: [300, 300, 300, 300]
+    } }
   };
 
   const partial = {

@@ -305,7 +305,7 @@ Projection rules:
 - Attachments remain addressable even when drawn as badges or compact symbols.
 - Voltage levels, feeder roots, and containment may influence layout without changing topology.
 
-ELK layered layout is the default candidate because it supports explicit ports and orthogonal routing. The prototype now exposes an optional pinned, vendored `elkjs` enhancement from the Single-wire controls; its computed bus positions and orthogonal edge sections are calculated in a Web Worker, transformed into the SVG coordinate space, and cached by case identity, direction, and root bus. A selected root is passed through ELK's fixed-root processing options; deterministic layout remains the offline fallback. Julia-generated reports embed the bundle so the option remains available offline. The cache keeps at most eight recently used direction/root profiles per case; renderer package extraction remains the remaining productionisation step. Manual bus nudges invalidate routed sections and return the view to deterministic paths. Layout never mutates the source case.
+ELK layered layout is the default candidate because it supports explicit ports and orthogonal routing. The prototype now exposes an optional pinned, vendored `elkjs` enhancement from the Single-wire controls; its computed bus positions and orthogonal edge sections are calculated in a Web Worker, transformed into the SVG coordinate space, and cached by case identity, direction, and root bus. A selected root is passed through ELK's fixed-root processing options; deterministic layout remains the offline fallback. Julia-generated reports embed the bundle so the option remains available offline. The cache keeps at most eight recently used direction/root profiles per case; renderer package extraction remains the remaining productionisation step. Manual dragging can override any bus or device symbol position; moved symbols retain a dashed leader to their electrical anchor, and drag overrides invalidate routed sections and return the view to deterministic paths. Layout never mutates the source case.
 
 ### 7.3 Multi-wire projection
 
@@ -320,6 +320,14 @@ Projection rules:
 - Unsupported connection semantics produce diagnostics rather than plausible-looking guesses.
 
 The focused renderer supports a selected asset or bus and a configurable one- or two-hop neighbourhood. Bus terminal stacks remain explicit; conductor paths preserve ordered phase permutations, neutral/ground distinctions, and open-switch interruptions. Two-winding transformers use a device body between their winding-side terminal stacks. Multi-winding transformers use a body with one explicit terminal stack per winding, including winding metadata and selectable connected buses; they are never reduced to pairwise branches. Full-network overview uses collapsed bundles and semantic zoom; expanded conductors are rendered only where useful.
+
+Selected line and DC-branch records use the specification's nominal Π-model
+when impedance fields are available. The focused view presents the full
+series `R_series_k_j + jX_series_k_j` matrix in absolute Ω, converting
+linecode Ω/m values using the branch length. From- and to-side shunt
+`G/B` matrices are rendered as half-sections in S only when at least one
+nonzero entry is present; a pure-series branch shows an explicit omission note
+instead of drawing invented shunt elements.
 
 ## 8. Interaction and navigation
 

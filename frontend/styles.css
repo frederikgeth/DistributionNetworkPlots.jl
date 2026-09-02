@@ -56,6 +56,9 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor: col-resize !important; 
 .canvas svg { display: block; width: 100%; height: 500px; }
 .canvas svg.single-wire-svg { min-width: 100%; }
 .canvas [data-kind]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.canvas .sld-draggable { cursor: grab; touch-action: none; user-select: none; }
+.canvas .sld-draggable:active { cursor: grabbing; }
+.canvas .sld-drag-leader { pointer-events: none; }
 .canvas .message { padding: 80px 24px; color: var(--muted); text-align: center; }
 .diagnostics-view { min-height: 500px; padding: 16px; background: #fbfaf7; }
 .diagnostics-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }

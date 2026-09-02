@@ -69,7 +69,43 @@
       return `<path d="M${points.map((point) => `${point[0]} ${point[1]}`).join("L")}" fill="none" stroke="${visual.colour}" stroke-width="3"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
     }
 
-    return Object.freeze({ MODULE_VERSION, conductorVisual, terminalNames, multiBusPanel, multiWindingPanel, focusedPath });
+    function matrixValue(record, prefix, row, column) {
+      if (!record || typeof record !== "object") return null;
+      const key = `${prefix}_${row + 1}_${column + 1}`;
+      const direct = record[key];
+      if (direct !== null && direct !== undefined && direct !== "" && Number.isFinite(Number(direct))) return Number(direct);
+      const matrix = record[prefix] || record[prefix.toLowerCase()];
+      const nested = Array.isArray(matrix) && Array.isArray(matrix[row]) ? matrix[row][column] : undefined;
+      if (nested !== null && nested !== undefined && nested !== "" && Number.isFinite(Number(nested))) return Number(nested);
+      const keyed = matrix && typeof matrix === "object" ? matrix[key] : undefined;
+      if (keyed !== null && keyed !== undefined && keyed !== "" && Number.isFinite(Number(keyed))) return Number(keyed);
+      return null;
+    }
+
+    function branchModel(item, connection, findRecord) {
+      const record = item?.sourceRecord || {};
+      const linecode = record.linecode && findRecord ? findRecord({ kind: "linecode", id: record.linecode }) : null;
+      const source = linecode?.sourceRecord || record;
+      const fromCode = Boolean(linecode?.sourceRecord);
+      const length = Number(record.length);
+      const scale = fromCode && Number.isFinite(length) ? length : 1;
+      const count = Math.max(1, connection?.pairs?.length || item?.ports?.[0]?.terminals?.length || 1);
+      const series = Array.from({ length: count }, (_, row) => Array.from({ length: count }, (_, column) => ({
+        r: matrixValue(source, "R_series", row, column),
+        x: matrixValue(source, "X_series", row, column)
+      })).map((entry) => ({ r: entry.r === null ? null : entry.r * scale, x: entry.x === null ? null : entry.x * scale })));
+      const shunt = { from: [], to: [] };
+      for (const side of ["from", "to"]) {
+        shunt[side] = Array.from({ length: count }, (_, row) => Array.from({ length: count }, (_, column) => ({
+          g: matrixValue(source, `G_${side}`, row, column),
+          b: matrixValue(source, `B_${side}`, row, column)
+        })).map((entry) => ({ g: entry.g === null ? null : entry.g * scale, b: entry.b === null ? null : entry.b * scale })));
+      }
+      const shuntPresent = shunt.from.flat().concat(shunt.to.flat()).some((entry) => [entry.g, entry.b].some((value) => value !== null && Math.abs(value) > 1e-12));
+      return { series, shunt, shuntPresent, source: fromCode ? `linecode ${record.linecode} · ${Number.isFinite(length) ? `L = ${length} m` : "length unavailable"}` : "inline absolute values" };
+    }
+
+    return Object.freeze({ MODULE_VERSION, conductorVisual, terminalNames, multiBusPanel, multiWindingPanel, focusedPath, branchModel });
   }
 
   globalThis.BMOPFProjections = Object.freeze({ MODULE_VERSION, createMultiWireProjection });

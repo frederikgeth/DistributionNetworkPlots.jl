@@ -9,7 +9,7 @@
   const SIDEBAR_WIDTH_DEFAULT = 360;
   const SIDEBAR_WIDTH_MIN = 280;
   const SIDEBAR_WIDTH_MAX = 640;
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -223,11 +223,12 @@
   }
 
   function normaliseLayoutProfile(profile) {
-    if (!profile || typeof profile !== "object") return { locked: {}, routes: {}, engine: "deterministic" };
+    if (!profile || typeof profile !== "object") return { locked: {}, positions: {}, routes: {}, engine: "deterministic" };
     const locked = profile.locked && typeof profile.locked === "object" ? profile.locked : {};
+    const positions = profile.positions && typeof profile.positions === "object" ? profile.positions : {};
     const routes = profile.routes && typeof profile.routes === "object" ? profile.routes : {};
     const lastUsed = Number.isFinite(Number(profile.lastUsed)) ? Number(profile.lastUsed) : 0;
-    return { locked, routes, engine: profile.engine === "elk" ? "elk" : "deterministic", lastUsed };
+    return { locked, positions, routes, engine: profile.engine === "elk" ? "elk" : "deterministic", lastUsed };
   }
 
   function pruneLayoutProfiles(profiles, activeKey) {
@@ -245,7 +246,7 @@
   function loadLayout() {
     const key = layoutKey();
     const graphSignature = layoutGraphSignature();
-    const defaults = (cacheState = "none") => ({ version: LAYOUT_CACHE_VERSION, key, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {}, cacheState });
+    const defaults = (cacheState = "none") => ({ version: LAYOUT_CACHE_VERSION, key, locked: {}, positions: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {}, cacheState });
     try {
       const current = JSON.parse(localStorage.getItem(`bmopf-layout-v3:${key}`) || "null");
       if (current && current.version === LAYOUT_CACHE_VERSION && current.key === key && current.graphSignature === graphSignature && current.routeSpace === LAYOUT_ROUTE_SPACE && current.elkVersion === ELK_VERSION && current.profiles && typeof current.profiles === "object") {
@@ -254,7 +255,7 @@
         const activeProfileKey = layoutProfileKey(direction, root);
         const profiles = pruneLayoutProfiles(current.profiles, activeProfileKey);
         const profile = normaliseLayoutProfile(profiles[activeProfileKey]);
-        return { version: LAYOUT_CACHE_VERSION, key, locked: profile.locked, routes: profile.routes, direction, root, engine: profile.engine, profiles, graphSignature, cacheState: "valid" };
+        return { version: LAYOUT_CACHE_VERSION, key, locked: profile.locked, positions: profile.positions, routes: profile.routes, direction, root, engine: profile.engine, profiles, graphSignature, cacheState: "valid" };
       }
       if (current && current.version === LAYOUT_CACHE_VERSION && current.key === key) return defaults("stale");
       const stored = JSON.parse(localStorage.getItem(`bmopf-layout-v2:${key}`) || "null");
@@ -262,14 +263,14 @@
         const direction = stored.direction === "load-to-source" ? stored.direction : "source-to-load";
         const root = typeof stored.root === "string" ? stored.root : "auto";
         const profile = normaliseLayoutProfile(stored.profiles[layoutProfileKey(direction, root)]);
-        return { version: LAYOUT_CACHE_VERSION, key, locked: profile.locked, routes: profile.routes, direction, root, engine: profile.engine, profiles: stored.profiles, graphSignature, cacheState: "migrated" };
+        return { version: LAYOUT_CACHE_VERSION, key, locked: profile.locked, positions: profile.positions, routes: profile.routes, direction, root, engine: profile.engine, profiles: stored.profiles, graphSignature, cacheState: "migrated" };
       }
       const legacy = JSON.parse(localStorage.getItem(`bmopf-layout-v1:${key}`) || "null");
       if (legacy && legacy.version === 1 && legacy.key === key && legacy.locked && typeof legacy.locked === "object") {
         const direction = legacy.direction === "load-to-source" ? legacy.direction : "source-to-load";
         const root = typeof legacy.root === "string" ? legacy.root : "auto";
         const profileKey = layoutProfileKey(direction, root);
-        return { version: LAYOUT_CACHE_VERSION, key, locked: legacy.locked, routes: {}, direction, root, engine: legacy.engine === "elk" ? "elk" : "deterministic", profiles: { [profileKey]: { locked: legacy.locked, routes: {}, engine: legacy.engine === "elk" ? "elk" : "deterministic" } }, graphSignature, cacheState: "migrated" };
+        return { version: LAYOUT_CACHE_VERSION, key, locked: legacy.locked, positions: {}, routes: {}, direction, root, engine: legacy.engine === "elk" ? "elk" : "deterministic", profiles: { [profileKey]: { locked: legacy.locked, positions: {}, routes: {}, engine: legacy.engine === "elk" ? "elk" : "deterministic" } }, graphSignature, cacheState: "migrated" };
       }
     } catch (_) { /* localStorage is optional in static reports */ }
     return defaults();
@@ -280,7 +281,7 @@
     try {
       const profileKey = layoutProfileKey(state.layout.direction, state.layout.root);
       const graphSignature = layoutGraphSignature();
-      const profiles = pruneLayoutProfiles({ ...(state.layout.profiles || {}), [profileKey]: { graphSignature, optionsSignature: profileKey, routeSpace: LAYOUT_ROUTE_SPACE, elkVersion: ELK_VERSION, locked: state.layout.locked || {}, routes: state.layout.routes || {}, engine: state.layout.engine === "elk" ? "elk" : "deterministic", lastUsed: Date.now() } }, profileKey);
+      const profiles = pruneLayoutProfiles({ ...(state.layout.profiles || {}), [profileKey]: { graphSignature, optionsSignature: profileKey, routeSpace: LAYOUT_ROUTE_SPACE, elkVersion: ELK_VERSION, locked: state.layout.locked || {}, positions: state.layout.positions || {}, routes: state.layout.routes || {}, engine: state.layout.engine === "elk" ? "elk" : "deterministic", lastUsed: Date.now() } }, profileKey);
       state.layout.profiles = profiles;
       localStorage.setItem(`bmopf-layout-v3:${state.layout.key}`, JSON.stringify({ version: LAYOUT_CACHE_VERSION, key: state.layout.key, graphSignature, optionsSignature: profileKey, routeSpace: LAYOUT_ROUTE_SPACE, elkVersion: ELK_VERSION, direction: state.layout.direction, root: state.layout.root, profiles }));
     } catch (_) { /* ignore unavailable storage */ }
@@ -293,6 +294,7 @@
     state.layout.direction = nextDirection;
     state.layout.root = nextRoot;
     state.layout.locked = profile.locked;
+    state.layout.positions = profile.positions;
     state.layout.routes = profile.routes;
     state.layout.engine = profile.engine;
     saveLayout();
@@ -389,6 +391,24 @@
 
   function layoutLocked(id) { return Array.isArray(state.layout?.locked?.[id]); }
 
+  function layoutElementKey(ref) { return `${ref.kind}:${ref.id}`; }
+
+  function singleElementPosition(item, fallback) {
+    const point = state.layout?.positions?.[layoutElementKey(item?.ref || {})];
+    return Array.isArray(point) && point.length === 2 && point.every(Number.isFinite) ? point : fallback;
+  }
+
+  function saveSingleElementPosition(item, point) {
+    if (!item || !Array.isArray(point) || point.length !== 2 || !point.every(Number.isFinite)) return;
+    state.layout.locked ||= {};
+    state.layout.positions ||= {};
+    if (item.ref.kind === "bus") state.layout.locked[item.ref.id] = [...point];
+    else state.layout.positions[layoutElementKey(item.ref)] = [...point];
+    state.layout.engine = "deterministic";
+    state.layout.routes = {};
+    saveLayout();
+  }
+
   function nudgeSelectedBus(dx, dy) {
     const item = itemFor(state.selected);
     if (!item || item.ref.kind !== "bus") return;
@@ -400,7 +420,7 @@
   }
 
   function resetLayout() {
-    state.layout = { version: LAYOUT_CACHE_VERSION, key: layoutKey(), locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} };
+    state.layout = { version: LAYOUT_CACHE_VERSION, key: layoutKey(), locked: {}, positions: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} };
     saveLayout();
     renderView(); renderCameraControls();
     setStatus("Single-line layout reset to the computed source-to-load arrangement.");
@@ -854,7 +874,8 @@
 
   const multiWireProjection = globalThis.BMOPFProjections?.createMultiWireProjection({
     escapeHtml,
-    findBus: (id) => state.index?.buses.find((bus) => bus.ref.id === id)
+    findBus: (id) => state.index?.buses.find((bus) => bus.ref.id === id),
+    findRecord: (ref) => itemFor(ref)
   });
   const deterministicLayout = globalThis.BMOPFLayouts?.createDeterministicLayout({
     getIndex: () => state.index,
@@ -865,6 +886,7 @@
   function multiBusPanel(...args) { return multiWireProjection.multiBusPanel(...args); }
   function multiWindingPanel(...args) { return multiWireProjection.multiWindingPanel(...args); }
   function focusedPath(...args) { return multiWireProjection.focusedPath(...args); }
+  function branchModel(...args) { return multiWireProjection.branchModel(...args, (ref) => itemFor(ref)); }
 
   function renderMultiHopControls() {
     const controls = $("multi-hop-controls");
@@ -1068,7 +1090,10 @@
   function focusSelection() {
     const item = itemFor(state.selected); if (!item || !state.index || ["multi", "diagnostics"].includes(state.view)) return;
     const positions = state.view === "geo" ? busCoordinates().positions : singlePositions();
-    const points = item.ref.kind === "bus" ? [positions.get(item.ref.id)] : (item.ports || []).map((port) => positions.get(port.busId));
+    const fallbackPoints = item.ref.kind === "bus" ? [positions.get(item.ref.id)] : (item.ports || []).map((port) => positions.get(port.busId));
+    const points = state.view === "single" && item.ref.kind !== "bus"
+      ? [singleElementPosition(item, fallbackPoints.find(Boolean) || null)]
+      : fallbackPoints;
     const valid = points.filter(Boolean); if (!valid.length) return;
     const target = [valid.reduce((sum, point) => sum + point[0], 0) / valid.length, valid.reduce((sum, point) => sum + point[1], 0) / valid.length];
     const camera = state.cameras[state.view];
@@ -1129,6 +1154,7 @@
     titleOf,
     resultTooltip,
     singleSymbol,
+    singleElementPosition,
     resultVoltageVisual,
     layoutLocked,
     resultLegend
@@ -1215,11 +1241,46 @@
     const left = connection.from; const right = connection.to;
     const leftBus = state.index.buses.find((bus) => bus.ref.id === left.busId) || { ref: { id: left.busId }, groundedTerminals: [] };
     const rightBus = state.index.buses.find((bus) => bus.ref.id === right.busId) || { ref: { id: right.busId }, groundedTerminals: [] };
-    const leftPanel = multiBusPanel(leftBus, left, 25, 70, 215, "left");
-    const rightPanel = multiBusPanel(rightBus, right, 520, 70, 215, "right");
+    const branch = ["line", "dc_branch"].includes(item.ref.kind) ? branchModel(item, connection) : null;
+    const leftPanel = multiBusPanel(leftBus, left, 20, 70, 200, "left");
+    const rightPanel = multiBusPanel(rightBus, right, branch ? 700 : 520, 70, 200, "right");
     const pairs = connection.pairs;
     const bodyY = 142 + Math.max(pairs.length - 1, 0) * 17;
-    let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))} · terminal detail</text>${leftPanel.html}${rightPanel.html}<rect x="285" y="${Math.max(105, bodyY - 48)}" width="190" height="96" rx="10" fill="#f4f1ea" stroke="${colourOf(item.ref.kind)}" stroke-width="2"/><text x="380" y="${Math.max(122, bodyY - 20)}" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(item.ref.kind.replaceAll("_", " "))}</text>`;
+    const canvasWidth = branch ? 940 : 760;
+    let content = `<text x="${branch ? 470 : 380}" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))} · terminal detail</text>${leftPanel.html}${rightPanel.html}`;
+    if (branch) {
+      const boxX = 260; const boxY = 92; const boxWidth = 400; const columnStep = Math.min(82, 320 / Math.max(pairs.length - 1, 1));
+      const boxHeight = Math.max(190, 78 + pairs.length * 28);
+      const labels = pairs.map(([from]) => String(from));
+      const formatImpedance = (value) => value === null || value === undefined ? "—" : formatValue(value);
+      const formatComplex = (entry) => entry.r === null && entry.x === null ? "—" : `${formatImpedance(entry.r)}${entry.x === null ? "" : ` + j${formatImpedance(entry.x)}`}`;
+      const header = labels.map((label, i) => `<text x="${boxX + 55 + i * columnStep}" y="${boxY + 47}" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(label)}</text>`).join("");
+      const matrixRows = branch.series.map((row, i) => `<text x="${boxX + 18}" y="${boxY + 68 + i * 28}" fill="#37332c" font-size="9">${escapeHtml(labels[i] || String(i + 1))}</text>${row.map((entry, j) => `<text x="${boxX + 55 + j * columnStep}" y="${boxY + 68 + i * 28}" text-anchor="middle" fill="#37332c" font-size="9">${escapeHtml(formatComplex(entry))}</text>`).join("")}`).join("");
+      const formatAdmittance = (entry) => entry.g === null && entry.b === null ? "—" : `${entry.g === null ? "—" : formatImpedance(entry.g)}${entry.b === null ? "" : ` + j${formatImpedance(entry.b)}`} S`;
+      const matrixBox = (side, x, y, width) => {
+        const matrix = branch.shunt[side] || [];
+        const step = Math.min(42, (width - 48) / Math.max(pairs.length - 1, 1));
+        const head = labels.map((label, i) => `<text x="${x + 30 + i * step}" y="${y + 31}" text-anchor="middle" fill="#70695f" font-size="8">${escapeHtml(label)}</text>`).join("");
+        const rows = matrix.map((row, i) => `<text x="${x + 10}" y="${y + 49 + i * 20}" fill="#37332c" font-size="8">${escapeHtml(labels[i] || String(i + 1))}</text>${row.map((entry, j) => `<text x="${x + 30 + j * step}" y="${y + 49 + i * 20}" text-anchor="middle" fill="#37332c" font-size="8">${escapeHtml(formatAdmittance(entry))}</text>`).join("")}`).join("");
+        return `<rect x="${x}" y="${y}" width="${width}" height="${48 + pairs.length * 20}" rx="7" fill="#fffdf9" stroke="#ded8cc"/><text x="${x + width / 2}" y="${y + 16}" text-anchor="middle" fill="#37332c" font-size="10" font-weight="700">Y${side} [S]</text>${head}${rows}<path d="M${x + width / 2} ${y + 48 + pairs.length * 20}v12M${x + width / 2 - 9} ${y + 60 + pairs.length * 20}h18M${x + width / 2 - 6} ${y + 66 + pairs.length * 20}h12M${x + width / 2 - 3} ${y + 72 + pairs.length * 20}h6" fill="none" stroke="#70695f" stroke-width="1.3"/>`;
+      };
+      const shuntY = boxY + boxHeight + 18;
+      const shuntHeight = 48 + pairs.length * 20 + 76;
+      const branchHeight = branch.shuntPresent ? shuntY + shuntHeight + 42 : boxY + boxHeight + 58;
+      content += `<g data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><rect x="${boxX}" y="${boxY}" width="${boxWidth}" height="${boxHeight}" rx="10" fill="#f4f1ea" stroke="${colourOf(item.ref.kind)}" stroke-width="2"/><text x="${boxX + boxWidth / 2}" y="${boxY + 20}" text-anchor="middle" fill="#37332c" font-size="12" font-weight="700">Π branch model</text><text x="${boxX + boxWidth / 2}" y="${boxY + 34}" text-anchor="middle" fill="#70695f" font-size="9">Series Zs [Ω] · ${escapeHtml(branch.source)}</text>${header}${matrixRows}${branch.shuntPresent ? "" : `<text x="${boxX + boxWidth / 2}" y="${boxY + boxHeight - 14}" text-anchor="middle" fill="#70695f" font-size="10">Pure series branch · shunt admittance omitted</text>`}</g>`;
+      if (branch.shuntPresent) content += `<g>${matrixBox("from", boxX, shuntY, 190)}${matrixBox("to", boxX + 210, shuntY, 190)}</g>`;
+      pairs.forEach(([a, b], i) => {
+        const yLeft = leftPanel.rowY[i] || (142 + i * 34); const yRight = rightPanel.rowY[i] || (142 + i * 34); const visual = conductorVisual(a, b, left.busId, right.busId, i);
+        content += focusedPath([[220, yLeft], [boxX, yLeft]], visual, item.status);
+        content += focusedPath([[boxX + boxWidth, yRight], [700, yRight]], visual, item.status);
+      });
+      content += `<text x="470" y="${branch.shuntPresent ? branchHeight - 16 : branchHeight - 16}" text-anchor="middle" fill="#70695f" font-size="10">R and X are absolute series impedance entries in Ω; shunt G/B entries are absolute admittance values in S.</text>`;
+      setStatus(`${pairs.length} conductor pairs · ${item.status} · ${branch.shuntPresent ? "Π series + shunt model" : "pure series model"}`);
+      $("canvas").innerHTML = svgShell(content, { size: { width: canvasWidth, height: Math.max(510, branchHeight) } });
+      bindSvgSelection();
+      return;
+    }
+    content += `<rect x="285" y="${Math.max(105, bodyY - 48)}" width="190" height="96" rx="10" fill="#f4f1ea" stroke="${colourOf(item.ref.kind)}" stroke-width="2"/><text x="380" y="${Math.max(122, bodyY - 20)}" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(item.ref.kind.replaceAll("_", " "))}</text>`;
     pairs.forEach(([a, b], i) => {
       const yLeft = leftPanel.rowY[i] || (142 + i * 34); const yRight = rightPanel.rowY[i] || (142 + i * 34); const visual = conductorVisual(a, b, left.busId, right.busId, i);
       if (item.status === "open") {
@@ -1284,6 +1345,18 @@
   }
 
   function bindSvgSelection() {
+    const svgPoint = (svg, event) => {
+      const ctm = svg.getScreenCTM?.();
+      if (!ctm) return [event.offsetX || 0, event.offsetY || 0];
+      const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
+      const local = point.matrixTransform(ctm.inverse());
+      return [local.x, local.y];
+    };
+    const transformPoint = (node) => {
+      const match = /translate\(\s*([+-]?\d*\.?\d+)\s+([+-]?\d*\.?\d+)\s*\)/.exec(node.getAttribute("transform") || "");
+      return match ? [Number(match[1]), Number(match[2])] : null;
+    };
+    let activeDrag = null;
     $("canvas").querySelectorAll("[data-kind][data-id]").forEach((node) => {
       node.setAttribute("tabindex", "0");
       node.setAttribute("role", "button");
@@ -1292,6 +1365,45 @@
       node.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(globalThis.BMOPFRendererContract?.assetRef(node) || { kind: node.dataset.kind, id: node.dataset.id }); }
       });
+      if (state.view !== "single" || node.tagName.toLowerCase() !== "g") return;
+      node.classList.add("sld-draggable");
+      node.addEventListener("pointerdown", (event) => {
+        if (event.button !== 0) return;
+        const item = itemFor({ kind: node.dataset.kind, id: node.dataset.id });
+        const svg = node.closest("svg");
+        if (!item || !svg) return;
+        const initial = item.ref.kind === "bus" ? singlePositions().get(item.ref.id) : transformPoint(node);
+        if (!initial || !initial.every(Number.isFinite)) return;
+        activeDrag = { node, item, svg, pointerId: event.pointerId, start: svgPoint(svg, event), initial, current: [...initial], moved: false };
+        node.setPointerCapture?.(event.pointerId);
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      node.addEventListener("pointermove", (event) => {
+        if (!activeDrag || activeDrag.node !== node || activeDrag.pointerId !== event.pointerId) return;
+        const point = svgPoint(activeDrag.svg, event);
+        const dx = point[0] - activeDrag.start[0]; const dy = point[1] - activeDrag.start[1];
+        activeDrag.current = [activeDrag.initial[0] + dx, activeDrag.initial[1] + dy];
+        activeDrag.moved = activeDrag.moved || Math.hypot(dx, dy) >= 3;
+        if (!activeDrag.moved) return;
+        const transform = activeDrag.item.ref.kind === "bus"
+          ? `translate(${dx} ${dy})`
+          : `translate(${activeDrag.current[0]} ${activeDrag.current[1]})`;
+        node.setAttribute("transform", transform);
+        event.preventDefault();
+        event.stopPropagation();
+      });
+      const finishDrag = (event, cancelled = false) => {
+        if (!activeDrag || activeDrag.node !== node || activeDrag.pointerId !== event.pointerId) return;
+        const drag = activeDrag; activeDrag = null;
+        if (drag.moved && !cancelled) {
+          saveSingleElementPosition(drag.item, drag.current);
+          navigateTo({ view: "single", selected: { kind: drag.item.ref.kind, id: drag.item.ref.id } });
+        } else if (drag.moved) renderView();
+        event.stopPropagation();
+      };
+      node.addEventListener("pointerup", (event) => finishDrag(event));
+      node.addEventListener("pointercancel", (event) => finishDrag(event, true));
     });
   }
 
