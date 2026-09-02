@@ -96,6 +96,10 @@ try {
     await page.mouse.up();
     const layoutAfterDeviceDrag = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:example-complete-feeder")));
     assert.ok(Object.values(layoutAfterDeviceDrag.profiles).some((profile) => Array.isArray(profile.positions?.["line:line_main"])));
+    await page.getByRole("button", { name: "Apply force layout" }).click();
+    assert.match(await page.locator("#view-status").textContent(), /Force-directed layout applied/);
+    const forceLayout = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:example-complete-feeder")));
+    assert.ok(Object.values(forceLayout.profiles).some((profile) => profile.engine === "force" && Object.keys(profile.locked || {}).length >= 4));
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     assert.match(await page.locator("#canvas").innerText(), /Π branch model/);
     assert.match(await page.locator("#canvas").innerText(), /Series Zs \[Ω\]/);

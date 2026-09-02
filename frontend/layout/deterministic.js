@@ -10,11 +10,11 @@
     const getIndex = dependencies.getIndex;
     const getLayout = dependencies.getLayout;
 
-    function singlePositions() {
+    function graph() {
       const index = getIndex();
-      const layout = getLayout() || {};
       const buses = index?.buses || [];
       const adjacency = new Map(buses.map((bus) => [bus.ref.id, new Set()]));
+      const edges = [];
       for (const item of index?.assets || []) {
         const ports = item.ports || [];
         if (ports.length < 2) continue;
@@ -24,8 +24,16 @@
           if (!adjacency.has(port.busId)) adjacency.set(port.busId, new Set());
           adjacency.get(anchor).add(port.busId);
           adjacency.get(port.busId).add(anchor);
+          if (anchor !== port.busId) edges.push([anchor, port.busId]);
         }
       }
+      return { buses, adjacency, edges };
+    }
+
+    function layeredPositions() {
+      const index = getIndex();
+      const layout = getLayout() || {};
+      const { buses, adjacency } = graph();
       const roots = (index?.assets || [])
         .filter((item) => item.ref.kind === "voltage_source" && item.ports?.[0])
         .map((item) => item.ports[0].busId)
@@ -53,6 +61,83 @@
         const column = layout.direction === "load-to-source" ? maxDepth - d : d;
         level.forEach((bus, i) => positions.set(bus.ref.id, [CANVAS_PADDING.left + column * LAYER_STEP, start + i * MIN_BUS_GAP]));
       }
+      return positions;
+    }
+
+    function hash(value) {
+      let result = 2166136261;
+      for (const character of String(value)) { result ^= character.charCodeAt(0); result = Math.imul(result, 16777619); }
+      return (result >>> 0) / 4294967296;
+    }
+
+    function singleForcePositions() {
+      const { buses, edges } = graph();
+      const positions = layeredPositions();
+      const nodes = buses.map((bus) => bus.ref.id);
+      if (nodes.length < 2) return positions;
+      const nodeSet = new Set(nodes);
+      const velocities = new Map(nodes.map((id) => [id, [0, 0]]));
+      nodes.forEach((id, index) => {
+        const point = positions.get(id) || [CANVAS_PADDING.left, CANVAS_PADDING.top];
+        const angle = hash(`${id}:angle`) * Math.PI * 2;
+        const jitter = (hash(`${id}:jitter`) - 0.5) * 46;
+        positions.set(id, [point[0] + Math.cos(angle) * jitter + (index % 3 - 1) * 12, point[1] + Math.sin(angle) * jitter]);
+      });
+      const edgeKeys = new Set();
+      const uniqueEdges = edges.filter(([from, to]) => {
+        if (!nodeSet.has(from) || !nodeSet.has(to)) return false;
+        const key = [from, to].sort().join("|");
+        if (edgeKeys.has(key)) return false;
+        edgeKeys.add(key);
+        return true;
+      });
+      const iterations = Math.max(32, Math.min(110, Math.round(18000 / nodes.length)));
+      const springLength = 145;
+      const repulsion = 9000;
+      const springStrength = 0.035;
+      const centreX = 390;
+      const centreY = Math.max(250, 120 + Math.sqrt(nodes.length) * 36);
+      for (let iteration = 0; iteration < iterations; iteration += 1) {
+        const forces = new Map(nodes.map((id) => [id, [0, 0]]));
+        for (let i = 0; i < nodes.length; i += 1) {
+          const first = positions.get(nodes[i]);
+          for (let j = i + 1; j < nodes.length; j += 1) {
+            const second = positions.get(nodes[j]);
+            let dx = second[0] - first[0]; let dy = second[1] - first[1];
+            const distance = Math.max(18, Math.hypot(dx, dy));
+            dx /= distance; dy /= distance;
+            const force = repulsion / (distance * distance);
+            forces.get(nodes[i])[0] -= dx * force; forces.get(nodes[i])[1] -= dy * force;
+            forces.get(nodes[j])[0] += dx * force; forces.get(nodes[j])[1] += dy * force;
+          }
+        }
+        uniqueEdges.forEach(([from, to]) => {
+          const first = positions.get(from); const second = positions.get(to);
+          let dx = second[0] - first[0]; let dy = second[1] - first[1];
+          const distance = Math.max(18, Math.hypot(dx, dy));
+          const force = (distance - springLength) * springStrength;
+          dx /= distance; dy /= distance;
+          forces.get(from)[0] += dx * force; forces.get(from)[1] += dy * force;
+          forces.get(to)[0] -= dx * force; forces.get(to)[1] -= dy * force;
+        });
+        nodes.forEach((id) => {
+          const point = positions.get(id); const velocity = velocities.get(id); const force = forces.get(id);
+          force[0] += (centreX - point[0]) * 0.002; force[1] += (centreY - point[1]) * 0.002;
+          velocity[0] = (velocity[0] + force[0]) * 0.82; velocity[1] = (velocity[1] + force[1]) * 0.82;
+          const magnitude = Math.hypot(velocity[0], velocity[1]);
+          const step = Math.min(22, magnitude);
+          if (magnitude > 0) { velocity[0] = velocity[0] / magnitude * step; velocity[1] = velocity[1] / magnitude * step; }
+          positions.set(id, [Math.max(36, point[0] + velocity[0]), Math.max(CANVAS_PADDING.top, point[1] + velocity[1])]);
+        });
+      }
+      return positions;
+    }
+
+    function singlePositions() {
+      const layout = getLayout() || {};
+      const forcePositions = new Map(Object.entries(layout.locked || {}).filter(([, point]) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)).map(([id, point]) => [id, [...point]]));
+      const expectedBuses = getIndex()?.buses?.length || 0;
+      const positions = layout.engine === "force" && forcePositions.size === expectedBuses ? forcePositions : layeredPositions();
       for (const [id, point] of Object.entries(layout.locked || {})) {
         if (Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) positions.set(id, [point[0], point[1]]);
       }
@@ -70,7 +155,7 @@
       };
     }
 
-    return Object.freeze({ MODULE_VERSION, singlePositions, singleBounds });
+    return Object.freeze({ MODULE_VERSION, singlePositions, singleForcePositions, singleBounds });
   }
 
   globalThis.BMOPFLayouts = Object.freeze({ MODULE_VERSION, createDeterministicLayout });

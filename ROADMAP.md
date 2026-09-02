@@ -54,6 +54,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Class overview summarizes asset counts, support levels, and available result ranges with filter links.
 - [x] Support configurable single-line reading direction and feeder-root selection, persisted with the case layout.
 - [x] Optional ELK Layered layout can be applied from the browser and persisted, with deterministic offline fallback.
+- [x] Add a deterministic force-directed Single-wire layout option for dense or highly branched networks.
 - [x] Run optional ELK layout computation in a Web Worker so the browser UI remains responsive during layout.
 - [x] Vendor the pinned ELK browser bundle, embed it in Julia reports, and cache layout profiles by case and layout options.
 - [x] Add a local-file ELK fallback that loads the pinned bundle on the main thread when browser security blocks worker imports.
@@ -421,6 +422,7 @@ A slice is done only when:
 - Walking skeleton of all three views.
 - MapLibre geospatial view with tile-free mode.
 - [x] ELK single-wire layout.
+- [x] Force-directed single-wire layout option.
 - Focused multi-wire view.
 - Julia static report generation.
 - End-to-end critical workflow test.

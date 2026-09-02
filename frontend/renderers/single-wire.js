@@ -107,9 +107,10 @@
       content += dependencies.resultLegend();
       const directionLabel = state.layout?.direction === "load-to-source" ? "load-to-source" : "source-to-load";
       const rootLabel = state.layout?.root && state.layout.root !== "auto" ? ` · root ${state.layout.root}` : " · automatic feeder root";
-      const engineLabel = state.layout?.engine === "elk" ? " · ELK" : " · deterministic";
+      const engineLabel = state.layout?.engine === "elk" ? " · ELK" : state.layout?.engine === "force" ? " · force-directed" : " · deterministic";
       const cacheLabel = state.layout?.cacheState === "stale" ? " · stale cached layout ignored" : "";
-      setStatus(`Single-line diagram: ${directionLabel} layered layout${rootLabel}${engineLabel}${cacheLabel} with conventional busbars and device symbols.`);
+      const layoutLabel = state.layout?.engine === "force" ? "force-directed" : "layered";
+      setStatus(`Single-line diagram: ${directionLabel} ${layoutLabel} layout${rootLabel}${engineLabel}${cacheLabel} with conventional busbars and device symbols.`);
       setCanvas(svgShell(content, { className: "single-wire-svg", size: canvasSize(positions) }));
       bindSvgSelection();
     }

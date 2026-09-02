@@ -88,6 +88,7 @@ The prototype supports:
 - Locally persisted single-line bus adjustments with per-bus nudge, lock/unlock, and reset controls.
 - Configurable single-line direction and feeder-root selection, also persisted per case.
 - Optional worker-backed, vendored ELK Layered layout enhancement with fixed-root preference and orthogonal edge routing; deterministic offline fallback remains available and generated reports embed the pinned bundle.
+- Deterministic force-directed Single-wire layout option for dense or highly branched networks.
 - Class overview with asset counts, support-level breakdowns, and result ranges; class links filter the explorer.
 - Explicit overview SVG budgets with a focused one-hop fallback for oversized cases.
 - Large cases can be opened after a browser confirmation; the warning can be bypassed for the current page, or the focused neighbourhood view can be retained.
