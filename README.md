@@ -2,7 +2,9 @@
 
 Browser-native exploration of BMOPF distribution-network JSON cases, with Julia-generated static reports.
 
-The repository currently contains a dependency-free walking skeleton. It is private while the data model and visual semantics are being validated; deployment and GitHub Pages setup are intentionally deferred.
+The repository contains a dependency-free static explorer. The GitHub Pages
+deployment is built from `dist/` by GitHub Actions; local case files are still
+read in the browser and are never uploaded by the application.
 
 ## Try the browser prototype locally
 
@@ -79,6 +81,15 @@ directory. The site has no runtime Node.js requirement.
 Julia-generated reports remain a separate self-contained distribution format:
 `render_case` embeds the source modules and vendor assets directly in one HTML
 file, so the static assembler is not required for reports.
+
+## Publish with GitHub Pages
+
+The [`Deploy GitHub Pages`](.github/workflows/pages.yml) workflow runs on pushes
+to `main` and can also be started manually from the Actions tab. It verifies the
+static bundle, builds `dist/`, uploads it as a Pages artifact, and publishes it
+to the repository's `github-pages` environment. After enabling the workflow,
+set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**;
+the workflow will expose the published URL on each successful run.
 
 ## Generate a static Julia report
 
