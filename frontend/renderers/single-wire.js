@@ -49,6 +49,8 @@
 
     function drawSingle() {
       const positions = dependencies.singlePositions();
+      const display = state.singleDisplay || {};
+      const arrowMarker = display.showArrows !== false ? ' marker-end="url(#sld-arrow)"' : "";
       let content = `<defs><marker id="sld-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0 0L7 3.5L0 7z" fill="#6b655c"/></marker></defs><text x="24" y="26" fill="#37332c" font-size="13" font-weight="700">Source → load one-line view</text><text x="24" y="43" fill="#70695f" font-size="10">IEC/IEEE-inspired symbols · heavy busbars · drag buses or device symbols to refine the layout</text>`;
       const edgeCounts = new Map();
       for (const item of dependencies.overviewAssets().filter((e) => e.connections?.length)) {
@@ -71,7 +73,7 @@
           const routeKey = `edge:${item.ref.kind}:${item.ref.id}:${connection.from.busId}:${connection.to.busId}`;
           const elkRoute = state.layout.engine === "elk" ? state.layout.routes?.[routeKey] : null;
           const path = Array.isArray(elkRoute) && elkRoute.length >= 2 ? `M${elkRoute.map((point) => `${point[0]} ${point[1]}`).join("L")}` : `M${a[0]} ${a[1]}H${midX}V${laneY}H${b[0]}V${b[1]}`;
-          content += `<path d="${path}" fill="none" stroke="${visual.colour}" stroke-width="${visual.width}" stroke-opacity="${opacity}" marker-end="url(#sld-arrow)" ${status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(dependencies.titleOf(item))}${escapeHtml(dependencies.resultTooltip(item))}</title></path>`;
+          content += `<path d="${path}" fill="none" stroke="${visual.colour}" stroke-width="${visual.width}" stroke-opacity="${opacity}"${arrowMarker} ${status === "open" ? "stroke-dasharray=\"8 6\"" : ""} data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><title>${escapeHtml(dependencies.titleOf(item))}${escapeHtml(dependencies.resultTooltip(item))}</title></path>`;
           const fallbackPoint = routeMidpoint(elkRoute) || [midX, laneY];
           const symbolPoint = dependencies.singleElementPosition ? dependencies.singleElementPosition(item, fallbackPoint) : fallbackPoint;
           content += dragLeader(symbolPoint, fallbackPoint);
@@ -85,7 +87,7 @@
         const left = item.ref.kind === "voltage_source" && state.layout?.direction !== "load-to-source";
         const fallbackPoint = [p[0] + (left ? -58 : 62), p[1] + (left ? 0 : -38 - offset * 38)];
         const symbolPoint = dependencies.singleElementPosition ? dependencies.singleElementPosition(item, fallbackPoint) : fallbackPoint;
-        content += `<path d="M${p[0] + (left ? -38 : 38)} ${p[1]}H${fallbackPoint[0]}V${fallbackPoint[1]}" fill="none" stroke="${dependencies.colourOf(item.ref.kind)}" stroke-width="2" marker-end="url(#sld-arrow)"/>`;
+        content += `<path d="M${p[0] + (left ? -38 : 38)} ${p[1]}H${fallbackPoint[0]}V${fallbackPoint[1]}" fill="none" stroke="${dependencies.colourOf(item.ref.kind)}" stroke-width="2"${arrowMarker}/>`;
         content += dragLeader(symbolPoint, fallbackPoint);
         content += dependencies.singleSymbol(item, symbolPoint[0], symbolPoint[1]);
       }
@@ -93,7 +95,7 @@
         const points = item.ports.map((port) => positions.get(port.busId)).filter(Boolean); if (!points.length) continue;
         const fallbackPoint = [points.reduce((sum, p) => sum + p[0], 0) / points.length, points.reduce((sum, p) => sum + p[1], 0) / points.length];
         const symbolPoint = dependencies.singleElementPosition ? dependencies.singleElementPosition(item, fallbackPoint) : fallbackPoint;
-        points.forEach((p) => { content += `<path d="M${p[0]} ${p[1]}L${fallbackPoint[0]} ${fallbackPoint[1]}" fill="none" stroke="${dependencies.colourOf(item.ref.kind)}" stroke-width="2" marker-end="url(#sld-arrow)"/>`; });
+        points.forEach((p) => { content += `<path d="M${p[0]} ${p[1]}L${fallbackPoint[0]} ${fallbackPoint[1]}" fill="none" stroke="${dependencies.colourOf(item.ref.kind)}" stroke-width="2"${arrowMarker}/>`; });
         content += dragLeader(symbolPoint, fallbackPoint);
         content += dependencies.singleSymbol(item, symbolPoint[0], symbolPoint[1]);
       }
@@ -101,7 +103,8 @@
         const p = positions.get(bus.ref.id); const selected = dependencies.sameRef(bus.ref, state.selected);
         const voltage = dependencies.resultVoltageVisual(bus, selected, "#2f6fb3"); const voltageDash = voltage.dash ? ` stroke-dasharray="${voltage.dash}"` : ""; const voltageGlyph = voltage.level === "high" ? "!" : voltage.level === "moderate" ? "~" : "";
         const lockMark = dependencies.layoutLocked(bus.ref.id) ? " · locked" : "";
-        content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><line x1="${p[0] - 42}" y1="${p[1]}" x2="${p[0] + 42}" y2="${p[1]}" stroke="${voltage.colour}" stroke-width="${selected ? 7 : 5}"${voltageDash}/><circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${voltage.colour}"/><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(lockMark)}${escapeHtml(dependencies.resultTooltip(bus))}</title>${voltageGlyph ? `<text x="${p[0] - 50}" y="${p[1] - 8}" fill="${voltage.colour}" font-size="10" font-weight="700">${voltageGlyph}</text>` : ""}<text x="${p[0]}" y="${p[1] + 20}" text-anchor="middle" fill="#37332c" font-size="11">${escapeHtml(bus.ref.id)}${lockMark ? " · locked" : ""}</text></g>`;
+        const showBusLabel = display.showBusLabels !== false && (!display.labelsSelectedOnly || selected);
+        content += `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><line x1="${p[0] - 42}" y1="${p[1]}" x2="${p[0] + 42}" y2="${p[1]}" stroke="${voltage.colour}" stroke-width="${selected ? 7 : 5}"${voltageDash}/><circle cx="${p[0]}" cy="${p[1]}" r="3" fill="${voltage.colour}"/><title>bus ${escapeHtml(bus.ref.id)}${escapeHtml(lockMark)}${escapeHtml(dependencies.resultTooltip(bus))}</title>${voltageGlyph ? `<text x="${p[0] - 50}" y="${p[1] - 8}" fill="${voltage.colour}" font-size="10" font-weight="700">${voltageGlyph}</text>` : ""}${showBusLabel ? `<text x="${p[0]}" y="${p[1] + 20}" text-anchor="middle" fill="#37332c" font-size="11">${escapeHtml(bus.ref.id)}${lockMark ? " · locked" : ""}</text>` : ""}</g>`;
       }
       content += `<text x="24" y="474" fill="#70695f" font-size="10">Legend: heavy line = busbar · ○ = source/generator · paired coils = transformer · □ = load · ║ = capacitor · ⏚ = shunt · open blade/dashed path = open switch · dashed leader = moved symbol</text>`;
       content += dependencies.resultLegend();

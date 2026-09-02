@@ -58,6 +58,12 @@ try {
     assert.equal(await page.locator(".view-tab.active").getAttribute("data-view"), "single");
     assert.match(await page.evaluate(() => window.location.hash), /#\/single$/);
     assert.deepEqual(await page.locator(".view-tab").evaluateAll((tabs) => tabs.map((tab) => tab.dataset.view)), ["single", "multi", "geo", "diagnostics"]);
+    const displayOptions = page.locator("#display-options");
+    assert.equal(await displayOptions.isVisible(), true);
+    assert.equal(await displayOptions.locator('input[data-display-option="showBusLabels"]').isChecked(), true);
+    await displayOptions.locator('input[data-display-option="showDeviceLabels"]').uncheck();
+    assert.equal(await displayOptions.locator('input[data-display-option="showDeviceLabels"]').isChecked(), false);
+    await displayOptions.locator('input[data-display-option="showDeviceLabels"]').check();
     assert.match(await page.locator("#case-summary").innerText(), /Coordinate provenance: synthetic illustrative coordinates/);
     // #view-status is an aria-live region and loading an example announces the
     // example itself, so re-enter the geospatial view to read its own status.

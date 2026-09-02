@@ -10,7 +10,7 @@
   const SIDEBAR_WIDTH_DEFAULT = 360;
   const SIDEBAR_WIDTH_MIN = 280;
   const SIDEBAR_WIDTH_MAX = 640;
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, singleDisplay: { showBusLabels: true, showDeviceLabels: true, showArrows: true, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -508,6 +508,24 @@
   }
 
   function layoutLocked(id) { return Array.isArray(state.layout?.locked?.[id]); }
+
+  function renderDisplayOptions() {
+    const pane = $("display-options");
+    if (!pane) return;
+    const visible = Boolean(state.index && state.view === "single");
+    pane.hidden = !visible;
+    if (!visible) return;
+    pane.querySelectorAll("[data-display-option]").forEach((input) => {
+      const option = input.dataset.displayOption;
+      const defaultValue = option === "labelsSelectedOnly" ? false : true;
+      input.checked = state.singleDisplay?.[option] ?? defaultValue;
+      input.onchange = () => {
+        state.singleDisplay[option] = input.checked;
+        renderView();
+        renderDisplayOptions();
+      };
+    });
+  }
 
   function layoutElementKey(ref) { return `${ref.kind}:${ref.id}`; }
 
@@ -1257,7 +1275,7 @@
   });
   function drawGeo() { return geospatialRenderer.drawGeo(); }
 
-  function singleSymbol(item, x, y) { return symbolRenderer.singleSymbol(item, x, y, state.selected); }
+  function singleSymbol(item, x, y) { return symbolRenderer.singleSymbol(item, x, y, state.selected, state.view === "single" ? state.singleDisplay : undefined); }
 
   const singleWireRenderer = globalThis.BMOPFRenderers?.createSingleWireRenderer({
     state,
@@ -1574,7 +1592,7 @@
     bindCamera();
   }
 
-  function render() { renderSummary(); renderClassOverview(); renderResultSummary(); renderInventory(); renderInspector(); renderView(); renderCameraControls(); renderMultiHopControls(); }
+  function render() { renderSummary(); renderClassOverview(); renderResultSummary(); renderInventory(); renderInspector(); renderView(); renderCameraControls(); renderMultiHopControls(); renderDisplayOptions(); }
 
   function parseHash() {
     const entry = navigationEntryFromHash();

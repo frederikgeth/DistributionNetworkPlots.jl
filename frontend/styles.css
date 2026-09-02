@@ -52,6 +52,11 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor: col-resize !important; 
 .multi-hop-controls { display: flex; align-items: center; gap: 6px; min-height: 34px; margin: 0 0 8px; color: var(--muted); font-size: 12px; }
 .multi-hop-controls button { border: 1px solid var(--line); border-radius: 5px; padding: 4px 8px; color: var(--muted); background: var(--panel); cursor: pointer; }
 .multi-hop-controls button.active, .multi-hop-controls button:focus-visible { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.display-options-panel { margin: 0 0 8px; border: 1px solid var(--line); border-radius: 7px; padding: 6px 9px; color: var(--muted); background: var(--panel); font-size: 12px; }
+.display-options-panel summary { cursor: pointer; color: var(--ink); font-weight: 600; }
+.display-options-list { display: flex; flex-wrap: wrap; gap: 7px 14px; margin-top: 8px; }
+.display-options-list label { display: inline-flex; align-items: center; gap: 5px; }
+.display-options-panel p { margin: 8px 0 2px; font-size: 11px; }
 .canvas { min-height: 500px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: #fbfaf7; }
 .canvas svg { display: block; width: 100%; height: 500px; }
 .canvas svg.single-wire-svg { min-width: 100%; }
@@ -172,7 +177,7 @@ pre.raw { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 9px; bor
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; } }
 @media print {
   body { background: white; }
-  .topbar .file-actions, .drop-zone, .view-tabs, .camera-controls, .multi-hop-controls, .sidebar { display: none !important; }
+  .topbar .file-actions, .drop-zone, .view-tabs, .camera-controls, .multi-hop-controls, .display-options-panel, .sidebar { display: none !important; }
   .layout { display: block; min-height: 0; }
   .sidebar-resizer { display: none; }
   .workspace { padding: 0; }
