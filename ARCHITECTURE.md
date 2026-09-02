@@ -320,6 +320,10 @@ connection configuration and, for loads, the declared load model (defaulting
 visibly to `CONSTANT_POWER` when the optional field is absent). Two-terminal
 transformer conductor labels are kept in the gutter beside the body so phase
 annotations do not sit on top of the transformer symbol or wiring.
+The card includes a compact connection glyph: star topology for WYE, a
+triangle for DELTA, and a two-terminal branch for single-phase or unspecified
+connections. The glyph supplements, rather than replaces, the exact metadata
+and terminal rows.
 
 Projection rules:
 

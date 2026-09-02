@@ -139,10 +139,12 @@ try {
     await page.locator('button[data-kind="load"][data-id="load_a"]').click();
     const loadText = await page.locator("#canvas").innerText();
     assert.match(loadText, /connection: SINGLE PHASE/);
+    assert.match(loadText, /SINGLE PHASE connection/);
     assert.match(loadText, /load model: CONSTANT POWER \(default\)/);
     await inventorySearch.fill("backup_gen");
     await page.locator('button[data-kind="generator"][data-id="backup_gen"]').click();
     assert.match(await page.locator("#canvas").innerText(), /connection: WYE/);
+    assert.match(await page.locator("#canvas").innerText(), /WYE connection/);
     await page.locator("#file-input").setInputFiles(resolve(fixtureRoot, "micro_bmopf.json"));
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");

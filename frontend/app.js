@@ -1103,6 +1103,32 @@
     controls.querySelectorAll("[data-hops]").forEach((button) => button.addEventListener("click", () => { state.multiHops = Number(button.dataset.hops); render(); }));
   }
 
+  function connectionDiagram(item, configuration, terminals, x, y) {
+    const config = String(configuration || "").toUpperCase();
+    const colour = colourOf(item.ref.kind);
+    const neutralIndex = terminals.findIndex((terminal) => /^(n|neutral|g|pe|ground|earth)$/i.test(String(terminal)));
+    const phaseTerminals = terminals.filter((_, index) => index !== neutralIndex).slice(0, 3);
+    const label = (terminal) => escapeHtml(String(terminal));
+    const device = item.ref.kind === "load"
+      ? `<rect x="-14" y="-10" width="28" height="20" rx="2" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><path d="M-7 0h14M4-5l6 5-6 5" fill="none" stroke="${colour}" stroke-width="1.5"/>`
+      : item.ref.kind === "ibr" ? `<circle cx="0" cy="0" r="14" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="0" y="4" text-anchor="middle" fill="${colour}" font-size="8">IBR</text>`
+        : `<circle cx="0" cy="0" r="14" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="0" y="4" text-anchor="middle" fill="${colour}" font-size="10">G</text>`;
+    const configLabel = config.replaceAll("_", " ");
+    let html = `<g transform="translate(${x} ${y})"><text x="0" y="-54" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(configLabel || "terminal")} connection</text>`;
+    if (config === "DELTA" && phaseTerminals.length >= 3) {
+      const points = [[-58, -16], [58, -16], [0, 42]];
+      html += `<path d="M${points[0][0]} ${points[0][1]}L${points[1][0]} ${points[1][1]}L${points[2][0]} ${points[2][1]}Z" fill="none" stroke="${colour}" stroke-width="2"/>${points.map(([px, py], index) => `<circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/><text x="${px}" y="${py + (py > 0 ? 17 : -8)}" text-anchor="middle" fill="#37332c" font-size="10">${label(phaseTerminals[index])}</text>`).join("")}<g transform="translate(0 2)">${device}</g>`;
+    } else if (config === "WYE" && phaseTerminals.length >= 2) {
+      const points = phaseTerminals.map((terminal, index) => [-58 + index * (phaseTerminals.length === 1 ? 0 : 58), -22]);
+      html += `${points.map(([px, py], index) => `<line x1="${px}" y1="${py}" x2="0" y2="0" stroke="${colour}" stroke-width="2"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/><text x="${px}" y="${py - 8}" text-anchor="middle" fill="#37332c" font-size="10">${label(phaseTerminals[index])}</text>`).join("")}<g>${device}</g>${neutralIndex >= 0 ? `<line x1="0" y1="14" x2="0" y2="42" stroke="#5d574d" stroke-width="2" stroke-dasharray="4 3"/><circle cx="0" cy="42" r="3" fill="#fffdf9" stroke="#5d574d" stroke-width="1.5"/><text x="8" y="46" fill="#37332c" font-size="10">${label(terminals[neutralIndex])}</text>` : ""}`;
+    } else if (terminals.length >= 2) {
+      html += `<line x1="-62" y1="0" x2="-14" y2="0" stroke="${colour}" stroke-width="2"/><line x1="14" y1="0" x2="62" y2="0" stroke="${colour}" stroke-width="2"/><circle cx="-62" cy="0" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/><circle cx="62" cy="0" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/><text x="-62" y="-8" text-anchor="middle" fill="#37332c" font-size="10">${label(terminals[0])}</text><text x="62" y="-8" text-anchor="middle" fill="#37332c" font-size="10">${label(terminals[1])}</text><g>${device}</g>`;
+    } else {
+      html += `<text x="0" y="6" text-anchor="middle" fill="#70695f" font-size="11">Terminal topology unavailable</text>`;
+    }
+    return `${html}</g>`;
+  }
+
   function renderInspector() {
     const item = itemFor(state.selected);
     $("selection-label").textContent = item ? titleOf(item) : "Nothing selected";
@@ -1484,13 +1510,17 @@
       const configuration = record.configuration ? `connection: ${String(record.configuration).replaceAll("_", " ")}` : null;
       const model = item.ref.kind === "load" ? `load model: ${String(record.model || "CONSTANT_POWER").replaceAll("_", " ")}${record.model ? "" : " (default)"}` : null;
       const details = [configuration, model].filter(Boolean);
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))}</text><rect x="180" y="85" width="400" height="300" rx="8" fill="#fffdf9" stroke="${colourOf(item.ref.kind)}" stroke-width="3"/><text x="380" y="125" text-anchor="middle" font-size="15">bus ${escapeHtml(attachment.busId)}</text>`;
-      details.forEach((detail, i) => { content += `<text x="380" y="${148 + i * 15}" text-anchor="middle" fill="#70695f" font-size="11">${escapeHtml(detail)}</text>`; });
       const terminalStart = details.length ? 184 : 170;
+      const diagramY = Math.max(330, terminalStart + terminals.length * 42 + 16);
+      const cardHeight = Math.max(300, diagramY - 85 + 100);
+      const footerY = 85 + cardHeight + 34;
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))}</text><rect x="180" y="85" width="400" height="${cardHeight}" rx="8" fill="#fffdf9" stroke="${colourOf(item.ref.kind)}" stroke-width="3"/><text x="380" y="125" text-anchor="middle" font-size="15">bus ${escapeHtml(attachment.busId)}</text>`;
+      details.forEach((detail, i) => { content += `<text x="380" y="${148 + i * 15}" text-anchor="middle" fill="#70695f" font-size="11">${escapeHtml(detail)}</text>`; });
       terminals.forEach((terminal, i) => { const y = terminalStart + i * 42; content += `<line x1="250" y1="${y}" x2="510" y2="${y}" stroke="#9a9388" stroke-width="2"/><text x="230" y="${y + 4}" text-anchor="end" fill="#37332c" font-size="13">${escapeHtml(terminal)}</text>`; });
-      content += `<text x="380" y="430" text-anchor="middle" fill="#70695f" font-size="12">Single-bus attachment · inspect properties for device details</text>`;
+      content += connectionDiagram(item, record.configuration, terminals, 380, diagramY);
+      content += `<text x="380" y="${footerY}" text-anchor="middle" fill="#70695f" font-size="12">Single-bus attachment · inspect properties for device details</text>`;
       setMultiStatus(`${terminals.length} attached terminals · ${item.status}`);
-      target.innerHTML = multiShell(content);
+      target.innerHTML = multiShell(content, { size: { width: 760, height: Math.max(500, footerY + 35) } });
       bindSvgSelection(target);
       return;
     }
