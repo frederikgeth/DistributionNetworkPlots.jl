@@ -10,7 +10,8 @@ python3 -m http.server 8765 --directory frontend
 
 Open <http://127.0.0.1:8765/> and choose a built-in example, or drop a BMOPF
 case such as `fixtures/micro/micro_bmopf.json` onto the page. The prototype supports the
-features listed below.
+features listed below. The Single-wire view is the default starting overview; the tabs
+then proceed through Multi-wire, Geospatial, and Diagnostics.
 
 For a single-directory distribution build, run `npm run build` from the
 repository root. This writes `dist/` with a bundled `index.html`, stylesheet,

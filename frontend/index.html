@@ -24,9 +24,9 @@
     <section class="workspace" aria-label="Network visualisation">
       <div id="drop-zone" class="drop-zone">Drop a BMOPF case or result JSON here, or use the file controls above.</div>
       <div class="view-tabs" role="tablist" aria-label="Views">
-        <button class="view-tab active" data-view="geo" role="tab">Geospatial</button>
-        <button class="view-tab" data-view="single" role="tab">Single-wire</button>
+        <button class="view-tab active" data-view="single" role="tab">Single-wire</button>
         <button class="view-tab" data-view="multi" role="tab">Multi-wire</button>
+        <button class="view-tab" data-view="geo" role="tab">Geospatial</button>
         <button class="view-tab" data-view="diagnostics" role="tab">Diagnostics</button>
       </div>
       <div id="view-status" class="view-status" role="status" aria-live="polite"></div>
@@ -49,7 +49,7 @@
           <details open>
             <summary>Quick start</summary>
             <ol>
-              <li>Choose a built-in example, open a case JSON, or drop a case into the drop zone.</li>
+              <li>Choose a built-in example, open a case JSON, or drop a case into the drop zone. Single-wire opens first as the default overview.</li>
               <li>Use the Inventory or Class overview to select a bus or asset.</li>
               <li>Switch views to compare geographic placement, a compact single-wire overview, and terminal-level multi-wire detail.</li>
               <li>Attach a result JSON after loading a case to colour assets and inspect solution metrics.</li>

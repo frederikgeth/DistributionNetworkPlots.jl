@@ -5,11 +5,12 @@ Last updated: 2026-09-01
 
 ## 1. Purpose
 
-DistributionNetworkPlots.jl is a browser-native explorer for BMOPF distribution-network case files. It provides three coordinated views of the same case:
+DistributionNetworkPlots.jl is a browser-native explorer for BMOPF distribution-network case files. It opens on the Single-wire overview and provides four coordinated views of the same case:
 
-1. A geospatial view when trustworthy bus coordinates are available.
-2. A single-wire electrical diagram.
-3. A multi-wire diagram that preserves terminal and conductor detail.
+1. A single-wire electrical diagram.
+2. A multi-wire diagram that preserves terminal and conductor detail.
+3. A geospatial view when trustworthy bus coordinates are available.
+4. A Diagnostics view for result validation and solution-profile findings.
 
 The explorer is delivered as static HTML, JavaScript, CSS, and optional local data files. "Static" means that no application server is required at run time; selection, tooltips, filtering, search, navigation, and drill-down remain interactive in the browser.
 

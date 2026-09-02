@@ -55,6 +55,9 @@ try {
     assert.equal(await page.locator('script[src="renderers/single-wire.js"]').count(), 1);
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "example-complete-feeder");
+    assert.equal(await page.locator(".view-tab.active").getAttribute("data-view"), "single");
+    assert.match(await page.evaluate(() => window.location.hash), /#\/single$/);
+    assert.deepEqual(await page.locator(".view-tab").evaluateAll((tabs) => tabs.map((tab) => tab.dataset.view)), ["single", "multi", "geo", "diagnostics"]);
     assert.match(await page.locator("#case-summary").innerText(), /Coordinate provenance: synthetic illustrative coordinates/);
     // #view-status is an aria-live region and loading an example announces the
     // example itself, so re-enter the geospatial view to read its own status.
