@@ -27,7 +27,7 @@
           !("bus" in value) && !("bus_from" in value) && !("bus_to" in value)) {
         for (const [nestedId, nested] of Object.entries(value)) {
           if (isObject(nested)) {
-            entries.push({ id: nestedId, value: nested,
+            entries.push({ id: nestedId, subtype: id, value: nested,
               pointer: `${pointer}/${pointerEscape(id)}/${pointerEscape(nestedId)}` });
           }
         }
@@ -163,6 +163,7 @@
       const entries = entriesFor(kind, document[kind], `/${pointerEscape(kind)}`);
       for (const item of entries) {
         const e = entity(kind, item.id, item.pointer, item.value);
+        if (item.subtype) e.subtype = item.subtype;
         addEntity(e, ASSET_KINDS.has(kind));
         for (const connection of e.connections) if (connection.warning) warnings.push(`${kind}/${item.id}: ${connection.warning}`);
         for (const p of e.ports) {

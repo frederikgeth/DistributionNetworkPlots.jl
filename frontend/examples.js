@@ -17,7 +17,7 @@
     switch: { switch_open: { bus_from: "feeder", bus_to: "load_bus", terminal_map_from: ["1", "2", "3", "n"], terminal_map_to: ["1", "3", "2", "n"], open_switch: true } },
     line_geometry: { route_main: { coordinates: [[152.650, -27.750], [152.730, -27.690], [152.840, -27.610]] } },
     transformer: {
-      two_winding: { tx_lv: { bus_from: "feeder", bus_to: "load_bus", terminal_map_from: ["1", "2", "3"], terminal_map_to: ["1", "2", "3", "n"], s_rating: 100000, v_nom_from: 11000, v_nom_to: 433 } },
+      delta_wye: { tx_lv: { bus_from: "feeder", bus_to: "load_bus", terminal_map_from: ["1", "2", "3"], terminal_map_to: ["1", "2", "3", "n"], s_rating: 100000, v_nom_from: 11000, v_nom_to: 433 } },
       n_winding: { tx_three: { windings: [{ bus: "feeder", terminal_map: ["1", "2", "3"], v_nom: 11000, configuration: "WYE" }, { bus: "load_bus", terminal_map: ["1", "2", "3", "n"], v_nom: 433, configuration: "WYE" }, { bus: "aux_bus", terminal_map: ["1", "2", "3"], v_nom: 433, configuration: "DELTA" }], s_rating: 150000 } }
     },
     load: { load_a: { bus: "load_bus", terminal_map: ["1", "n"], configuration: "SINGLE_PHASE", p_nom: [12000], q_nom: [2500] } },

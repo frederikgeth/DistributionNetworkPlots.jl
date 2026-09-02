@@ -1129,6 +1129,37 @@
     return `${html}</g>`;
   }
 
+  function transformerConfiguration(item, index) {
+    const record = item?.sourceRecord || {};
+    const winding = Array.isArray(record.windings) ? record.windings[index] : null;
+    if (winding?.configuration) return String(winding.configuration).toUpperCase();
+    const explicit = index === 0
+      ? (record.configuration_from ?? record.config_from)
+      : (record.configuration_to ?? record.config_to);
+    if (explicit) return String(explicit).toUpperCase();
+    const subtype = String(item?.subtype || "").toLowerCase();
+    return ({ wye_delta: ["WYE", "DELTA"], delta_wye: ["DELTA", "WYE"], single_phase: ["SINGLE_PHASE", "SINGLE_PHASE"], center_tap: ["SINGLE_PHASE", "CENTER_TAP"] }[subtype] || [])[index] || null;
+  }
+
+  function transformerWindingGlyph(configuration, x, y, side = "") {
+    const config = String(configuration || "").toUpperCase();
+    if (!config) return "";
+    const colour = "#4f789f";
+    const label = config.replaceAll("_", " ");
+    const caption = side ? `${side}: ${label}` : label;
+    let shape = "";
+    if (config === "DELTA") {
+      shape = `<path d="M-25 14L25 14L0-22Z" fill="none" stroke="${colour}" stroke-width="2"/><circle cx="-25" cy="14" r="2.5" fill="#fffdf9" stroke="${colour}"/><circle cx="25" cy="14" r="2.5" fill="#fffdf9" stroke="${colour}"/><circle cx="0" cy="-22" r="2.5" fill="#fffdf9" stroke="${colour}"/>`;
+    } else if (config === "WYE") {
+      shape = `<line x1="-25" y1="-14" x2="0" y2="0" stroke="${colour}" stroke-width="2"/><line x1="0" y1="-25" x2="0" y2="0" stroke="${colour}" stroke-width="2"/><line x1="25" y1="-14" x2="0" y2="0" stroke="${colour}" stroke-width="2"/><line x1="0" y1="0" x2="0" y2="23" stroke="#5d574d" stroke-width="2" stroke-dasharray="4 3"/><circle cx="0" cy="0" r="3" fill="#fffdf9" stroke="${colour}"/><circle cx="-25" cy="-14" r="2.5" fill="#fffdf9" stroke="${colour}"/><circle cx="0" cy="-25" r="2.5" fill="#fffdf9" stroke="${colour}"/><circle cx="25" cy="-14" r="2.5" fill="#fffdf9" stroke="${colour}"/><circle cx="0" cy="23" r="2.5" fill="#fffdf9" stroke="#5d574d"/>`;
+    } else if (config === "SINGLE_PHASE" || config === "CENTER_TAP") {
+      shape = `<line x1="-25" y1="0" x2="-8" y2="0" stroke="${colour}" stroke-width="2"/><line x1="8" y1="0" x2="25" y2="0" stroke="${colour}" stroke-width="2"/><circle cx="-8" cy="0" r="8" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><circle cx="8" cy="0" r="8" fill="#fffdf9" stroke="${colour}" stroke-width="2"/>`;
+    } else {
+      return "";
+    }
+    return `<g transform="translate(${x} ${y})" aria-label="${escapeHtml(caption)} transformer winding"><title>${escapeHtml(caption)} transformer winding</title><text x="0" y="-38" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(caption)}</text>${shape}</g>`;
+  }
+
   function renderInspector() {
     const item = itemFor(state.selected);
     $("selection-label").textContent = item ? titleOf(item) : "Nothing selected";
@@ -1491,6 +1522,9 @@
         const windingRecord = item.sourceRecord?.windings?.[i] || {};
         const details = [windingRecord.configuration, windingRecord.v_nom === undefined ? null : `V ${formatValue(windingRecord.v_nom)}`].filter(Boolean).join(" · ");
         content += `<text x="${layout.side === "left" ? layout.x + layout.width + 8 : layout.side === "right" ? layout.x - 8 : layout.x + layout.width / 2}" y="${layout.side === "top" ? layout.y + 78 : layout.y + 42}" text-anchor="${layout.side === "left" ? "start" : layout.side === "right" ? "end" : "middle"}" fill="#70695f" font-size="10">${escapeHtml(details || winding.role)}</text>`;
+        const glyphX = layout.side === "left" ? 252 : layout.side === "right" ? 508 : layout.x + layout.width / 2;
+        const glyphY = layout.side === "top" ? 312 : 158;
+        content += transformerWindingGlyph(windingRecord.configuration, glyphX, glyphY, `winding ${i + 1}`);
       });
       content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Each winding keeps its bus and terminal stack; no false direct bus-to-bus edges are drawn</text>`;
       setMultiStatus(`${item.ports.length} winding ports · ${item.status}`);
@@ -1602,7 +1636,16 @@
       const labelAnchor = item.ref.kind === "transformer" ? "end" : "middle";
       content += `<text x="${labelX}" y="${Math.min(405, Math.max(yLeft, yRight) - 7)}" text-anchor="${labelAnchor}" fill="#70695f" font-size="10"${item.ref.kind === "transformer" ? " data-role=\"conductor-label\"" : ""}>${escapeHtml(visual.label)} · ${escapeHtml(visual.kind)}</text>`;
     });
-    content += singleSymbol(item, 380, bodyY);
+    if (item.ref.kind === "transformer") {
+      const fromConfiguration = transformerConfiguration(item, 0);
+      const toConfiguration = transformerConfiguration(item, 1);
+      const hasWindingGlyph = Boolean(fromConfiguration || toConfiguration);
+      content += transformerWindingGlyph(fromConfiguration, 330, bodyY, "from");
+      content += transformerWindingGlyph(toConfiguration, 430, bodyY, "to");
+      if (!hasWindingGlyph) content += singleSymbol(item, 380, bodyY);
+    } else {
+      content += singleSymbol(item, 380, bodyY);
+    }
     const mappingNote = connection.warning ? `<text x="380" y="438" text-anchor="middle" fill="#8a4d20" font-size="12">${escapeHtml(connection.warning)} Inspect raw maps before relying on this pairing.</text>` : "";
     content += `${mappingNote}<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">${item.status === "open" ? "Open switch: conductor paths are intentionally interrupted" : "Ordered conductor pairing from source terminal maps"}</text>`;
     setMultiStatus(`${pairs.length} conductor pairs · ${item.status}${connection.warning ? " · terminal-map warning" : ""}`);

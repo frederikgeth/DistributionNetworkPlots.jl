@@ -138,6 +138,10 @@ try {
     assert.match(await page.locator("#canvas").innerText(), /Series Zs \[Ω\]/);
     assert.match(await page.locator("#canvas").innerText(), /0\.054/);
     assert.match(await page.locator("#canvas").innerText(), /Pure series branch · shunt admittance omitted/);
+    await inventorySearch.fill("tx_lv");
+    await page.locator('button[data-kind="transformer"][data-id="tx_lv"]').click();
+    assert.match(await page.locator("#canvas").innerText(), /from: DELTA/);
+    assert.match(await page.locator("#canvas").innerText(), /to: WYE/);
     await inventorySearch.fill("load_a");
     await page.locator('button[data-kind="load"][data-id="load_a"]').click();
     const loadText = await page.locator("#canvas").innerText();
