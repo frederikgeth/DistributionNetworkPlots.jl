@@ -17,6 +17,9 @@ jobs:
   build:
     name: Build static site
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -34,6 +37,10 @@ jobs:
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+        with:
+          # Create the Pages site on first run instead of failing when the
+          # repository has never had Pages enabled.
+          enablement: true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
