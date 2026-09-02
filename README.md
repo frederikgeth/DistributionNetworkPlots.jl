@@ -1,10 +1,35 @@
 # DistributionNetworkPlots.jl
 
+[![CI](https://github.com/frederikgeth/DistributionNetworkPlots.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/frederikgeth/DistributionNetworkPlots.jl/actions/workflows/ci.yml)
+[![CD](https://github.com/frederikgeth/DistributionNetworkPlots.jl/actions/workflows/pages.yml/badge.svg)](https://github.com/frederikgeth/DistributionNetworkPlots.jl/actions/workflows/pages.yml)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-2ea44f)](https://frederikgeth.github.io/DistributionNetworkPlots.jl/)
+
 Browser-native exploration of BMOPF distribution-network JSON cases, with Julia-generated static reports.
+
+> **Rapidly evolving initiative:** this project is an early, actively changing
+> release. APIs, visual semantics, supported BMOPF records, and result adapters
+> may change without notice. Validate important engineering conclusions against
+> the source case, BMOPFTools diagnostics, and your own domain review before
+> relying on the viewer in production.
 
 The repository contains a dependency-free static explorer. The GitHub Pages
 deployment is built from `dist/` by GitHub Actions; local case files are still
 read in the browser and are never uploaded by the application.
+
+## Relationship to the BMOPF ecosystem
+
+DistributionNetworkPlots.jl is the visual exploration companion to
+[BMOPFTools.jl](https://github.com/frederikgeth/BMOPFTools.jl). BMOPFTools is
+the Julia toolkit for parsing, validating, analysing, preparing, and profiling
+BMOPF cases and result dictionaries; this project focuses on making those
+cases and results inspectable in a browser through coordinated geospatial,
+single-wire, and multi-wire views.
+
+The case and result conventions follow the [IEEE Task Force mathematical and
+data-model specifications](https://github.com/distribution-system-opt/math-and-data-model-specifications).
+When the specification or BMOPFTools changes, this viewer may need an adapter
+update. Please report compatibility findings with a small case/result example
+and identify the relevant specification revision where possible.
 
 ## Try the browser prototype locally
 
