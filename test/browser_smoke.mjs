@@ -72,6 +72,13 @@ try {
     const transformerText = await page.locator("#canvas").innerText();
     assert.match(transformerText, /transformer/);
     assert.match(transformerText, /Ordered conductor pairing/);
+    await searchBox.fill("tx_three");
+    await page.locator('button[data-kind="transformer"][data-id="tx_three"]').click();
+    const multiWindingText = await page.locator("#canvas").innerText();
+    assert.match(multiWindingText, /winding detail/);
+    assert.match(multiWindingText, /WYE/);
+    assert.match(multiWindingText, /DELTA/);
+    assert.match(multiWindingText, /Each winding keeps its bus and terminal stack/);
     assert.deepEqual(consoleErrors, []);
   } finally {
     await browser.close();

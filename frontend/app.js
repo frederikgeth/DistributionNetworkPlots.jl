@@ -718,6 +718,30 @@
     return { html, rowY };
   }
 
+  function multiWindingPanel(bus, port, x, y, width, side) {
+    const terminals = terminalNames(port);
+    const height = side === "top" ? 92 : Math.max(150, 78 + terminals.length * 28);
+    const anchors = [];
+    let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><rect x="${x}" y="${y}" width="${width}" height="${height}" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><text x="${x + width / 2}" y="${y + 24}" text-anchor="middle" fill="#25231f" font-size="13">bus ${escapeHtml(bus.ref.id)}</text>`;
+    terminals.forEach((terminal, i) => {
+      const grounded = (bus.groundedTerminals || []).includes(terminal) || /^(g|pe|ground|earth)$/i.test(terminal);
+      const label = grounded ? `${terminal} · ⏚` : terminal;
+      if (side === "top") {
+        const point = terminals.length === 1 ? x + width / 2 : x + 24 + i * ((width - 48) / (terminals.length - 1));
+        anchors.push([point, y]);
+        html += `<line x1="${point}" y1="${y}" x2="${point}" y2="${y + 15}" stroke="${grounded ? "#5d574d" : "#9a9388"}" stroke-width="${grounded ? 3 : 2}"${grounded ? " stroke-dasharray=\"2 4\"" : ""}/><text x="${point}" y="${y + 39}" text-anchor="middle" fill="#37332c" font-size="11">${escapeHtml(label)}</text>`;
+      } else {
+        const rowY = y + 54 + i * 28;
+        const lineStart = side === "left" ? x + width - 18 : x + 18;
+        const lineEnd = side === "left" ? x + width - 4 : x + 4;
+        anchors.push([lineEnd, rowY]);
+        html += `<line x1="${lineStart}" y1="${rowY}" x2="${lineEnd}" y2="${rowY}" stroke="${grounded ? "#5d574d" : "#9a9388"}" stroke-width="${grounded ? 3 : 2}"${grounded ? " stroke-dasharray=\"2 4\"" : ""}/><text x="${side === "left" ? x + 12 : x + width - 12}" y="${rowY + 4}" text-anchor="${side === "left" ? "start" : "end"}" fill="#37332c" font-size="11">${escapeHtml(label)}</text>`;
+      }
+    });
+    html += `</g>`;
+    return { html, anchors };
+  }
+
   function focusedPath(points, visual, status) {
     const dash = [visual.dash, status === "open" ? "8 6" : ""].filter(Boolean).join(" ");
     return `<path d="M${points.map((point) => `${point[0]} ${point[1]}`).join("L")}" fill="none" stroke="${visual.colour}" stroke-width="3"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
@@ -1131,13 +1155,34 @@
       return;
     }
     if (item.ref.kind === "transformer" && item.ports?.length > 2) {
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))}</text><rect x="280" y="175" width="200" height="120" rx="10" fill="#e8f0f8" stroke="#4f789f" stroke-width="3"/><text x="380" y="242" text-anchor="middle" font-size="15">transformer body</text>`;
-      item.ports.forEach((winding, i) => {
-        const angle = -Math.PI / 2 + i * (Math.PI / Math.max(item.ports.length - 1, 1));
-        const x = 380 + Math.cos(angle) * 250; const y = 235 + Math.sin(angle) * 150;
-        content += `<g data-kind="bus" data-id="${escapeHtml(winding.busId)}"><line x1="380" y1="235" x2="${x}" y2="${y}" stroke="#4f789f" stroke-width="3"/><circle cx="${x}" cy="${y}" r="9" fill="#fffdf9" stroke="#4f789f" stroke-width="2"/><title>bus ${escapeHtml(winding.busId)}</title><text x="${x}" y="${y - 16}" text-anchor="middle" fill="#37332c" font-size="12">${escapeHtml(winding.role)}</text><text x="${x}" y="${y + 26}" text-anchor="middle" fill="#70695f" font-size="12">${escapeHtml(winding.busId)} · [${winding.terminals.map(escapeHtml).join(", ")}]</text></g>`;
+      const body = { x: 280, y: 165, width: 200, height: 125 };
+      const layouts = item.ports.map((_, i) => {
+        if (i === 0) return { x: 25, y: 78, width: 205, side: "left" };
+        if (i === 1) return { x: 530, y: 78, width: 205, side: "right" };
+        const count = item.ports.length - 2;
+        const width = Math.min(205, Math.max(150, 680 / Math.max(count, 1)));
+        const x = 380 - (width * count) / 2 + (i - 2) * width;
+        return { x, y: 335, width, side: "top" };
       });
-      content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Winding ports remain explicit; no false direct bus-to-bus edges are drawn</text>`;
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))} · winding detail</text><rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="10" fill="#e8f0f8" stroke="#4f789f" stroke-width="3"/><path d="M345 188c-16 0-16 28 0 28s16 28 0 28 16 28 0 28M415 188c16 0 16 28 0 28s-16 28 0 28-16 28 0 28" fill="none" stroke="#4f789f" stroke-width="3"/><text x="380" y="232" text-anchor="middle" font-size="14">multi-winding body</text>`;
+      item.ports.forEach((winding, i) => {
+        const layout = layouts[i];
+        const bus = state.index.buses.find((candidate) => candidate.ref.id === winding.busId) || { ref: { id: winding.busId }, groundedTerminals: [] };
+        const panel = multiWindingPanel(bus, winding, layout.x, layout.y, layout.width, layout.side);
+        content += panel.html;
+        panel.anchors.forEach((anchor, terminalIndex) => {
+          const terminal = winding.terminals[terminalIndex] || "?";
+          const visual = conductorVisual(terminal, terminal, winding.busId, winding.busId, terminalIndex);
+          const target = layout.side === "left" ? [body.x, body.y + 28 + terminalIndex * 22]
+            : layout.side === "right" ? [body.x + body.width, body.y + 28 + terminalIndex * 22]
+              : [body.x + 38 + terminalIndex * 42, body.y + body.height];
+          content += focusedPath([anchor, target], visual, "unknown");
+        });
+        const windingRecord = item.sourceRecord?.windings?.[i] || {};
+        const details = [windingRecord.configuration, windingRecord.v_nom === undefined ? null : `V ${formatValue(windingRecord.v_nom)}`].filter(Boolean).join(" · ");
+        content += `<text x="${layout.side === "left" ? layout.x + layout.width + 8 : layout.side === "right" ? layout.x - 8 : layout.x + layout.width / 2}" y="${layout.side === "top" ? layout.y + 78 : layout.y + 42}" text-anchor="${layout.side === "left" ? "start" : layout.side === "right" ? "end" : "middle"}" fill="#70695f" font-size="10">${escapeHtml(details || winding.role)}</text>`;
+      });
+      content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Each winding keeps its bus and terminal stack; no false direct bus-to-bus edges are drawn</text>`;
       setStatus(`${item.ports.length} winding ports · ${item.status}`);
       $("canvas").innerHTML = svgShell(content);
       bindSvgSelection();

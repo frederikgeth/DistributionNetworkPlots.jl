@@ -51,6 +51,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Vendor the pinned ELK browser bundle, embed it in Julia reports, and cache layout profiles by case and layout options.
 - [x] Apply ELK orthogonal edge sections to single-line SVG paths and pass the selected root as a fixed ELK processing root.
 - [x] Faithful focused multi-wire view shows terminal stacks, phase permutations, neutral/ground cues, open-switch interruptions, and explicit transformer windings.
+- [x] Multi-winding focused view shows one terminal stack per winding with winding metadata and selectable connected buses.
 - [x] Publish an explicit overview SVG budget and switch oversized geospatial/single-line cases to a focused one-hop fallback.
 - [ ] Replace prototype renderer packages and define formal layout-cache retention/eviction policy.
 - [x] Add an automated browser end-to-end smoke test and wire it into GitHub Actions.

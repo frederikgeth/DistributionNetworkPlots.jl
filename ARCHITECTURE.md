@@ -319,7 +319,7 @@ Projection rules:
 - Transformer winding ports remain explicit; multi-winding devices are not reduced to arbitrary pairwise branches.
 - Unsupported connection semantics produce diagnostics rather than plausible-looking guesses.
 
-The focused renderer supports a selected asset or bus and a configurable one- or two-hop neighbourhood. Bus terminal stacks remain explicit; conductor paths preserve ordered phase permutations, neutral/ground distinctions, and open-switch interruptions. Two-winding transformers use a device body between their winding-side terminal stacks, while multi-winding transformers retain explicit winding spokes. Full-network overview uses collapsed bundles and semantic zoom; expanded conductors are rendered only where useful.
+The focused renderer supports a selected asset or bus and a configurable one- or two-hop neighbourhood. Bus terminal stacks remain explicit; conductor paths preserve ordered phase permutations, neutral/ground distinctions, and open-switch interruptions. Two-winding transformers use a device body between their winding-side terminal stacks. Multi-winding transformers use a body with one explicit terminal stack per winding, including winding metadata and selectable connected buses; they are never reduced to pairwise branches. Full-network overview uses collapsed bundles and semantic zoom; expanded conductors are rendered only where useful.
 
 ## 8. Interaction and navigation
 
@@ -548,6 +548,9 @@ For every supported selectable asset:
 ## 14. Architectural decisions
 
 The following decisions are accepted by this baseline unless superseded by an Architecture Decision Record (ADR):
+
+The renderer and layout boundaries, including cache validity and retention
+principles, are recorded in [ADR 0004](docs/adr/0004-renderer-and-layout-contract.md).
 
 | Decision | Status | Rationale |
 |---|---|---|
