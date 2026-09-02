@@ -58,6 +58,7 @@ try {
     assert.equal(await page.locator(".view-tab.active").getAttribute("data-view"), "single");
     assert.match(await page.evaluate(() => window.location.hash), /#\/single$/);
     assert.deepEqual(await page.locator(".view-tab").evaluateAll((tabs) => tabs.map((tab) => tab.dataset.view)), ["single", "multi", "geo", "diagnostics"]);
+    assert.equal(await page.locator("#canvas text").evaluateAll((nodes) => nodes.some((node) => /Source → load one-line view|IEC\/IEEE-inspired symbols/.test(node.textContent))), false);
     assert.equal(await page.locator(".sidebar > .help-panel").evaluate((node) => node === node.parentElement.firstElementChild), true);
     const displayOptions = page.locator("#display-options");
     assert.equal(await displayOptions.isVisible(), true);

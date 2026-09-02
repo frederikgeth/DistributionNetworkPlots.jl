@@ -101,7 +101,10 @@
       const connectedAssets = overviewAssets.filter((e) => e.connections?.length);
       const attachedAssets = overviewAssets.filter((e) => !e.connections?.length && e.ports?.length === 1);
       const attachedFallbacks = attachmentFallbacks(attachedAssets, connectedAssets, positions);
-      let content = `<defs><marker id="sld-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0 0L7 3.5L0 7z" fill="#6b655c"/></marker></defs><text x="24" y="26" fill="#37332c" font-size="13" font-weight="700">Source → load one-line view</text><text x="24" y="43" fill="#70695f" font-size="10">IEC/IEEE-inspired symbols · heavy busbars · drag buses or device symbols to refine the layout</text>`;
+      // Keep explanatory copy out of the network drawing. The status line,
+      // floating legend, and Help panel provide the same guidance without
+      // consuming diagram space or moving with the camera.
+      let content = `<defs><marker id="sld-arrow" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto" markerUnits="strokeWidth"><path d="M0 0L7 3.5L0 7z" fill="#6b655c"/></marker></defs>`;
       const edgeCounts = new Map();
       for (const item of connectedAssets) {
         for (const connection of item.connections) {
