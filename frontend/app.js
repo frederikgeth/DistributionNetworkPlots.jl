@@ -473,6 +473,8 @@
     const reportHtml = report ? `<p class="report-meta">Report ${escapeHtml(report.app_version || "unknown")} · layout ${escapeHtml(report.layout_engine || "unknown")} · fingerprint <code>${escapeHtml(String(report.case_fingerprint || "").slice(0, 12))}</code></p>` : "";
     const support = index.supportCounts || {};
     const supportHtml = `<p class="support-meta">Support: ${support.full || 0} full · ${support.focused || 0} focused · ${support["raw-only"] || 0} raw-only</p>`;
+    const coordinateProvenance = index.raw?.meta?.coordinate_provenance;
+    const coordinateHtml = coordinateProvenance ? `<p class="report-meta">Coordinate provenance: ${escapeHtml(coordinateProvenance)}</p>` : "";
     const budget = overviewBudget();
     const budgetHtml = budget.over && state.largeCaseDecision !== "full"
       ? `<p class="budget-warning"><strong>Focused overview mode</strong> · ${escapeHtml(budget.message)} Select an asset to render its one-hop context.</p>`
@@ -483,7 +485,7 @@
       : budget.over && state.largeCaseDecision === "focused"
         ? `<div class="large-case-dialog"><strong>Focused overview enabled</strong><p>Full overview rendering is paused for this case.</p><button id="large-case-continue">Render full overview</button></div>` : "";
     $("case-summary").className = "panel";
-    $("case-summary").innerHTML = `<div class="panel-heading"><h2>${escapeHtml(index.name)}</h2><span class="muted">${index.schema ? "schema" : "JSON"}</span></div><div class="stats">${stats.map(([n, label]) => `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`).join("")}</div>${supportHtml}${budgetHtml}${largeCasePrompt}${reportHtml}${warningHtml}`;
+    $("case-summary").innerHTML = `<div class="panel-heading"><h2>${escapeHtml(index.name)}</h2><span class="muted">${index.schema ? "schema" : "JSON"}</span></div><div class="stats">${stats.map(([n, label]) => `<div class="stat"><strong>${n}</strong><span>${label}</span></div>`).join("")}</div>${supportHtml}${coordinateHtml}${budgetHtml}${largeCasePrompt}${reportHtml}${warningHtml}`;
     $("case-summary").querySelector("#large-case-bypass")?.addEventListener("change", (event) => { state.largeCaseBypass = event.target.checked; });
     $("case-summary").querySelector("#large-case-continue")?.addEventListener("click", () => {
       if ($("case-summary").querySelector("#large-case-bypass")?.checked) state.largeCaseBypass = true;

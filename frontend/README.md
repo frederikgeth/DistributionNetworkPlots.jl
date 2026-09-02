@@ -58,7 +58,7 @@ be matched for best-effort inspection.
 - Cases above the overview budget remain loadable. The viewer asks for confirmation before full geospatial or single-line rendering, with a page-session bypass checkbox and a focused-mode option.
 - Schema-identifier diagnostics when a case omits or does not identify BMOPF.
 - A Diagnostics view normalises result validation/profile findings and links each linked finding back to its asset.
-- Built-in authored examples for the complete AC feeder and sparse/DC support-boundary cases; selecting one loads it without a file round-trip.
+- Built-in authored examples for the complete AC feeder and sparse/DC support-boundary cases; both include synthetic, provenance-labelled coordinates for immediate geospatial discovery, while the sparse case retains one deliberate omission.
 - Diagnostics can be filtered by severity or text; the Results panel reports whether the sidecar identity is matched, mismatched, or unverified against the open case.
 
 Multinetwork `nw` results are identified and require an explicit scenario

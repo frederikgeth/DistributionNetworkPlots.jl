@@ -41,9 +41,11 @@ python3 -m http.server 8765 --directory frontend
 
 Open <http://127.0.0.1:8765/> and drop [`fixtures/micro/micro_bmopf.json`](fixtures/micro/micro_bmopf.json) onto the page.
 
-The browser also starts with two built-in authored examples: a complete AC
-feeder covering the supported device classes, and a sparse/DC case that
-exercises missing coordinates, terminal diagnostics, and raw-only records.
+The browser also starts with two built-in authored examples. Both use clearly
+labelled synthetic coordinates spread across a broad illustrative area so the
+geospatial view is useful immediately; the sparse/DC case deliberately leaves
+one bus unplaced to exercise missing-coordinate diagnostics. The complete AC
+feeder covers the supported device classes.
 
 To inspect solved values, use **Attach results JSON** and choose
 [`fixtures/micro/micro_bmopf_result.json`](fixtures/micro/micro_bmopf_result.json)

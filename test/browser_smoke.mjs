@@ -53,6 +53,10 @@ try {
     assert.equal(await page.locator('script[src="layout/deterministic.js"]').count(), 1);
     assert.equal(await page.locator('script[src="renderers/geospatial.js"]').count(), 1);
     assert.equal(await page.locator('script[src="renderers/single-wire.js"]').count(), 1);
+    await page.locator("#case-summary h2").waitFor({ state: "visible" });
+    assert.equal(await page.locator("#case-summary h2").textContent(), "example-complete-feeder");
+    assert.match(await page.locator("#view-status").textContent(), /Geographic coordinates used for 4\/4 buses/);
+    assert.match(await page.locator("#case-summary").innerText(), /Coordinate provenance: synthetic illustrative coordinates/);
     await page.locator("#file-input").setInputFiles(resolve(fixtureRoot, "micro_bmopf.json"));
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");

@@ -40,6 +40,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Viewer recognises versioned optional case fingerprints and prefers cryptographic pairing when producer metadata is available.
 - [x] Overview views encode supported loading, explicit voltage deviation, and operating-state result cues with non-colour legend guidance.
 - [x] Frontend provides built-in authored cases for complete-model and partial/raw-only support-boundary smoke tests.
+- [x] Built-in discovery cases include provenance-labelled synthetic coordinate spans, with a deliberate missing-coordinate example retained for diagnostics.
 - [x] Single-line view uses a deterministic source-to-load layered layout, heavy busbars, orthogonal branch routing, explicit device labels, and IEEE/IEC-inspired symbols.
 - [x] Inventory search ranks exact/prefix asset matches and can jump by keyboard; help panel documents views, symbols, and result cues.
 - [x] Add Back/Forward navigation for selection and view changes, preserving multi-wire drill-down history and hash deep links.
