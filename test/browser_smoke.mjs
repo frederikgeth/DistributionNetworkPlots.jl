@@ -71,6 +71,15 @@ try {
     await page.getByPlaceholder("Search assets, buses, or result fields").fill("rooftop_ibr");
     await page.locator('button[data-kind="ibr"][data-id="rooftop_ibr"]').click();
     assert.match(await page.locator("#inspector").innerText(), /s_max[\s\S]*35000 VA/);
+    await page.getByRole("tab", { name: "Multi-wire" }).click();
+    await page.getByPlaceholder("Search assets, buses, or result fields").fill("load_three_phase");
+    await page.locator('button[data-kind="load"][data-id="load_three_phase"]').click();
+    assert.match(await page.locator("#canvas").innerText(), /DELTA connection/);
+    assert.match(await page.locator("#canvas").innerText(), /load model: ZIP/);
+    await page.getByPlaceholder("Search assets, buses, or result fields").fill("utility_ibr_three_phase");
+    await page.locator('button[data-kind="ibr"][data-id="utility_ibr_three_phase"]').click();
+    assert.match(await page.locator("#canvas").innerText(), /WYE connection/);
+    await page.getByRole("tab", { name: "Single-wire" }).click();
     const attachedTransforms = await page.locator('#canvas g[data-kind="load"], #canvas g[data-kind="ibr"], #canvas g[data-kind="capacitor"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("transform")));
     assert.equal(new Set(attachedTransforms).size, attachedTransforms.length);
     assert.equal(await page.locator("#floating-legend").isVisible(), true);

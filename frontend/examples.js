@@ -20,9 +20,15 @@
       delta_wye: { tx_lv: { bus_from: "feeder", bus_to: "load_bus", terminal_map_from: ["1", "2", "3"], terminal_map_to: ["1", "2", "3", "n"], s_rating: 100000, v_nom_from: 11000, v_nom_to: 433 } },
       n_winding: { tx_three: { windings: [{ bus: "feeder", terminal_map: ["1", "2", "3"], v_nom: 11000, configuration: "WYE" }, { bus: "load_bus", terminal_map: ["1", "2", "3", "n"], v_nom: 433, configuration: "WYE" }, { bus: "aux_bus", terminal_map: ["1", "2", "3"], v_nom: 433, configuration: "DELTA" }], s_rating: 150000 } }
     },
-    load: { load_a: { bus: "load_bus", terminal_map: ["1", "n"], configuration: "SINGLE_PHASE", p_nom: [12000], q_nom: [2500] } },
+    load: {
+      load_a: { bus: "load_bus", terminal_map: ["1", "n"], configuration: "SINGLE_PHASE", p_nom: [12000], q_nom: [2500] },
+      load_three_phase: { bus: "aux_bus", terminal_map: ["1", "2", "3"], configuration: "DELTA", model: "ZIP", p_nom: [9000, 9000, 9000], q_nom: [1800, 1800, 1800], v_nom: [433, 433, 433], alpha_z: [0.2, 0.2, 0.2], alpha_i: [0.3, 0.3, 0.3], alpha_p: [0.5, 0.5, 0.5], beta_z: [0.2, 0.2, 0.2], beta_i: [0.3, 0.3, 0.3], beta_p: [0.5, 0.5, 0.5] }
+    },
     generator: { backup_gen: { bus: "feeder", terminal_map: ["1", "2", "3"], configuration: "WYE", p_min: [0], p_max: [50000] } },
-    ibr: { rooftop_ibr: { bus: "load_bus", terminal_map: ["2", "n"], p_max: [30000], q_max: [10000], s_max: [35000] } },
+    ibr: {
+      rooftop_ibr: { bus: "load_bus", terminal_map: ["2", "n"], p_max: [30000], q_max: [10000], s_max: [35000] },
+      utility_ibr_three_phase: { bus: "aux_bus", terminal_map: ["1", "2", "3", "n"], configuration: "WYE", p_max: [30000, 30000, 30000], q_max: [10000, 10000, 10000], s_max: [35000, 35000, 35000] }
+    },
     shunt: { grounding: { bus: "feeder", terminal_map: ["n"], G_1_1: 0.1 } },
     capacitor: { cap_bank: { bus: "load_bus", terminal_map: ["1", "2", "3"], q_nom: [5000, 5000, 5000] } },
     linecode: { lc_main: {
