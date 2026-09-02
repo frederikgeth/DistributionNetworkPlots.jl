@@ -36,7 +36,7 @@ h2 { margin-bottom: 0; font-size: 15px; }
 .view-tab { border: 1px solid var(--line); border-radius: 6px; padding: 8px 11px; color: var(--muted); background: var(--panel); cursor: pointer; }
 .view-tab.active, .view-tab:focus-visible { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .view-status { min-height: 22px; color: var(--muted); }
-.camera-controls { display: flex; align-items: center; gap: 6px; min-height: 34px; margin: 0 0 8px; color: var(--muted); font-size: 12px; }
+.camera-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 34px; margin: 0 0 8px; color: var(--muted); font-size: 12px; }
 .camera-controls button { border: 1px solid var(--line); border-radius: 5px; padding: 4px 8px; color: var(--muted); background: var(--panel); cursor: pointer; }
 .camera-controls button:hover, .camera-controls button:focus-visible { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .camera-controls button:disabled { cursor: not-allowed; opacity: .5; }

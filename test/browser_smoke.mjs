@@ -9,6 +9,7 @@ const frontendRoot = resolve(fileURLToPath(new URL("../frontend/", import.meta.u
 const fixtureRoot = resolve(fileURLToPath(new URL("../fixtures/micro/", import.meta.url)));
 const contentTypes = { ".css": "text/css", ".js": "text/javascript", ".json": "application/json", ".html": "text/html" };
 const resultFixture = await readFile(resolve(fixtureRoot, "micro_bmopf_result.json"), "utf8");
+const resultCaseFingerprint = JSON.parse(resultFixture).meta.case_fingerprint;
 const mismatchedResult = JSON.stringify({ ...JSON.parse(resultFixture), meta: { ...JSON.parse(resultFixture).meta, case_fingerprint: "not-the-open-case" } });
 const largeCase = {
   name: "large-browser-smoke-case",
@@ -63,13 +64,18 @@ try {
     }, { text, name });
     await dropJson(resultFixture, "micro_bmopf_result.json");
     await page.waitForTimeout(100);
-    assert.match(await page.locator("#result-summary").innerText(), /Pairing matched/);
+    // A case opened from a plain JSON file carries no fingerprint of its own, so
+    // the app can report the identity a result claims but cannot verify it. The
+    // cryptographic matched/mismatch paths need a case that declares its own
+    // fingerprint, which only a rendered report does today.
+    assert.match(await page.locator("#result-summary").innerText(), /Pairing unverified/i);
+    assert.match(await page.locator("#result-summary").innerText(), new RegExp(`case identity ${resultCaseFingerprint}`));
     assert.match(await page.locator("#view-status").textContent(), /Results attached to the current case/);
+    assert.match(await page.locator("#view-status").textContent(), /identity could not be verified/);
     await dropJson(mismatchedResult, "mismatch_result.json");
     await page.waitForTimeout(100);
     assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");
-    assert.match(await page.locator("#result-summary").innerText(), /Pairing mismatch/);
-    assert.match(await page.locator("#view-status").textContent(), /identity mismatch/);
+    assert.match(await page.locator("#result-summary").innerText(), /case identity not-the-open-case/);
     await page.getByRole("tab", { name: "Single-wire" }).click();
     await page.getByRole("button", { name: "Apply ELK layout" }).click();
     await page.locator("#view-status").waitFor({ state: "visible" });
@@ -117,6 +123,9 @@ try {
     await page.getByRole("button", { name: "Show full overview", exact: true }).click();
     await page.waitForTimeout(100);
     assert.match(await page.evaluate(() => window.location.hash), /single$/);
+    // The overview action clears the selection, and multi-wire focus mode needs a
+    // selected multi-terminal device, so re-select the line before switching tabs.
+    await page.locator('button[data-kind="line"][data-id="line_main"]').click();
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     const multiText = await page.locator("#canvas").innerText();
     assert.match(multiText, /terminal detail/);
