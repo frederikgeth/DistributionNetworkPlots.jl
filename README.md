@@ -37,7 +37,7 @@ The prototype supports:
 - Geospatial schematic and single-wire projections.
 - Single-line rendering with source-to-load layering, heavy busbars, orthogonal
   branch routing, labeled equipment, and IEEE/IEC-inspired symbols.
-- Bus- and device-focused multi-wire drill-down.
+- Bus- and device-focused multi-wire drill-down with terminal stacks, phase permutations, open-switch interruptions, and explicit transformer winding ports.
 - Local-only case loading with no runtime backend.
 - Browser-side guardrails for invalid JSON and oversized case files.
 - Optional BMOPFTools-style result JSON sidecars with objective/status summary and asset-level metrics.

@@ -319,7 +319,7 @@ Projection rules:
 - Transformer winding ports remain explicit; multi-winding devices are not reduced to arbitrary pairwise branches.
 - Unsupported connection semantics produce diagnostics rather than plausible-looking guesses.
 
-The initial renderer supports a selected asset or bus and a configurable one- or two-hop neighbourhood. Full-network overview uses collapsed bundles and semantic zoom; expanded conductors are rendered only where useful.
+The focused renderer supports a selected asset or bus and a configurable one- or two-hop neighbourhood. Bus terminal stacks remain explicit; conductor paths preserve ordered phase permutations, neutral/ground distinctions, and open-switch interruptions. Two-winding transformers use a device body between their winding-side terminal stacks, while multi-winding transformers retain explicit winding spokes. Full-network overview uses collapsed bundles and semantic zoom; expanded conductors are rendered only where useful.
 
 ## 8. Interaction and navigation
 

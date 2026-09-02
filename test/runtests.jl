@@ -26,6 +26,8 @@ const MULTINETWORK_RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro"
     @test occursin("__BMOPF_ELK_BUNDLE_SOURCE__", html)
     @test occursin("org.eclipse.elk.processingOrder.preferredRoot", html)
     @test occursin("routeMidpoint", html)
+    @test occursin("terminal detail", html)
+    @test occursin("Open switch: conductor paths are intentionally interrupted", html)
     @test occursin("LAYOUT_CACHE_VERSION = 3", html)
     @test occursin("bmopf-layout-v3:", html)
     @test occursin("single-svg-v1", html)

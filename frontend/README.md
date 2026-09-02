@@ -21,7 +21,7 @@ inspector, alongside a raw result-record view.
 - Source-property inspection and raw-record display.
 - Endpoint links from devices to buses.
 - Geospatial and schematic single-wire projections.
-- Focused multi-wire conductor pairing for a selected two-port device.
+- Focused multi-wire terminal stacks and conductor pairing for selected buses, lines, switches, and transformers, including phase permutations and explicit neutral/ground cues.
 - One- and two-hop neighbourhood expansion from a selected bus.
 - Pan, zoom, and fit/reset controls for the static SVG views.
 - Distinct single-wire symbols for supported device classes and state styling.

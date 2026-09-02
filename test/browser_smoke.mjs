@@ -57,6 +57,21 @@ try {
     assert.ok(Object.keys(profilesAfterSwitch).some((key) => key.includes("direction=load-to-source")));
     const profileCount = await page.evaluate(() => Object.values(localStorage).filter((value) => value.includes('"version":3')).length);
     assert.equal(profileCount, 1);
+    const inventorySearch = page.getByPlaceholder("Search assets, buses, or result fields");
+    await inventorySearch.fill("line_main");
+    await page.locator('button[data-kind="line"][data-id="line_main"]').click();
+    await page.getByRole("tab", { name: "Multi-wire" }).click();
+    const multiText = await page.locator("#canvas").innerText();
+    assert.match(multiText, /terminal detail/);
+    assert.match(multiText, /Ordered conductor pairing/);
+    await inventorySearch.fill("switch_open");
+    await page.locator('button[data-kind="switch"][data-id="switch_open"]').click();
+    assert.match(await page.locator("#canvas").innerText(), /Open switch/);
+    await inventorySearch.fill("tx_lv");
+    await page.locator('button[data-kind="transformer"][data-id="tx_lv"]').click();
+    const transformerText = await page.locator("#canvas").innerText();
+    assert.match(transformerText, /transformer/);
+    assert.match(transformerText, /Ordered conductor pairing/);
     assert.deepEqual(consoleErrors, []);
   } finally {
     await browser.close();

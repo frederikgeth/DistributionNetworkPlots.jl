@@ -690,12 +690,37 @@
     const name = String(terminal).toLowerCase(); const otherName = String(otherTerminal).toLowerCase();
     const bus = state.index.buses.find((candidate) => candidate.ref.id === busId);
     const otherBus = state.index.buses.find((candidate) => candidate.ref.id === otherBusId);
-    const grounded = Boolean(bus?.groundedTerminals.includes(String(terminal)) || otherBus?.groundedTerminals.includes(String(otherTerminal)));
-    const neutral = name === "n" || otherName === "n";
+    const grounded = Boolean(bus?.groundedTerminals.includes(String(terminal)) || otherBus?.groundedTerminals.includes(String(otherTerminal)) || /^(g|pe|ground|earth)$/.test(name) || /^(g|pe|ground|earth)$/.test(otherName));
+    const neutral = name === "n" || name === "neutral" || otherName === "n" || otherName === "neutral";
     if (grounded && neutral) return { colour: "#5d574d", dash: "4 3", label: "N⏚", kind: "grounded neutral" };
     if (grounded) return { colour: "#5d574d", dash: "2 4", label: "⏚", kind: "ground" };
     if (neutral) return { colour: "#787266", dash: "10 5", label: "N", kind: "neutral" };
-    return { colour: ["#c2564b", "#4a8f5f", "#3f6fb9"][index % 3], dash: "", label: ["A", "B", "C"][index % 3], kind: "phase" };
+    const phaseIndex = { a: 0, p1: 0, phase1: 0, "1": 0, b: 1, p2: 1, phase2: 1, "2": 1, c: 2, p3: 2, phase3: 2, "3": 2 }[name] ?? { a: 0, p1: 0, phase1: 0, "1": 0, b: 1, p2: 1, phase2: 1, "2": 1, c: 2, p3: 2, phase3: 2, "3": 2 }[otherName] ?? index % 3;
+    return { colour: ["#c2564b", "#4a8f5f", "#3f6fb9"][phaseIndex], dash: "", label: ["A", "B", "C"][phaseIndex], kind: "phase" };
+  }
+
+  function terminalNames(port) {
+    return port?.terminals?.length ? port.terminals.map(String) : ["? (terminal map unavailable)"];
+  }
+
+  function multiBusPanel(bus, port, x, y, width, side) {
+    const terminals = terminalNames(port);
+    const rowY = terminals.map((_, i) => y + 72 + i * 34);
+    let html = `<g data-kind="bus" data-id="${escapeHtml(bus.ref.id)}"><rect x="${x}" y="${y}" width="${width}" height="${Math.max(190, 112 + terminals.length * 34)}" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><text x="${x + width / 2}" y="${y + 28}" text-anchor="middle" fill="#25231f" font-size="14">bus ${escapeHtml(bus.ref.id)}</text>`;
+    terminals.forEach((terminal, i) => {
+      const grounded = bus.groundedTerminals.includes(terminal) || /^(g|pe|ground|earth)$/i.test(terminal);
+      const label = grounded ? `${terminal} · ⏚` : terminal;
+      const lineStart = side === "left" ? x + width - 18 : x + 18;
+      const textX = side === "left" ? x + 14 : x + width - 14;
+      html += `<line x1="${lineStart}" y1="${rowY[i]}" x2="${side === "left" ? x + width - 4 : x + 4}" y2="${rowY[i]}" stroke="${grounded ? "#5d574d" : "#9a9388"}" stroke-width="${grounded ? 3 : 2}"${grounded ? " stroke-dasharray=\"2 4\"" : ""}/><text x="${textX}" y="${rowY[i] + 4}" text-anchor="${side === "left" ? "start" : "end"}" fill="#37332c" font-size="12">${escapeHtml(label)}</text>`;
+    });
+    html += `</g>`;
+    return { html, rowY };
+  }
+
+  function focusedPath(points, visual, status) {
+    const dash = [visual.dash, status === "open" ? "8 6" : ""].filter(Boolean).join(" ");
+    return `<path d="M${points.map((point) => `${point[0]} ${point[1]}`).join("L")}" fill="none" stroke="${visual.colour}" stroke-width="3"${dash ? ` stroke-dasharray="${dash}"` : ""}/>`;
   }
 
   function renderMultiHopControls() {
@@ -1088,16 +1113,15 @@
     if (item.ref.kind === "bus") {
       const neighbourhood = neighbourhoodForBus(item.ref.id, state.multiHops);
       const incident = neighbourhood.assets;
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">bus ${escapeHtml(item.ref.id)}</text><rect x="35" y="70" width="220" height="350" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><text x="145" y="102" text-anchor="middle" font-size="15">terminals</text>`;
-      item.terminals.forEach((terminal, i) => {
-        const y = 140 + i * 38;
-        const grounded = item.groundedTerminals.includes(terminal) ? " · grounded" : "";
-        content += `<text x="60" y="${y}" fill="#37332c" font-size="13">${escapeHtml(terminal)}${escapeHtml(grounded)}</text><line x1="95" y1="${y - 4}" x2="225" y2="${y - 4}" stroke="#9a9388" stroke-width="2"/>`;
-      });
+      const busPanel = multiBusPanel(item, { terminals: item.terminals }, 35, 70, 220, "left");
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">bus ${escapeHtml(item.ref.id)} · terminal neighbourhood</text>${busPanel.html}`;
       content += `<rect x="300" y="70" width="425" height="350" rx="8" fill="#fffdf9" stroke="#ded8cc"/><text x="512" y="102" text-anchor="middle" font-size="15">${state.multiHops}-hop assets</text>`;
       incident.slice(0, 7).forEach((device, i) => {
         const y = 140 + i * 38;
-        content += `<g data-kind="${escapeHtml(device.ref.kind)}" data-id="${escapeHtml(device.ref.id)}"><circle cx="335" cy="${y - 4}" r="6" fill="${colourOf(device.ref.kind)}"/><text x="352" y="${y}" fill="#37332c" font-size="13">${escapeHtml(titleOf(device))}</text><title>${escapeHtml(titleOf(device))}</title></g>`;
+        const attachedPorts = (device.ports || []).filter((port) => port.busId === item.ref.id);
+        const terminalText = attachedPorts.map((port) => `${port.role}: ${terminalNames(port).join(", ")}`).join(" · ");
+        const warning = (device.connections || []).find((connection) => connection.warning)?.warning;
+        content += `<g data-kind="${escapeHtml(device.ref.kind)}" data-id="${escapeHtml(device.ref.id)}"><circle cx="335" cy="${y - 4}" r="6" fill="${colourOf(device.ref.kind)}"/><text x="352" y="${y}" fill="#37332c" font-size="13">${escapeHtml(titleOf(device))}</text><text x="352" y="${y + 15}" fill="#70695f" font-size="10">${escapeHtml(terminalText || "terminal mapping unavailable")}</text>${warning ? `<text x="352" y="${y + 28}" fill="#8a4d20" font-size="10">⚠ ${escapeHtml(warning)}</text>` : ""}<title>${escapeHtml(titleOf(device))}${terminalText ? ` · ${escapeHtml(terminalText)}` : ""}</title></g>`;
       });
       if (incident.length > 7) content += `<text x="512" y="405" text-anchor="middle" fill="#70695f" font-size="12">+ ${incident.length - 7} more in the inspector</text>`;
       content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Select an incident device to expand its conductor pairing</text>`;
@@ -1136,17 +1160,30 @@
     }
     const connection = item.connections[0];
     const left = connection.from; const right = connection.to;
-    let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))}</text><rect x="35" y="70" width="200" height="350" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><rect x="525" y="70" width="200" height="350" rx="8" fill="#fffdf9" stroke="#2f6fb3" stroke-width="2"/><text x="135" y="102" text-anchor="middle" font-size="15">bus ${escapeHtml(left.busId)}</text><text x="625" y="102" text-anchor="middle" font-size="15">bus ${escapeHtml(right.busId)}</text>`;
+    const leftBus = state.index.buses.find((bus) => bus.ref.id === left.busId) || { ref: { id: left.busId }, groundedTerminals: [] };
+    const rightBus = state.index.buses.find((bus) => bus.ref.id === right.busId) || { ref: { id: right.busId }, groundedTerminals: [] };
+    const leftPanel = multiBusPanel(leftBus, left, 25, 70, 215, "left");
+    const rightPanel = multiBusPanel(rightBus, right, 520, 70, 215, "right");
     const pairs = connection.pairs;
+    const bodyY = 142 + Math.max(pairs.length - 1, 0) * 17;
+    let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${escapeHtml(titleOf(item))} · terminal detail</text>${leftPanel.html}${rightPanel.html}<rect x="285" y="${Math.max(105, bodyY - 48)}" width="190" height="96" rx="10" fill="#f4f1ea" stroke="${colourOf(item.ref.kind)}" stroke-width="2"/><text x="380" y="${Math.max(122, bodyY - 20)}" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(item.ref.kind.replaceAll("_", " "))}</text>`;
     pairs.forEach(([a, b], i) => {
-      const y = 145 + i * 45; const visual = conductorVisual(a, b, left.busId, right.busId, i);
-      const dash = [visual.dash, item.status === "open" ? "8 6" : ""].filter(Boolean).join(" ");
-      content += `<text x="60" y="${y + 4}" fill="#37332c" font-size="13">${escapeHtml(a)}</text><line x1="90" y1="${y}" x2="670" y2="${y}" stroke="${visual.colour}" stroke-width="3" ${dash ? `stroke-dasharray="${dash}"` : ""}/><text x="380" y="${y - 6}" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(visual.label)} · ${escapeHtml(visual.kind)}</text><text x="690" y="${y + 4}" fill="#37332c" font-size="13">${escapeHtml(b)}</text>`;
+      const yLeft = leftPanel.rowY[i] || (142 + i * 34); const yRight = rightPanel.rowY[i] || (142 + i * 34); const visual = conductorVisual(a, b, left.busId, right.busId, i);
+      if (item.status === "open") {
+        content += focusedPath([[240, yLeft], [350, yLeft]], visual, item.status);
+        content += focusedPath([[410, yRight], [520, yRight]], visual, item.status);
+        content += `<path d="M350 ${yLeft}L380 ${bodyY - 12}M380 ${bodyY + 12}L410 ${yRight}" fill="none" stroke="${visual.colour}" stroke-width="3" stroke-dasharray="8 6"/>`;
+      } else {
+        content += focusedPath([[240, yLeft], [380, bodyY], [520, yRight]], visual, item.status);
+      }
+      content += `<text x="380" y="${Math.min(405, Math.max(yLeft, yRight) - 7)}" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(visual.label)} · ${escapeHtml(visual.kind)}</text>`;
     });
+    content += singleSymbol(item, 380, bodyY);
     const mappingNote = connection.warning ? `<text x="380" y="438" text-anchor="middle" fill="#8a4d20" font-size="12">${escapeHtml(connection.warning)} Inspect raw maps before relying on this pairing.</text>` : "";
-    content += `${mappingNote}<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Ordered conductor pairing from source terminal maps</text>`;
+    content += `${mappingNote}<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">${item.status === "open" ? "Open switch: conductor paths are intentionally interrupted" : "Ordered conductor pairing from source terminal maps"}</text>`;
     setStatus(`${pairs.length} conductor pairs · ${item.status}${connection.warning ? " · terminal-map warning" : ""}`);
     $("canvas").innerHTML = svgShell(content);
+    bindSvgSelection();
   }
 
   function drawDiagnostics() {
