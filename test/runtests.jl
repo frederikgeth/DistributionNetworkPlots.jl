@@ -34,6 +34,8 @@ const MULTINETWORK_RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro"
     @test occursin("BMOPFProjections", html)
     @test occursin("deterministic-layout-v1", html)
     @test occursin("BMOPFLayouts", html)
+    @test occursin("geospatial-renderer-v1", html)
+    @test occursin("single-wire-renderer-v1", html)
     @test occursin("terminal detail", html)
     @test occursin("Open switch: conductor paths are intentionally interrupted", html)
     @test occursin("winding detail", html)
@@ -50,6 +52,8 @@ const MULTINETWORK_RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro"
     @test !occursin("src=\"renderers/symbols.js\"", html)
     @test !occursin("src=\"projections/multi-wire.js\"", html)
     @test !occursin("src=\"layout/deterministic.js\"", html)
+    @test !occursin("src=\"renderers/geospatial.js\"", html)
+    @test !occursin("src=\"renderers/single-wire.js\"", html)
     @test !occursin("src=\"app.js\"", html)
 end
 

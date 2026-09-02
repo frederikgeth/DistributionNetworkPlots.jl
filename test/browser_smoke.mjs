@@ -41,6 +41,8 @@ try {
     assert.equal(await page.locator('script[src="renderers/symbols.js"]').count(), 1);
     assert.equal(await page.locator('script[src="projections/multi-wire.js"]').count(), 1);
     assert.equal(await page.locator('script[src="layout/deterministic.js"]').count(), 1);
+    assert.equal(await page.locator('script[src="renderers/geospatial.js"]').count(), 1);
+    assert.equal(await page.locator('script[src="renderers/single-wire.js"]').count(), 1);
     await page.getByRole("tab", { name: "Single-wire" }).click();
     await page.getByRole("button", { name: "Apply ELK layout" }).click();
     await page.locator("#view-status").waitFor({ state: "visible" });

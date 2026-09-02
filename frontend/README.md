@@ -27,6 +27,7 @@ inspector, alongside a raw result-record view.
 - Shared `renderer-contract-v1` boundary for SVG shells and canonical selectable asset references.
 - Contract-backed `renderers/symbols.js` module for IEEE/IEC-inspired device symbols.
 - Contract-backed `projections/multi-wire.js` and `layout/deterministic.js` modules keep terminal semantics and deterministic positioning independent from UI orchestration.
+- Contract-backed `renderers/geospatial.js` and `renderers/single-wire.js` modules keep overview SVG composition independent from UI orchestration.
 - Versioned layout profiles with deterministic fallback and bounded local retention (eight profiles per case).
 - Distinct single-wire symbols for supported device classes and state styling.
 - Reusable geospatial line geometry when supplied, with deterministic endpoint fallback.

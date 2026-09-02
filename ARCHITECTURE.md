@@ -458,8 +458,10 @@ still orchestrates state and projections, while `frontend/renderer-contract.js`
 and `frontend/renderers/symbols.js` are the first extracted contract-backed
 modules. `frontend/projections/multi-wire.js` and
 `frontend/layout/deterministic.js` now extract the terminal projection and
-deterministic positioning adapters as well. Further extraction should preserve
-the same browser script order and the Julia embedding boundary.
+deterministic positioning adapters as well. Overview composition now lives in
+`frontend/renderers/geospatial.js` and `frontend/renderers/single-wire.js`.
+Further extraction should preserve the same browser script order and the Julia
+embedding boundary.
 
 ## 11. Quality attributes
 
