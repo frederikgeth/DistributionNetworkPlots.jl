@@ -70,9 +70,53 @@
       return (result >>> 0) / 4294967296;
     }
 
+    function treeSeedPositions() {
+      const index = getIndex();
+      const layout = getLayout() || {};
+      const { buses, adjacency, edges } = graph();
+      const edgeKeys = new Set();
+      const uniqueEdges = edges.filter(([from, to]) => {
+        const key = [from, to].sort().join("|");
+        if (edgeKeys.has(key)) return false;
+        edgeKeys.add(key);
+        return true;
+      });
+      if (buses.length < 2 || uniqueEdges.length !== buses.length - 1) return null;
+      const ids = new Set(buses.map((bus) => bus.ref.id));
+      const sourceRoot = index?.assets?.find((item) => item.ref.kind === "voltage_source" && item.ports?.[0])?.ports?.[0]?.busId;
+      const root = layout.root && layout.root !== "auto" && ids.has(layout.root) ? layout.root : ids.has(sourceRoot) ? sourceRoot : buses[0]?.ref.id;
+      if (!root) return null;
+      const parent = new Map([[root, null]]); const depth = new Map([[root, 0]]); const queue = [root];
+      for (let cursor = 0; cursor < queue.length; cursor += 1) {
+        const id = queue[cursor];
+        for (const next of [...(adjacency.get(id) || [])].sort()) {
+          if (!ids.has(next) || parent.has(next)) continue;
+          parent.set(next, id); depth.set(next, depth.get(id) + 1); queue.push(next);
+        }
+      }
+      if (parent.size !== buses.length) return null;
+      const children = new Map(buses.map((bus) => [bus.ref.id, []]));
+      parent.forEach((ancestor, id) => { if (ancestor) children.get(ancestor).push(id); });
+      children.forEach((list) => list.sort());
+      const leaves = [...children.values()].filter((list) => list.length === 0).length;
+      const leafGap = Math.max(30, Math.min(58, 12000 / Math.max(1, leaves)));
+      const maxDepth = Math.max(0, ...depth.values());
+      const depthStep = Math.max(100, Math.min(165, 9000 / Math.max(1, maxDepth)));
+      const positions = new Map(); let leafIndex = 0;
+      const assign = (id) => {
+        const descendants = children.get(id) || [];
+        const y = descendants.length ? descendants.map(assign).reduce((sum, value) => sum + value, 0) / descendants.length : 110 + leafIndex++ * leafGap;
+        const column = layout.direction === "load-to-source" ? maxDepth - depth.get(id) : depth.get(id);
+        positions.set(id, [CANVAS_PADDING.left + column * depthStep, y]);
+        return y;
+      };
+      assign(root);
+      return positions;
+    }
+
     function singleForcePositions() {
       const { buses, edges } = graph();
-      const positions = layeredPositions();
+      const positions = treeSeedPositions() || layeredPositions();
       const nodes = buses.map((bus) => bus.ref.id);
       if (nodes.length < 2) return positions;
       const nodeSet = new Set(nodes);
@@ -95,8 +139,9 @@
       const springLength = 145;
       const repulsion = 9000;
       const springStrength = 0.035;
-      const centreX = 390;
-      const centreY = Math.max(250, 120 + Math.sqrt(nodes.length) * 36);
+      const bounds = nodes.map((id) => positions.get(id));
+      const centreX = (Math.min(...bounds.map((point) => point[0])) + Math.max(...bounds.map((point) => point[0]))) / 2;
+      const centreY = (Math.min(...bounds.map((point) => point[1])) + Math.max(...bounds.map((point) => point[1]))) / 2;
       for (let iteration = 0; iteration < iterations; iteration += 1) {
         const forces = new Map(nodes.map((id) => [id, [0, 0]]));
         for (let i = 0; i < nodes.length; i += 1) {
@@ -122,7 +167,7 @@
         });
         nodes.forEach((id) => {
           const point = positions.get(id); const velocity = velocities.get(id); const force = forces.get(id);
-          force[0] += (centreX - point[0]) * 0.002; force[1] += (centreY - point[1]) * 0.002;
+          force[0] += (centreX - point[0]) * 0.0008; force[1] += (centreY - point[1]) * 0.0008;
           velocity[0] = (velocity[0] + force[0]) * 0.82; velocity[1] = (velocity[1] + force[1]) * 0.82;
           const magnitude = Math.hypot(velocity[0], velocity[1]);
           const step = Math.min(22, magnitude);

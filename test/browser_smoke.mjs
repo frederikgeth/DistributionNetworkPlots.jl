@@ -242,6 +242,10 @@ try {
     await page.waitForTimeout(100);
     assert.equal(await page.locator("#large-case-dialog").count(), 0);
     assert.ok(Number(await page.locator("#canvas svg").getAttribute("width")) > 760);
+    await page.getByRole("button", { name: "Apply force layout" }).click();
+    assert.match(await page.locator("#view-status").textContent(), /Force-directed layout applied to 501 buses/);
+    const largeForceLayout = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:large-browser-smoke-case")));
+    assert.ok(Object.values(largeForceLayout.profiles).some((profile) => profile.engine === "force" && Object.keys(profile.locked || {}).length === 501));
     assert.deepEqual(consoleErrors, []);
   } finally {
     await browser.close();
