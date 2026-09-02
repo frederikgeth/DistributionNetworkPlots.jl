@@ -90,7 +90,7 @@ try {
     await page.mouse.move(lineBox.x + lineBox.width / 2 + 18, lineBox.y + lineBox.height / 2 + 8);
     await page.mouse.up();
     const layoutAfterDeviceDrag = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:example-complete-feeder")));
-    assert.ok(Object.values(layoutAfterDeviceDrag.profiles).some((profile) => Array.isArray(profile.positions?.line_main)));
+    assert.ok(Object.values(layoutAfterDeviceDrag.profiles).some((profile) => Array.isArray(profile.positions?.["line:line_main"])));
     await page.getByRole("tab", { name: "Multi-wire" }).click();
     assert.match(await page.locator("#canvas").innerText(), /Π branch model/);
     assert.match(await page.locator("#canvas").innerText(), /Series Zs \[Ω\]/);
