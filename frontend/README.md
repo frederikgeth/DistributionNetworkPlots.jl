@@ -40,6 +40,7 @@ be matched for best-effort inspection.
 - Back and Forward controls for stepping through selected assets and view changes; browser history and deep links remain supported.
 - The single-line **Overview** control clears the focused asset and returns to the whole-network diagram; on oversized cases it re-enters the full-render confirmation.
 - Pan, zoom, and fit/reset controls for the static SVG views.
+- On desktop, drag the divider beside the details panel to change its width. The divider also supports Arrow keys, Home (default width), and End (widest width), and the preference is retained locally.
 - Shared `renderer-contract-v1` boundary for SVG shells and canonical selectable asset references.
 - Contract-backed `renderers/symbols.js` module for IEEE/IEC-inspired device symbols.
 - Contract-backed `projections/multi-wire.js` and `layout/deterministic.js` modules keep terminal semantics and deterministic positioning independent from UI orchestration.

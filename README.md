@@ -75,6 +75,7 @@ The prototype supports:
 - Side-by-side comparison of two result sidecars while retaining stable source-asset identity.
 - Ranked inventory search across asset IDs, bus links, and result field names, with keyboard jump-to-match.
 - Back/Forward navigation through selected assets and view changes, including multi-wire drill-down paths.
+- Resizable desktop details panel with keyboard-accessible divider and a remembered width preference.
 - An explicit **Overview** control in the single-line view clears the focused selection; oversized cases re-show the full-render confirmation before expanding.
 - Built-in accessible help panel explaining view semantics, symbols, conductor cues, and result encodings.
 - Export of the active geospatial or single-line SVG for reports and issue attachments.

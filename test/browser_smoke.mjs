@@ -56,6 +56,18 @@ try {
     await page.locator("#file-input").setInputFiles(resolve(fixtureRoot, "micro_bmopf.json"));
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");
+    const sidebarResizer = page.locator("#sidebar-resizer");
+    assert.equal(await sidebarResizer.getAttribute("role"), "separator");
+    const initialSidebarWidth = await page.locator(".sidebar").evaluate((node) => node.getBoundingClientRect().width);
+    await sidebarResizer.focus();
+    await sidebarResizer.press("ArrowLeft");
+    const expandedSidebarWidth = await page.locator(".sidebar").evaluate((node) => node.getBoundingClientRect().width);
+    assert.ok(expandedSidebarWidth > initialSidebarWidth);
+    assert.equal(await sidebarResizer.getAttribute("aria-valuenow"), String(Math.round(expandedSidebarWidth)));
+    assert.equal(await page.evaluate(() => localStorage.getItem("bmopf-sidebar-width-v1")), String(Math.round(expandedSidebarWidth)));
+    await sidebarResizer.press("Home");
+    assert.equal(await sidebarResizer.getAttribute("aria-valuenow"), "360");
+    assert.equal(await page.evaluate(() => localStorage.getItem("bmopf-sidebar-width-v1")), "360");
     const dropJson = async (text, name) => page.evaluate(({ text: content, name: filename }) => {
       const file = new File([content], filename, { type: "application/json" });
       const transfer = new DataTransfer();

@@ -5,7 +5,11 @@
   const LAYOUT_MAX_PROFILES = 8;
   const ELK_VERSION = "0.10.2";
   const LAYOUT_ROUTE_SPACE = "single-svg-v2";
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const SIDEBAR_WIDTH_KEY = "bmopf-sidebar-width-v1";
+  const SIDEBAR_WIDTH_DEFAULT = 360;
+  const SIDEBAR_WIDTH_MIN = 280;
+  const SIDEBAR_WIDTH_MAX = 640;
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "geo", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, routes: {}, direction: "source-to-load", root: "auto", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -15,6 +19,67 @@
   const symbolRenderer = globalThis.BMOPFRenderers?.createSymbolRenderer({ escapeHtml, colourOf, sameRef, resultStatus, resultTooltip, titleOf });
 
   function setStatus(text) { $("view-status").textContent = text || ""; }
+
+  function sidebarWidthBounds() {
+    const available = Math.max(SIDEBAR_WIDTH_MIN, window.innerWidth - 368);
+    return { min: SIDEBAR_WIDTH_MIN, max: Math.min(SIDEBAR_WIDTH_MAX, available) };
+  }
+
+  function clampSidebarWidth(value) {
+    const bounds = sidebarWidthBounds();
+    return Math.round(Math.max(bounds.min, Math.min(bounds.max, Number(value) || SIDEBAR_WIDTH_DEFAULT)));
+  }
+
+  function setSidebarWidth(value, { persist = true } = {}) {
+    const width = clampSidebarWidth(value);
+    state.sidebarWidth = width;
+    document.documentElement.style.setProperty("--sidebar-width", `${width}px`);
+    const handle = $("sidebar-resizer");
+    if (handle) {
+      const bounds = sidebarWidthBounds();
+      handle.setAttribute("aria-valuemin", String(bounds.min));
+      handle.setAttribute("aria-valuemax", String(bounds.max));
+      handle.setAttribute("aria-valuenow", String(width));
+      handle.setAttribute("aria-valuetext", `${width}px details panel`);
+    }
+    if (persist) {
+      try { localStorage.setItem(SIDEBAR_WIDTH_KEY, String(width)); } catch (_) { /* localStorage is optional in static reports */ }
+    }
+  }
+
+  function loadSidebarWidth() {
+    try {
+      const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_KEY));
+      return Number.isFinite(stored) ? stored : SIDEBAR_WIDTH_DEFAULT;
+    } catch (_) { return SIDEBAR_WIDTH_DEFAULT; }
+  }
+
+  function initialiseSidebarResize() {
+    const handle = $("sidebar-resizer");
+    if (!handle) return;
+    setSidebarWidth(loadSidebarWidth(), { persist: false });
+    let dragging = false;
+    const stopDragging = () => { dragging = false; document.body.classList.remove("resizing-sidebar"); };
+    handle.addEventListener("pointerdown", (event) => {
+      if (window.matchMedia("(max-width: 880px)").matches) return;
+      dragging = true;
+      handle.setPointerCapture?.(event.pointerId);
+      document.body.classList.add("resizing-sidebar");
+      event.preventDefault();
+    });
+    handle.addEventListener("pointermove", (event) => {
+      if (dragging) setSidebarWidth(window.innerWidth - event.clientX);
+    });
+    handle.addEventListener("pointerup", stopDragging);
+    handle.addEventListener("pointercancel", stopDragging);
+    handle.addEventListener("keydown", (event) => {
+      if (event.key === "ArrowLeft") { setSidebarWidth(state.sidebarWidth + 24); event.preventDefault(); }
+      else if (event.key === "ArrowRight") { setSidebarWidth(state.sidebarWidth - 24); event.preventDefault(); }
+      else if (event.key === "Home") { setSidebarWidth(SIDEBAR_WIDTH_DEFAULT); event.preventDefault(); }
+      else if (event.key === "End") { setSidebarWidth(SIDEBAR_WIDTH_MAX); event.preventDefault(); }
+    });
+    window.addEventListener("resize", () => setSidebarWidth(state.sidebarWidth, { persist: false }));
+  }
 
   function countJsonElements(value, limit) {
     let count = 0;
@@ -1419,6 +1484,7 @@
   }
 
   document.addEventListener("DOMContentLoaded", () => {
+    initialiseSidebarResize();
     const initialNavigation = parseHash();
     initialiseNavigation(initialNavigation);
     populateExamples();

@@ -337,10 +337,16 @@ interface AppState {
   focusRequest: FocusRequest | null;
   navigation: NavigationState;
   cameras: Record<string, unknown>;
+  sidebarWidth: number;
 }
 ```
 
 Selection is persistent. Hover is ephemeral. A focus request asks the active renderer to frame an asset but does not alter domain data.
+
+The desktop shell exposes the details panel width as a local UI preference. A
+bounded vertical separator changes the CSS grid track without changing renderer
+state or the case model; keyboard arrows provide equivalent adjustments, while
+mobile and print layouts collapse to a single-column/print flow.
 
 ### 8.2 Navigation
 
