@@ -85,6 +85,7 @@ try {
     await page.locator('button[data-kind="load"][data-id="load_three_phase"]').click();
     assert.match(await page.locator("#canvas").innerText(), /DELTA connection/);
     assert.match(await page.locator("#canvas").innerText(), /load model: ZIP/);
+    assert.equal(await page.locator('#canvas rect[x="180"][y="85"]').count(), 0);
     const deltaPhaseStrokes = await page.locator("#canvas line, #canvas path").evaluateAll((lines) => [...new Set(lines.map((line) => line.getAttribute("stroke")))]);
     assert.ok(["#c2564b", "#4a8f5f", "#3f6fb9"].every((stroke) => deltaPhaseStrokes.includes(stroke)));
     assert.ok(await page.locator('#canvas g[aria-label="DELTA connection for load"] circle').count() >= 3);

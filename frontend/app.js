@@ -1737,9 +1737,8 @@
       const model = item.ref.kind === "load" ? `load model: ${String(record.model || "CONSTANT_POWER").replaceAll("_", " ")}${record.model ? "" : " (default)"}` : null;
       const details = [configuration, model].filter(Boolean);
       const diagramY = 290;
-      const cardHeight = 285;
       const footerY = 404;
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}</text><rect x="180" y="85" width="400" height="${cardHeight}" rx="8" fill="#fffdf9" stroke="${colourOf(item.ref.kind)}" stroke-width="3"/><text x="380" y="125" text-anchor="middle" font-size="15">${entityLabelSvg("bus", attachment.busId)}</text>`;
+      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}</text><text x="380" y="125" text-anchor="middle" font-size="15">${entityLabelSvg("bus", attachment.busId)}</text>`;
       details.forEach((detail, i) => { content += `<text x="380" y="${148 + i * 15}" text-anchor="middle" fill="#70695f" font-size="11">${escapeHtml(detail)}</text>`; });
       content += `<text x="380" y="205" text-anchor="middle" fill="#70695f" font-size="11">terminal map: ${escapeHtml(terminals.join(" · "))}</text>`;
       const normalizedConfiguration = String(record.configuration || "").toUpperCase();
