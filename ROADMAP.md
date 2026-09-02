@@ -42,7 +42,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Frontend provides built-in authored cases for complete-model and partial/raw-only support-boundary smoke tests.
 - [x] Built-in discovery cases include provenance-labelled synthetic coordinate spans, with a deliberate missing-coordinate example retained for diagnostics.
 - [x] Single-line view uses a deterministic source-to-load layered layout, heavy busbars, orthogonal branch routing, explicit device labels, and IEEE/IEC-inspired symbols.
-- [x] Inventory search ranks exact/prefix asset matches and can jump by keyboard; help panel documents views, symbols, and result cues.
+- [x] Inventory search ranks exact/prefix asset matches and can jump by keyboard; help panel documents views, symbols, result cues, units, interactions, and provenance.
 - [x] Add Back/Forward navigation for selection and view changes, preserving multi-wire drill-down history and hash deep links.
 - [x] Add an explicit single-line Overview action for returning from focused selection to the whole-network diagram, including the large-case render gate.
 - [x] Add keyboard- and pointer-resizable class-overview and inventory columns with local width persistence.

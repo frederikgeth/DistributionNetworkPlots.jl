@@ -151,6 +151,13 @@ body.resizing-column, body.resizing-column * { cursor: col-resize !important; us
 .help-panel summary:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .help-content { padding: 0 14px 12px; color: var(--muted); font-size: 12px; }
 .help-content p { margin: 8px 0 0; }
+.help-content .help-intro { margin-top: 0; }
+.help-content details { margin-top: 9px; border-top: 1px solid #eee9e1; }
+.help-content details summary { padding: 8px 0 3px; color: var(--ink); cursor: pointer; font-weight: 600; }
+.help-content details summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.help-content details p { margin-top: 5px; }
+.help-content ul, .help-content ol { margin: 5px 0 0; padding-left: 19px; }
+.help-content li { margin: 4px 0; }
 .help-content strong { color: var(--ink); }
 .inspector-panel { flex: 1; min-height: 220px; }
 .inspector-content { padding: 13px 14px; }

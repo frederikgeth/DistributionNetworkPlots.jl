@@ -43,13 +43,60 @@
       <div id="result-summary" class="panel empty-panel">No simulation or optimisation results attached.</div>
       <div id="inventory" class="panel"></div>
       <details class="panel help-panel">
-        <summary>How to read the views</summary>
+        <summary>Help &amp; conventions</summary>
         <div class="help-content">
-          <p><strong>Geospatial</strong> uses supplied bus coordinates and line geometry. Buses without coordinates stay explicitly unplaced.</p>
-          <p><strong>Single-wire</strong> collapses phase conductors into one engineering-style overview: heavy lines are busbars, paired coils are transformers, and open blades/dashed paths identify open switches.</p>
-          <p><strong>Multi-wire</strong> expands terminal maps for a selected bus or device. Phase, neutral, and ground cues are labelled as well as patterned.</p>
-          <p><strong>Results</strong> colour and pattern loading, voltage deviation, and operating state. Hover a mark for a compact metric summary; select it for the full record.</p>
-          <p class="muted">Keyboard: Tab to an asset, Enter or Space to select, and use the inventory search arrows plus Enter to jump to a ranked match. Drag table separators (or focus one and use Arrow keys) to widen long columns. In Single-wire, choose the direction/root, then select a bus to nudge and lock its position; layout adjustments are saved locally per case.</p>
+          <p class="help-intro">The explorer is a static, browser-based reader for BMOPF case and result JSON. Start with a built-in example or drop in your own files, then select an asset to connect the views and inspector.</p>
+          <details open>
+            <summary>Quick start</summary>
+            <ol>
+              <li>Choose a built-in example, open a case JSON, or drop a case into the drop zone.</li>
+              <li>Use the Inventory or Class overview to select a bus or asset.</li>
+              <li>Switch views to compare geographic placement, a compact single-wire overview, and terminal-level multi-wire detail.</li>
+              <li>Attach a result JSON after loading a case to colour assets and inspect solution metrics.</li>
+            </ol>
+          </details>
+          <details>
+            <summary>Views</summary>
+            <p><strong>Geospatial</strong> uses supplied bus coordinates and line geometry. Buses without coordinates stay explicitly unplaced; synthetic built-in coordinates are labelled as illustrative.</p>
+            <p><strong>Single-wire</strong> collapses phase conductors into an engineering-style overview. Heavy lines are busbars, paired coils are transformers, and open blades/dashed paths identify open switches.</p>
+            <p><strong>Multi-wire</strong> expands terminal maps for a selected bus or device. Phase, neutral, and ground cues are labelled as well as patterned. Branches show their Π-model matrices when supported.</p>
+            <p><strong>Diagnostics</strong> collects validation, bounds, residual, and solution-profile findings from the active result slice.</p>
+          </details>
+          <details>
+            <summary>Visual conventions</summary>
+            <ul>
+              <li>Phase conductors use red/green/blue; neutral and ground use patterned grey lines with labels.</li>
+              <li>An open switch uses an open blade and a dashed connection. Out-of-service assets are faded.</li>
+              <li>Result overlays use green for nominal, amber for moderate, and red for high loading or voltage deviation; patterns and text repeat the meaning.</li>
+              <li>A faint dashed leader in Single-wire connects a manually moved symbol to its computed electrical anchor.</li>
+            </ul>
+          </details>
+          <details>
+            <summary>Data and units</summary>
+            <ul>
+              <li>Terminal maps are ordered: a pair such as <code>2→3</code> means source terminal 2 is connected to destination terminal 3.</li>
+              <li>Branch series entries are <code>R+jX</code> in absolute Ω. Linecode values in Ω/m are multiplied by the branch length.</li>
+              <li>Branch shunt <code>G/B</code> entries are absolute admittances in S and are shown as from/to Π half-sections only when nonzero.</li>
+              <li>Missing or unsupported semantics remain inspectable as raw properties and are called out rather than silently inferred.</li>
+            </ul>
+          </details>
+          <details>
+            <summary>Interaction and accessibility</summary>
+            <ul>
+              <li>Select assets in any view, follow Related links in the inspector, and use Back/Forward to retrace exploration.</li>
+              <li>In Single-wire, drag buses or device symbols. Bus positions and symbol overrides are stored locally for the active case/layout profile.</li>
+              <li>Use zoom, pan, Focus selection, and Fit / reset for the active SVG. Resize the details panel or table columns with pointer dragging; focused separators also respond to Arrow keys.</li>
+              <li>Keyboard users can Tab to assets, press Enter or Space to select, and use the Inventory search arrows plus Enter to jump to a ranked match.</li>
+            </ul>
+          </details>
+          <details>
+            <summary>Large cases and performance</summary>
+            <p>Cases over the overview guidance (more than 500 buses or roughly 5,000 estimated SVG elements) prompt before full rendering. Focused views, Diagnostics, and the deterministic layout fallback remain available; ELK is optional and may be slower on very large graphs.</p>
+          </details>
+          <details>
+            <summary>Provenance and limitations</summary>
+            <p>This tool reads JSON without changing the source files. Matching case/result identities are verified when fingerprints are available; otherwise pairing is labelled unverified. Built-in cases are illustrative CC BY 4.0 fixtures, while reused cases retain their source licences.</p>
+          </details>
         </div>
       </details>
       <div class="panel inspector-panel">

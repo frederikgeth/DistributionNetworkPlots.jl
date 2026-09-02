@@ -82,7 +82,7 @@ The prototype supports:
 - Draggable single-wire buses and device symbols with locally persisted layout overrides and dashed leaders for moved symbols.
 - Branch-focused multi-wire Π-model views with series R+jX values in Ω and conditional shunt G/B sections in S.
 - An explicit **Overview** control in the single-line view clears the focused selection; oversized cases re-show the full-render confirmation before expanding.
-- Built-in accessible help panel explaining view semantics, symbols, conductor cues, and result encodings.
+- Built-in accessible help and conventions guide covering views, symbols, conductor cues, units, interactions, performance, and provenance.
 - Export of the active geospatial or single-line SVG for reports and issue attachments.
 - Export of the active view as a 2× PNG, plus a print stylesheet for clean diagram output.
 - Locally persisted single-line bus adjustments with per-bus nudge, lock/unlock, and reset controls.
