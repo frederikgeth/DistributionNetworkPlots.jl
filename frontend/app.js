@@ -1254,7 +1254,7 @@
     return `<g transform="translate(${x} ${y})" aria-label="${escapeHtml(caption)} transformer winding"><title>${escapeHtml(caption)} transformer winding</title><text x="0" y="-52" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(caption)}</text>${shape}</g>`;
   }
 
-  function transformerWindingInterior(configuration, body, side, terminals, busId) {
+  function transformerWindingInterior(configuration, body, side, terminals, busId, labelPrefix = null) {
     const config = String(configuration || "").toUpperCase();
     const phaseColours = ["#c2564b", "#4a8f5f", "#3f6fb9"];
     const neutralIndex = terminals.findIndex((terminal) => /^(n|neutral|g|pe|ground|earth)$/i.test(String(terminal)));
@@ -1268,7 +1268,7 @@
       return `<circle cx="${px}" cy="${py}" r="4" fill="#fffdf9" stroke="${visual.colour}" stroke-width="2"/>`;
     }).join("");
     const configLabel = config.replaceAll("_", " ");
-    const sideLabel = side === "left" ? "from: " : side === "right" ? "to: " : "";
+    const sideLabel = labelPrefix ?? (side === "left" ? "from: " : side === "right" ? "to: " : "");
     let html = `<g aria-label="${escapeHtml(side)} ${escapeHtml(configLabel || "terminal")} winding"><text x="${cx}" y="${body.y + 18}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">${escapeHtml(`${sideLabel}${configLabel || "terminal"}`)}</text>${dotHtml}`;
     if (config === "DELTA" && phaseEntries.length >= 3) {
       const points = [[cx, cy - 29], [cx - 25, cy + 17], [cx + 25, cy + 17]];
@@ -1303,6 +1303,20 @@
     const bottom = body.y + body.height - 28;
     const coil = (x, direction) => `<path d="M${x} ${top + 8}c${direction * 14} 0 ${direction * 14} 12 0 12s${-direction * 14} 12 0 12 ${direction * 14} 0 ${direction * 14} 12 0 12s${-direction * 14} 12 0 12 ${direction * 14} 0 ${direction * 14} 12 0 12s${-direction * 14} 12 0 12" fill="none" stroke="#4f789f" stroke-width="2.5"/>`;
     return `${coil(mid - 27, 1)}${coil(mid + 27, -1)}<line x1="${mid - 5}" y1="${top}" x2="${mid - 5}" y2="${bottom}" stroke="#4f789f" stroke-width="2"/><line x1="${mid + 5}" y1="${top}" x2="${mid + 5}" y2="${bottom}" stroke="#4f789f" stroke-width="2"/>`;
+  }
+
+  function singleDeviceConnectionDiagram(item, configuration, terminals, x, y) {
+    const config = String(configuration || "").toUpperCase();
+    const colour = colourOf(item.ref.kind);
+    const body = { x: -105, y: -74, width: 210, height: 145 };
+    const interior = transformerWindingInterior(config, body, "left", terminals, null, "");
+    const device = item.ref.kind === "load"
+      ? `<rect x="46" y="-10" width="28" height="20" rx="2" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><path d="M53 0h14M64-5l6 5-6 5" fill="none" stroke="${colour}" stroke-width="1.5"/>`
+      : item.ref.kind === "ibr" ? `<circle cx="60" cy="0" r="14" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="60" y="4" text-anchor="middle" fill="${colour}" font-size="8">IBR</text>`
+        : `<circle cx="60" cy="0" r="14" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="60" y="4" text-anchor="middle" fill="${colour}" font-size="10">G</text>`;
+    const configLabel = config.replaceAll("_", " ") || "terminal";
+    const phaseColour = "#4f789f";
+    return `<g transform="translate(${x} ${y})" aria-label="${escapeHtml(configLabel)} connection for ${escapeHtml(item.ref.kind)}"><title>${escapeHtml(configLabel)} connection for ${escapeHtml(item.ref.kind)}</title><rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="8" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="0" y="${body.y + 18}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">${escapeHtml(configLabel)} connection</text>${interior.html}<path d="M-25 5H43" fill="none" stroke="${phaseColour}" stroke-width="2.5"/>${device}</g>`;
   }
 
   function renderInspector() {
@@ -1703,7 +1717,10 @@
       let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}</text><rect x="180" y="85" width="400" height="${cardHeight}" rx="8" fill="#fffdf9" stroke="${colourOf(item.ref.kind)}" stroke-width="3"/><text x="380" y="125" text-anchor="middle" font-size="15">${entityLabelSvg("bus", attachment.busId)}</text>`;
       details.forEach((detail, i) => { content += `<text x="380" y="${148 + i * 15}" text-anchor="middle" fill="#70695f" font-size="11">${escapeHtml(detail)}</text>`; });
       content += `<text x="380" y="205" text-anchor="middle" fill="#70695f" font-size="11">terminal map: ${escapeHtml(terminals.join(" · "))}</text>`;
-      content += connectionDiagram(item, record.configuration, terminals, 380, diagramY);
+      const normalizedConfiguration = String(record.configuration || "").toUpperCase();
+      content += ["DELTA", "WYE"].includes(normalizedConfiguration) && terminals.length >= 2
+        ? singleDeviceConnectionDiagram(item, normalizedConfiguration, terminals, 380, diagramY)
+        : connectionDiagram(item, record.configuration, terminals, 380, diagramY);
       content += `<text x="380" y="${footerY}" text-anchor="middle" fill="#70695f" font-size="12">Single-bus attachment · inspect properties for device details</text>`;
       setMultiStatus(`${terminals.length} attached terminals · ${item.status}`);
       target.innerHTML = multiShell(content);

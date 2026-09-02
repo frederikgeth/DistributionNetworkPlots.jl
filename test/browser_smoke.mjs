@@ -85,13 +85,15 @@ try {
     await page.locator('button[data-kind="load"][data-id="load_three_phase"]').click();
     assert.match(await page.locator("#canvas").innerText(), /DELTA connection/);
     assert.match(await page.locator("#canvas").innerText(), /load model: ZIP/);
-    const deltaPhaseStrokes = await page.locator("#canvas line").evaluateAll((lines) => [...new Set(lines.map((line) => line.getAttribute("stroke")))]);
+    const deltaPhaseStrokes = await page.locator("#canvas line, #canvas path").evaluateAll((lines) => [...new Set(lines.map((line) => line.getAttribute("stroke")))]);
     assert.ok(["#c2564b", "#4a8f5f", "#3f6fb9"].every((stroke) => deltaPhaseStrokes.includes(stroke)));
+    assert.ok(await page.locator('#canvas g[aria-label="DELTA connection for load"] circle').count() >= 3);
     await page.getByPlaceholder("Search assets, buses, or result fields").fill("utility_ibr_three_phase");
     await page.locator('button[data-kind="ibr"][data-id="utility_ibr_three_phase"]').click();
     assert.match(await page.locator("#canvas").innerText(), /WYE connection/);
-    const wyePhaseStrokes = await page.locator("#canvas line").evaluateAll((lines) => [...new Set(lines.map((line) => line.getAttribute("stroke")))]);
+    const wyePhaseStrokes = await page.locator("#canvas line, #canvas path").evaluateAll((lines) => [...new Set(lines.map((line) => line.getAttribute("stroke")))]);
     assert.ok(["#c2564b", "#4a8f5f", "#3f6fb9"].every((stroke) => wyePhaseStrokes.includes(stroke)));
+    assert.ok(await page.locator('#canvas g[aria-label="WYE connection for ibr"] circle').count() >= 4);
     await page.getByRole("tab", { name: "Single-wire" }).click();
     const attachedTransforms = await page.locator('#canvas g[data-kind="load"], #canvas g[data-kind="ibr"], #canvas g[data-kind="capacitor"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("transform")));
     assert.equal(new Set(attachedTransforms).size, attachedTransforms.length);
@@ -179,6 +181,7 @@ try {
     await page.locator('button[data-kind="generator"][data-id="backup_gen"]').click();
     assert.match(await page.locator("#canvas").innerText(), /connection: WYE/);
     assert.match(await page.locator("#canvas").innerText(), /WYE connection/);
+    assert.ok(await page.locator('#canvas g[aria-label="WYE connection for generator"] circle').count() >= 3);
     await page.getByRole("tab", { name: "Single-wire" }).click();
     assert.ok(await page.locator("#multi-detail-canvas").evaluate((node) => node.scrollWidth <= node.clientWidth + 1));
     await page.getByRole("tab", { name: "Multi-wire" }).click();
