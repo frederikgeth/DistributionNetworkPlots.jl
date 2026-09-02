@@ -22,7 +22,7 @@
     },
     load: { load_a: { bus: "load_bus", terminal_map: ["1", "n"], configuration: "SINGLE_PHASE", p_nom: [12000], q_nom: [2500] } },
     generator: { backup_gen: { bus: "feeder", terminal_map: ["1", "2", "3"], configuration: "WYE", p_min: [0], p_max: [50000] } },
-    ibr: { rooftop_ibr: { bus: "load_bus", terminal_map: ["2", "n"], p_max: [30000], q_max: [10000] } },
+    ibr: { rooftop_ibr: { bus: "load_bus", terminal_map: ["2", "n"], p_max: [30000], q_max: [10000], s_max: [35000] } },
     shunt: { grounding: { bus: "feeder", terminal_map: ["n"], G_1_1: 0.1 } },
     capacitor: { cap_bank: { bus: "load_bus", terminal_map: ["1", "2", "3"], q_nom: [5000, 5000, 5000] } },
     linecode: { lc_main: {

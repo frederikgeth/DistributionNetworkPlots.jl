@@ -1198,7 +1198,7 @@
     if (field === "va" || field === "v_angle" || field === "angle" || field.endsWith("_angle")) return "°";
     if (field === "vm" || field === "v_magnitude" || field === "voltage" || field.startsWith("v_nom") || field.endsWith("_voltage")) return "V";
     if (field === "i_max" || field === "i_nom" || field === "current" || field === "ampacity" || field.endsWith("_current")) return "A";
-    if (field === "s_rating" || field === "s_nom" || field === "apparent_power" || field.endsWith("_apparent_power")) return "VA";
+    if (field === "s_max" || field === "s_rating" || field === "s_nom" || field === "apparent_power" || field.endsWith("_apparent_power")) return "VA";
     if (field === "p" || field === "p_nom" || field === "p_min" || field === "p_max" || field === "pg" || field === "p_from" || field === "p_to" || field === "active_power" || field.endsWith("_active_power")) return "W";
     if (field === "q" || field === "q_nom" || field === "q_min" || field === "q_max" || field === "qg" || field === "q_from" || field === "q_to" || field === "reactive_power" || field.endsWith("_reactive_power")) return "var";
     if (/^(r|x)_series(?:_|$)/.test(field) || field === "impedance" || field.endsWith("_impedance")) return kind === "linecode" ? "Ω/m" : "Ω";

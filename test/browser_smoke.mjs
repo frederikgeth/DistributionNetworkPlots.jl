@@ -68,6 +68,9 @@ try {
     await displayOptions.locator('input[data-display-option="showDeviceLabels"]').uncheck();
     assert.equal(await displayOptions.locator('input[data-display-option="showDeviceLabels"]').isChecked(), false);
     await displayOptions.locator('input[data-display-option="showDeviceLabels"]').check();
+    await page.getByPlaceholder("Search assets, buses, or result fields").fill("rooftop_ibr");
+    await page.locator('button[data-kind="ibr"][data-id="rooftop_ibr"]').click();
+    assert.match(await page.locator("#inspector").innerText(), /s_max[\s\S]*35000 VA/);
     const attachedTransforms = await page.locator('#canvas g[data-kind="load"], #canvas g[data-kind="ibr"], #canvas g[data-kind="capacitor"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("transform")));
     assert.equal(new Set(attachedTransforms).size, attachedTransforms.length);
     assert.equal(await page.locator("#floating-legend").isVisible(), true);
