@@ -154,7 +154,11 @@ try {
     await page.getByRole("button", { name: "Apply ELK layout" }).click();
     await page.locator("#view-status").waitFor({ state: "visible" });
     await page.waitForFunction(() => document.querySelector("#view-status")?.textContent.includes("ELK layered layout applied"), null, { timeout: 15000 });
-    const cache = await page.evaluate(() => Object.entries(localStorage).find(([key]) => key.startsWith("bmopf-layout-v3:"))?.[1] || "");
+    // Dragging in the example case persists its own layout entry, so address this
+    // case's cache by key rather than taking whichever entry comes first.
+    const microLayoutKey = "bmopf-layout-v3:micro-bmopf";
+    const readLayout = (key) => page.evaluate((storageKey) => JSON.parse(localStorage.getItem(storageKey) || "null"), key);
+    const cache = await page.evaluate((storageKey) => localStorage.getItem(storageKey) || "", microLayoutKey);
     const parsedCache = JSON.parse(cache);
     assert.equal(parsedCache.version, 3);
     assert.equal(parsedCache.routeSpace, "single-svg-v2");
@@ -166,10 +170,12 @@ try {
     assert.ok(Object.keys(primaryProfile.routes || {}).length > 0);
     await page.locator("#sld-direction").selectOption("load-to-source");
     await page.locator("#sld-direction").selectOption("source-to-load");
-    const profilesAfterSwitch = await page.evaluate(() => Object.values(localStorage).map((value) => { try { return JSON.parse(value); } catch (_) { return null; } }).find((value) => value?.version === 3)?.profiles || {});
+    const profilesAfterSwitch = (await readLayout(microLayoutKey))?.profiles || {};
     assert.ok(Object.keys(profilesAfterSwitch).some((key) => key.includes("direction=load-to-source")));
-    const profileCount = await page.evaluate(() => Object.values(localStorage).filter((value) => value.includes('"version":3')).length);
-    assert.equal(profileCount, 1);
+    // Direction and root permutations live as profiles inside one entry per case,
+    // so the set of layout entries stays exactly one per case that was opened.
+    const layoutKeys = await page.evaluate(() => Object.keys(localStorage).filter((key) => key.startsWith("bmopf-layout-v3:")).sort());
+    assert.deepEqual(layoutKeys, ["bmopf-layout-v3:example-complete-feeder", microLayoutKey].sort());
     const directionControl = page.getByLabel("Single-line direction");
     const rootControl = page.getByLabel("Single-line root bus");
     for (const direction of ["source-to-load", "load-to-source"]) {
@@ -178,7 +184,7 @@ try {
         await rootControl.selectOption(root);
       }
     }
-    const retainedProfiles = await page.evaluate(() => Object.values(localStorage).map((value) => { try { return JSON.parse(value); } catch (_) { return null; } }).find((value) => value?.version === 3)?.profiles || {});
+    const retainedProfiles = (await readLayout(microLayoutKey))?.profiles || {};
     assert.ok(Object.keys(retainedProfiles).length <= 8);
     const inventorySearch = page.getByPlaceholder("Search assets, buses, or result fields");
     await inventorySearch.fill("line_main");
