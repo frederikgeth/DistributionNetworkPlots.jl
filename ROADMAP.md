@@ -55,6 +55,7 @@ The durable system boundaries and domain invariants are defined in [ARCHITECTURE
 - [x] Support configurable single-line reading direction and feeder-root selection, persisted with the case layout.
 - [x] Optional ELK Layered layout can be applied from the browser and persisted, with deterministic offline fallback.
 - [x] Add a deterministic force-directed Single-wire layout option for dense or highly branched networks.
+- [x] Add adaptive Single-wire attachment placement that separates one-port devices from nearby buses and co-located assets.
 - [x] Run optional ELK layout computation in a Web Worker so the browser UI remains responsive during layout.
 - [x] Vendor the pinned ELK browser bundle, embed it in Julia reports, and cache layout profiles by case and layout options.
 - [x] Add a local-file ELK fallback that loads the pinned bundle on the main thread when browser security blocks worker imports.
