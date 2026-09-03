@@ -226,6 +226,7 @@ try {
     assert.match(await page.locator("#canvas").innerText(), /Series Zs \[Ω\]/);
     assert.match(await page.locator("#canvas").innerText(), /0\.054/);
     assert.match(await page.locator("#canvas").innerText(), /Pure series branch · shunt admittance omitted/);
+    const inventorySearch = page.getByPlaceholder("Search assets, buses, or result fields");
     await inventorySearch.fill("tx_lv");
     await page.locator('button[data-kind="transformer"][data-id="tx_lv"]').click();
     assert.match(await page.locator("#canvas").innerText(), /from: DELTA/);
@@ -329,7 +330,6 @@ try {
     }
     const retainedProfiles = (await readLayout(microLayoutKey))?.profiles || {};
     assert.ok(Object.keys(retainedProfiles).length <= 8);
-    const inventorySearch = page.getByPlaceholder("Search assets, buses, or result fields");
     await inventorySearch.fill("line_main");
     await page.locator('button[data-kind="line"][data-id="line_main"]').click();
     await inventorySearch.fill("switch_open");
