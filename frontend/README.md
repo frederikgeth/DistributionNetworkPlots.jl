@@ -84,6 +84,10 @@ not equipment protection limits.
 
 The prototype intentionally has no external basemap or runtime backend. Its layout is deterministic by default. Dense single-line cases use a content-sized, scrollable canvas and preserve a minimum gap between buses in the same topology layer, rather than compressing every layer into the viewport. The Single-wire controls offer a deterministic force-directed arrangement as well as the optional vendored ELK Layered browser bundle (`elkjs@0.10.2`); both persist their resulting bus positions locally. Layout profiles are cached per case identity, direction, and root bus; selecting a root passes a fixed-root preference to ELK, while force-directed layout uses the graph topology and deterministic seeds. Manual bus nudges invalidate routed sections and return to deterministic paths. If the ELK bundle is unavailable, deterministic and force-directed layouts remain usable offline.
 
+Single-wire buses use compact dots by default so branch paths remain legible in
+dense drawings. The Display options panel can restore conventional heavy
+busbars without changing selection, layout, or terminal semantics.
+
 ELK runs on the main thread in every context. The vendored `elk.bundled.js`
 only supports main-thread use: loaded inside a worker its internal shim fails
 with `_Worker is not a constructor`, so source-mode, `dist/`, generated reports,

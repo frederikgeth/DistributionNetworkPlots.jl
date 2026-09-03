@@ -64,6 +64,16 @@ try {
     const displayOptions = page.locator("#display-options");
     assert.equal(await displayOptions.isVisible(), true);
     await displayOptions.locator("summary").click();
+    const busBarToggle = displayOptions.locator('input[data-display-option="showBusBars"]');
+    assert.equal(await busBarToggle.isChecked(), false);
+    assert.equal(await page.locator('#canvas g[data-kind="bus"] > .sld-busbar').count(), 0);
+    assert.ok(await page.locator('#canvas g[data-kind="bus"] > .sld-bus-dot').count() > 0);
+    await busBarToggle.check();
+    assert.ok(await page.locator('#canvas g[data-kind="bus"] > .sld-busbar').count() > 0);
+    assert.equal(await page.locator('#canvas g[data-kind="bus"] > .sld-bus-dot').count(), 0);
+    await busBarToggle.uncheck();
+    assert.equal(await page.locator('#canvas g[data-kind="bus"] > .sld-busbar').count(), 0);
+    assert.ok(await page.locator('#canvas g[data-kind="bus"] > .sld-bus-dot').count() > 0);
     assert.equal(await displayOptions.locator('input[data-display-option="showBusLabels"]').isChecked(), true);
     assert.equal(await displayOptions.locator('input[data-display-option="showDeviceLabels"]').isChecked(), false);
     assert.equal(await displayOptions.locator('input[data-display-option="showArrows"]').isChecked(), false);
@@ -99,7 +109,7 @@ try {
     const attachedTransforms = await page.locator('#canvas g[data-kind="load"], #canvas g[data-kind="ibr"], #canvas g[data-kind="capacitor"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("transform")));
     assert.equal(new Set(attachedTransforms).size, attachedTransforms.length);
     assert.equal(await page.locator("#floating-legend").isVisible(), true);
-    assert.match(await page.locator("#floating-legend").innerText(), /busbar/);
+    assert.match(await page.locator("#floating-legend").innerText(), /bus/);
     assert.match(await page.locator("#case-summary").innerText(), /Coordinate provenance: synthetic illustrative coordinates/);
     // #view-status is an aria-live region and loading an example announces the
     // example itself, so re-enter the geospatial view to read its own status.
@@ -117,7 +127,44 @@ try {
     const multiDetailPane = page.locator("#multi-detail-panel");
     assert.equal(await multiDetailPane.isVisible(), true);
     assert.match(await page.locator("#multi-detail-canvas").innerText(), /terminal detail|Π branch model/);
-    assert.equal(await page.locator('#multi-detail-canvas [data-copy-text][aria-label="Copy branch matrices"]').count(), 1);
+    const branchMatricesCopy = page.locator('#multi-detail-canvas [data-copy-text][aria-label="Copy branch matrices"]');
+    assert.equal(await branchMatricesCopy.count(), 1);
+    const copyGeometryBefore = await branchMatricesCopy.evaluate((node) => {
+      const bounds = node.getBoundingClientRect();
+      const background = node.querySelector(":scope > .copy-button-svg-bg");
+      return {
+        width: bounds.width,
+        height: bounds.height,
+        backgroundWidth: Number(background?.getAttribute("width")),
+        backgroundHeight: Number(background?.getAttribute("height")),
+        iconRects: [...node.querySelectorAll(":scope > g > svg > rect")].map((rect) => [
+          Number(rect.getAttribute("width")), Number(rect.getAttribute("height"))
+        ])
+      };
+    });
+    const copyFeedback = await branchMatricesCopy.evaluate(async (node) => {
+      node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+      const deadline = Date.now() + 1000;
+      while (node.getAttribute("aria-label") === "Copy branch matrices" && Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      return { label: node.getAttribute("aria-label"), connected: node.isConnected };
+    });
+    assert.deepEqual(copyFeedback, { label: "Copied", connected: true });
+    const copyGeometryAfter = await branchMatricesCopy.evaluate((node) => {
+      const bounds = node.getBoundingClientRect();
+      const background = node.querySelector(":scope > .copy-button-svg-bg");
+      return {
+        width: bounds.width,
+        height: bounds.height,
+        backgroundWidth: Number(background?.getAttribute("width")),
+        backgroundHeight: Number(background?.getAttribute("height")),
+        iconRects: [...node.querySelectorAll(":scope > g > svg > rect")].map((rect) => [
+          Number(rect.getAttribute("width")), Number(rect.getAttribute("height"))
+        ])
+      };
+    });
+    assert.deepEqual(copyGeometryAfter, copyGeometryBefore);
     const busGroups = page.locator('#multi-detail-canvas g[data-kind="bus"]');
     assert.ok(await busGroups.count() >= 2);
     assert.equal(await busGroups.locator("rect").count(), 0);

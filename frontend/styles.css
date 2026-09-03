@@ -85,6 +85,7 @@ body.resizing-multi-detail, body.resizing-multi-detail * { cursor: col-resize !i
 .floating-legend-row { display: flex; align-items: center; gap: 6px; min-height: 19px; }
 .legend-line { display: inline-block; width: 28px; height: 0; border-top: 3px solid var(--muted); }
 .legend-line.busbar { border-top-width: 5px; }
+.legend-bus-dot { display: inline-block; width: 9px; height: 9px; margin: 0 10px; border-radius: 50%; background: var(--accent); }
 .legend-line.open { border-top-style: dashed; }
 .legend-line.result-nominal { border-top-color: #4a8f5f; }
 .legend-line.result-moderate { border-top-color: #c28a26; border-top-width: 5px; }
@@ -214,14 +215,17 @@ body.resizing-column, body.resizing-column * { cursor: col-resize !important; us
 .property-table th { width: 42%; color: var(--muted); font-weight: 500; }
 .copyable-value-text { display: inline-block; max-width: calc(100% - 30px); overflow-wrap: anywhere; vertical-align: top; }
 .copy-button { display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; width: 22px; height: 22px; margin-left: 5px; border: 1px solid transparent; border-radius: 4px; padding: 2px; color: var(--muted); background: transparent; cursor: pointer; vertical-align: middle; }
-.copy-button svg { display: block; width: 15px; height: 15px; }
+.copy-button > svg { display: block; width: 15px; height: 15px; }
 .copy-button:hover, .copy-button:focus-visible { border-color: #b9cfe5; color: var(--accent); background: var(--accent-soft); outline: none; }
 .copy-button.copied { border-color: #b9d6be; color: #3f754b; background: #eef7ef; }
 .property-table th .copy-button { float: right; margin-top: -2px; }
 .property-table td .copy-button { float: right; margin-top: -2px; }
 .copyable-details summary { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.copy-button-svg { cursor: pointer; }
-.copy-button-svg:hover rect:first-child, .copy-button-svg:focus-visible rect:first-child { fill: var(--accent-soft); stroke: var(--accent); }
+.copy-button-svg { color: var(--muted); cursor: pointer; outline: none; }
+.copy-button-svg > g > svg { display: block; width: 16px; height: 16px; }
+.copy-button-svg:hover > .copy-button-svg-bg, .copy-button-svg:focus-visible > .copy-button-svg-bg { fill: var(--accent-soft); stroke: var(--accent); }
+.copy-button-svg.copied { color: #3f754b; }
+.copy-button-svg.copied > .copy-button-svg-bg { fill: #eef7ef; stroke: #b9d6be; }
 .related { display: flex; flex-wrap: wrap; gap: 5px; margin: 10px 0; }
 .link-button { border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px; color: var(--accent); background: var(--panel); cursor: pointer; font-size: 12px; }
 pre.raw { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 9px; border-radius: 5px; background: #f1eee7; font-size: 11px; white-space: pre-wrap; word-break: break-word; }

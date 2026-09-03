@@ -10,7 +10,7 @@
   const SIDEBAR_WIDTH_DEFAULT = 360;
   const SIDEBAR_WIDTH_MIN = 280;
   const SIDEBAR_WIDTH_MAX = 640;
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusLabels: true, showDeviceLabels: false, showArrows: false, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusBars: false, showBusLabels: true, showDeviceLabels: false, showArrows: false, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const MAX_FILE_BYTES = 25 * 1024 * 1024;
   const MAX_JSON_ELEMENTS = 100000;
   const $ = (id) => document.getElementById(id);
@@ -20,7 +20,7 @@
   const entityLabelHtml = (kind, id) => `<span class="entity-label" aria-label="${escapeHtml(`${kindName(kind)} ${id}`)}"><span class="entity-kind">${escapeHtml(kindName(kind))}</span> <span class="entity-id">${escapeHtml(id)}</span></span>`;
   const entityLabelSvg = (kind, id) => `<tspan class="entity-kind" fill="#70695f" font-size=".82em" font-style="italic" font-variant="small-caps" font-weight="600" letter-spacing=".04em">${escapeHtml(kindName(kind))}</tspan><tspan class="entity-id" fill="#25231f" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-weight="700"> ${escapeHtml(id)}</tspan>`;
   const colourOf = (kind) => ({ line: "#8a8378", switch: "#c26a27", transformer: "#4f789f", load: "#a75a1b", generator: "#4a8f5f", ibr: "#789e46", shunt: "#8a6ca8", capacitor: "#8a6ca8", voltage_source: "#3f6fb9" }[kind] || "#9a9388");
-  const copyIcon = `<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="5" y="2" width="8" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="5" width="8" height="9" rx="1.5" fill="var(--panel)" stroke="currentColor" stroke-width="1.3"/></svg>`;
+  const copyIcon = `<svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="5" y="2" width="8" height="9" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="2" y="5" width="8" height="9" rx="1.5" fill="var(--panel)" stroke="currentColor" stroke-width="1.3"/></svg>`;
 
   async function copyToClipboard(text) {
     const value = String(text ?? "");
@@ -52,7 +52,7 @@
   }
 
   function copySvgButton(x, y, text, label = "Copy") {
-    return `<g class="copy-button copy-button-svg" data-copy-text="${escapeHtml(text)}" role="button" tabindex="0" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}"><rect x="${x}" y="${y}" width="16" height="16" rx="3" fill="#fffdf9" stroke="#c9c1b4"/><g transform="translate(${x} ${y})">${copyIcon}</g></g>`;
+    return `<g class="copy-button-svg" data-copy-text="${escapeHtml(text)}" role="button" tabindex="0" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}"><rect class="copy-button-svg-bg" x="${x}" y="${y}" width="16" height="16" rx="3" fill="#fffdf9" stroke="#c9c1b4"/><g transform="translate(${x} ${y})">${copyIcon}</g></g>`;
   }
 
   function bindCopyButtons(root = document) {
@@ -634,6 +634,7 @@
         state.singleDisplay[option] = input.checked;
         renderView();
         renderDisplayOptions();
+        renderFloatingLegend();
       };
     });
   }
@@ -1002,7 +1003,10 @@
   }
 
   function floatingLegendHtml() {
-    const symbols = `<div class="floating-legend-section"><strong>Symbols</strong><div class="floating-legend-row"><span class="legend-line busbar"></span><span>busbar</span></div><div class="floating-legend-row"><span>○</span><span>source or generator</span></div><div class="floating-legend-row"><span>paired coils</span><span>transformer</span></div><div class="floating-legend-row"><span>□</span><span>load</span></div><div class="floating-legend-row"><span>║</span><span>capacitor</span></div><div class="floating-legend-row"><span>⏚</span><span>shunt / grounding</span></div><div class="floating-legend-row"><span class="legend-line open"></span><span>open switch or interrupted path</span></div><p class="legend-note">A dashed leader marks a manually moved symbol. Hover or select an asset for its full tooltip.</p></div>`;
+    const busSymbol = state.singleDisplay?.showBusBars === true
+      ? `<span class="legend-line busbar"></span><span>busbar</span>`
+      : `<span class="legend-bus-dot"></span><span>bus</span>`;
+    const symbols = `<div class="floating-legend-section"><strong>Symbols</strong><div class="floating-legend-row">${busSymbol}</div><div class="floating-legend-row"><span>○</span><span>source or generator</span></div><div class="floating-legend-row"><span>paired coils</span><span>transformer</span></div><div class="floating-legend-row"><span>□</span><span>load</span></div><div class="floating-legend-row"><span>║</span><span>capacitor</span></div><div class="floating-legend-row"><span>⏚</span><span>shunt / grounding</span></div><div class="floating-legend-row"><span class="legend-line open"></span><span>open switch or interrupted path</span></div><p class="legend-note">A dashed leader marks a manually moved symbol. Hover or select an asset for its full tooltip.</p></div>`;
     const hasLoading = state.result && visibleAssets().some((item) => resultScalar(item, "loading") !== null);
     const hasVoltage = state.result && state.index.buses.some((item) => resultVoltageDeviation(item) !== null);
     const hasState = state.result && visibleAssets().some((item) => resultStatus(item) !== item.status || ["open", "out_of_service"].includes(item.status));
