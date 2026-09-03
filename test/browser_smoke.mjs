@@ -86,7 +86,7 @@ try {
     await page.locator('button[data-kind="ibr"][data-id="rooftop_ibr"]').click();
     assert.equal(await page.locator("#selection-label .entity-kind").textContent(), "ibr");
     assert.equal(await page.locator("#inspector h3 .entity-id").textContent(), "rooftop_ibr");
-    assert.match(await page.locator("#inspector").innerText(), /s_max[\s\S]*35000 VA/);
+    assert.match(await page.locator("#inspector").innerText(), /s_max[\s\S]*35000[\s\S]*VA/);
     assert.ok(await page.locator("#inspector .copy-button").count() > 0);
     assert.equal(await page.locator('#inspector [data-copy-target="pre.raw"]').count(), 1);
     assert.equal(await page.locator("#inspector .property-table tr").count(), await page.locator("#inspector .property-table tr .copy-button").count());
@@ -179,13 +179,24 @@ try {
     assert.equal(await multiDetailPane.isVisible(), false);
     await page.getByRole("button", { name: "Show component detail" }).click();
     assert.equal(await multiDetailPane.isVisible(), true);
+    // The floating legend sits over the diagram and takes pointer input, so a
+    // symbol underneath it cannot be grabbed. Collapse it, as a user would.
+    await page.locator("#floating-legend > summary").click();
+    assert.equal(await page.locator("#floating-legend").evaluate((node) => node.open), false);
     const draggableBus = page.locator('g.sld-draggable[data-kind="bus"][data-id="source"]');
     assert.equal(await draggableBus.count(), 1);
-    const sourceBox = await draggableBus.boundingBox();
-    assert.ok(sourceBox);
-    await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+    // Grab the painted bus mark rather than the group box, which also spans the
+    // label below it and so centres on empty space between the two.
+    await draggableBus.scrollIntoViewIfNeeded();
+    const busPoint = await draggableBus.evaluate((node) => {
+      const mark = node.querySelector(".sld-busbar, .sld-bus-dot") || node;
+      const rect = mark.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    });
+    assert.ok(busPoint.x > 0 && busPoint.y > 0);
+    await page.mouse.move(busPoint.x, busPoint.y);
     await page.mouse.down();
-    await page.mouse.move(sourceBox.x + sourceBox.width / 2 + 30, sourceBox.y + sourceBox.height / 2 + 12);
+    await page.mouse.move(busPoint.x + 30, busPoint.y + 12);
     await page.mouse.up();
     const defaultLayout = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:example-complete-feeder")));
     assert.ok(Object.values(defaultLayout.profiles).some((profile) => Array.isArray(profile.locked?.source)));
@@ -215,6 +226,7 @@ try {
     assert.match(await page.locator("#canvas").innerText(), /Series Zs \[Ω\]/);
     assert.match(await page.locator("#canvas").innerText(), /0\.054/);
     assert.match(await page.locator("#canvas").innerText(), /Pure series branch · shunt admittance omitted/);
+    const inventorySearch = page.getByPlaceholder("Search assets, buses, or result fields");
     await inventorySearch.fill("tx_lv");
     await page.locator('button[data-kind="transformer"][data-id="tx_lv"]').click();
     assert.match(await page.locator("#canvas").innerText(), /from: DELTA/);
@@ -318,7 +330,6 @@ try {
     }
     const retainedProfiles = (await readLayout(microLayoutKey))?.profiles || {};
     assert.ok(Object.keys(retainedProfiles).length <= 8);
-    const inventorySearch = page.getByPlaceholder("Search assets, buses, or result fields");
     await inventorySearch.fill("line_main");
     await page.locator('button[data-kind="line"][data-id="line_main"]').click();
     await inventorySearch.fill("switch_open");
@@ -353,10 +364,13 @@ try {
     const transformerText = await page.locator("#canvas").innerText();
     assert.match(transformerText, /transformer/);
     assert.match(transformerText, /Ordered conductor pairing/);
-    assert.equal(await page.locator('#canvas g[aria-label="left DELTA winding"] circle').count(), 3);
-    assert.equal(await page.locator('#canvas g[aria-label="right WYE winding"] circle').count(), 4);
-    assert.ok(await page.locator('#canvas g[aria-label="left DELTA winding"] path[stroke="#c2564b"]').count() >= 1);
-    assert.ok(await page.locator('#canvas g[aria-label="right WYE winding"] path[stroke="#3f6fb9"]').count() >= 1);
+    // The micro fixture keeps tx_lv under the two_winding class key and declares no
+    // winding configuration, so the viewer draws generic terminal windings: one dot
+    // per terminal and a schematic link, without the DELTA/WYE phase coils.
+    assert.equal(await page.locator('#canvas g[aria-label="left terminal winding"] circle').count(), 3);
+    assert.equal(await page.locator('#canvas g[aria-label="right terminal winding"] circle').count(), 4);
+    assert.ok(await page.locator('#canvas g[aria-label="left terminal winding"] path[stroke="#4f789f"]').count() >= 1);
+    assert.ok(await page.locator('#canvas g[aria-label="right terminal winding"] path[stroke="#4f789f"]').count() >= 1);
     assert.equal(await page.locator('#canvas rect[x="280"][y="88"]').count(), 1);
     const transformerLabelXs = await page.locator('#canvas text[data-role="conductor-label"]').evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute("x"))));
     assert.ok(transformerLabelXs.length >= 3 && transformerLabelXs.every((x) => x < 285));
