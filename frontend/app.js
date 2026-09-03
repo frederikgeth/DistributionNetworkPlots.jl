@@ -1957,6 +1957,10 @@
   }
 
   function bindSvgSelection(target = $("canvas")) {
+    // Only the main single-wire canvas is draggable. The multi-wire detail pane
+    // renders while the view is still "single", so without this its groups would
+    // pick up the drag handlers and rewrite single-wire layout positions.
+    const draggable = state.view === "single" && target === $("canvas");
     const svgPoint = (svg, event) => {
       const ctm = svg.getScreenCTM?.();
       if (!ctm) return [event.offsetX || 0, event.offsetY || 0];
@@ -1977,7 +1981,7 @@
       node.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(globalThis.BMOPFRendererContract?.assetRef(node) || { kind: node.dataset.kind, id: node.dataset.id }); }
       });
-      if (state.view !== "single" || node.tagName.toLowerCase() !== "g") return;
+      if (!draggable || node.tagName.toLowerCase() !== "g") return;
       node.classList.add("sld-draggable");
       node.addEventListener("pointerdown", (event) => {
         if (event.button !== 0) return;
