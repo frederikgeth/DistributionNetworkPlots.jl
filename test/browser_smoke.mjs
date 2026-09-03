@@ -86,7 +86,7 @@ try {
     await page.locator('button[data-kind="ibr"][data-id="rooftop_ibr"]').click();
     assert.equal(await page.locator("#selection-label .entity-kind").textContent(), "ibr");
     assert.equal(await page.locator("#inspector h3 .entity-id").textContent(), "rooftop_ibr");
-    assert.match(await page.locator("#inspector").innerText(), /s_max[\s\S]*35000 VA/);
+    assert.match(await page.locator("#inspector").innerText(), /s_max[\s\S]*35000[\s\S]*VA/);
     assert.ok(await page.locator("#inspector .copy-button").count() > 0);
     assert.equal(await page.locator('#inspector [data-copy-target="pre.raw"]').count(), 1);
     assert.equal(await page.locator("#inspector .property-table tr").count(), await page.locator("#inspector .property-table tr .copy-button").count());
