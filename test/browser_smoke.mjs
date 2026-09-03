@@ -212,6 +212,20 @@ try {
     await page.mouse.move(lineOrigin.x + 18, lineOrigin.y + 8);
     await page.mouse.up();
     const layoutAfterDeviceDrag = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:example-complete-feeder")));
+    console.log("DIAG origin:", JSON.stringify(lineOrigin));
+    console.log("DIAG probe:", JSON.stringify(await page.evaluate(({ x, y }) => {
+      const g = document.querySelector('g.sld-draggable[data-kind="line"][data-id="line_main"]');
+      const el = document.elementFromPoint(x, y);
+      const rect = g.getBoundingClientRect();
+      return {
+        transform: g.getAttribute("transform"),
+        rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
+        hitTag: el?.tagName, hitKind: el?.dataset?.kind, hitId: el?.dataset?.id,
+        hitClass: el?.getAttribute?.("class"),
+        hitIsInsideG: !!(el && g.contains(el))
+      };
+    }, lineOrigin)));
+    console.log("DIAG positions:", JSON.stringify(Object.values(layoutAfterDeviceDrag?.profiles || {}).map((p) => Object.keys(p.positions || {}))));
     assert.ok(Object.values(layoutAfterDeviceDrag.profiles).some((profile) => Array.isArray(profile.positions?.["line:line_main"])));
     await page.getByRole("button", { name: "Apply force layout" }).click();
     assert.match(await page.locator("#view-status").textContent(), /Force-directed layout applied/);
