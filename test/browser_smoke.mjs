@@ -181,11 +181,18 @@ try {
     assert.equal(await multiDetailPane.isVisible(), true);
     const draggableBus = page.locator('g.sld-draggable[data-kind="bus"][data-id="source"]');
     assert.equal(await draggableBus.count(), 1);
-    const sourceBox = await draggableBus.boundingBox();
-    assert.ok(sourceBox);
-    await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+    // Grab the painted bus mark rather than the group box, which also spans the
+    // label below it and so centres on empty space between the two.
+    await draggableBus.scrollIntoViewIfNeeded();
+    const busPoint = await draggableBus.evaluate((node) => {
+      const mark = node.querySelector(".sld-busbar, .sld-bus-dot") || node;
+      const rect = mark.getBoundingClientRect();
+      return { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+    });
+    assert.ok(busPoint.x > 0 && busPoint.y > 0);
+    await page.mouse.move(busPoint.x, busPoint.y);
     await page.mouse.down();
-    await page.mouse.move(sourceBox.x + sourceBox.width / 2 + 30, sourceBox.y + sourceBox.height / 2 + 12);
+    await page.mouse.move(busPoint.x + 30, busPoint.y + 12);
     await page.mouse.up();
     const defaultLayout = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:example-complete-feeder")));
     assert.ok(Object.values(defaultLayout.profiles).some((profile) => Array.isArray(profile.locked?.source)));
