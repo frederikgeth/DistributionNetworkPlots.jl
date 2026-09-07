@@ -59,6 +59,24 @@ assert.ok(radialPositions.get("b1")[0] < radialPositions.get("b3")[0]);
 assert.equal(radialPositions.get("b1")[1], (radialPositions.get("b3")[1] + radialPositions.get("b4")[1]) / 2);
 assert.equal(radialPositions.get("source_bus")[1], (radialPositions.get("b1")[1] + radialPositions.get("b2")[1]) / 2);
 
+// Parallel branches and a self-loop add no second path between buses, so the
+// feeder stays radial and keeps its tidy tree.
+const parallelBuses = ["source_bus", "b1", "b2"].map((id) => ({ ref: { id } }));
+const parallelAssets = [
+  { ref: { kind: "voltage_source", id: "source" }, ports: [{ busId: "source_bus" }] },
+  branch("cable_a", "source_bus", "b1"), branch("cable_b", "source_bus", "b1"),
+  branch("l2", "b1", "b2"),
+  { ref: { kind: "shunt", id: "loop" }, ports: [{ busId: "b2" }, { busId: "b2" }] }
+];
+const parallelLayout = sandbox.globalThis.BMOPFLayouts.createDeterministicLayout({ getIndex: () => ({ buses: parallelBuses, assets: parallelAssets }), getLayout: () => ({ direction: "source-to-load", root: "auto", locked: {} }) });
+const parallelInfo = parallelLayout.singleLayoutInfo();
+assert.equal(parallelInfo.topology, "radial");
+assert.equal(parallelInfo.strategy, "tidy-tree");
+const parallelPositions = parallelLayout.singlePositions();
+assert.equal(parallelPositions.size, parallelBuses.length);
+assert.ok(parallelPositions.get("source_bus")[0] < parallelPositions.get("b1")[0]);
+assert.ok(parallelPositions.get("b1")[0] < parallelPositions.get("b2")[0]);
+
 // A closed ring is meshed, so it falls back to layered ranks, and the explicit
 // stress engine stays deterministic across runs.
 const ringBuses = ["b0", "b1", "b2", "b3"].map((id) => ({ ref: { id } }));

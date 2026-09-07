@@ -3,9 +3,12 @@
 
   // Topology-aware deterministic placement for the single-wire view.
   //
-  // The graph is classified once as radial (a tree or forest) or meshed (any
-  // cycle, parallel branch, or self-loop) and each class gets the layout that
-  // reads best for it:
+  // The graph is classified once as radial (a tree or forest) or meshed (a
+  // genuine loop: two distinct paths between the same pair of buses) and each
+  // class gets the layout that reads best for it. Parallel branches and
+  // self-loops are collapsed first: a second cable on the same route, or a
+  // device with both ports on one bus, adds no second path, and the renderer
+  // already fans parallel branches into their own lanes.
   //
   // * radial   -> tidy hierarchical tree, Buchheim/Junger/Leipert's linear-time
   //               improvement of Walker's algorithm (GD 2002). Parents are
@@ -57,12 +60,18 @@
     return { add, find, union };
   }
 
+  // Expects simple edges: one entry per connected bus pair, no self-loops. Any
+  // edge that joins two already-connected buses then closes a real loop.
   function classifyTopology(nodes, edges) {
     if (!nodes.length) return "empty";
     const groups = createUnionFind();
     nodes.forEach((id) => groups.add(id));
+    const seen = new Set();
     for (const [from, to] of edges) {
-      if (from === to) return "meshed";
+      if (from === to) continue;
+      const pair = from < to ? `${from}|${to}` : `${to}|${from}`;
+      if (seen.has(pair)) continue;
+      seen.add(pair);
       if (!groups.union(from, to)) return "meshed";
     }
     return "radial";
@@ -544,22 +553,25 @@
       const buses = index?.buses || [];
       const order = new Map(buses.map((bus, position) => [bus.ref.id, position]));
       const neighbours = new Map(buses.map((bus) => [bus.ref.id, new Set()]));
-      const edges = [];
       for (const item of index?.assets || []) {
         const ports = item.ports || [];
         if (ports.length < 2) continue;
         const anchor = ports[0].busId;
         if (!order.has(anchor)) continue;
         for (const port of ports.slice(1)) {
-          if (!order.has(port.busId)) continue;
-          edges.push([anchor, port.busId]);
-          if (anchor === port.busId) continue;
+          if (!order.has(port.busId) || anchor === port.busId) continue;
           neighbours.get(anchor).add(port.busId);
           neighbours.get(port.busId).add(anchor);
         }
       }
       // Neighbour lists in bus order keep every traversal reproducible.
       const adjacency = new Map([...neighbours].map(([id, set]) => [id, [...set].sort((a, b) => order.get(a) - order.get(b))]));
+      // The simple edge list the classifier needs: the adjacency has already
+      // collapsed parallel branches and self-loops, so read each pair once.
+      const edges = [];
+      for (const [id, list] of adjacency) {
+        for (const other of list) if (order.get(id) < order.get(other)) edges.push([id, other]);
+      }
       return { buses, adjacency, edges, order, nodes: buses.map((bus) => bus.ref.id) };
     }
 
