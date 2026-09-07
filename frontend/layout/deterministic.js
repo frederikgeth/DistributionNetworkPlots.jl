@@ -1,192 +1,671 @@
 (function () {
   "use strict";
 
-  const MODULE_VERSION = "deterministic-layout-v2";
+  // Topology-aware deterministic placement for the single-wire view.
+  //
+  // The graph is classified once as radial (a tree or forest) or meshed (any
+  // cycle, parallel branch, or self-loop) and each class gets the layout that
+  // reads best for it:
+  //
+  // * radial   -> tidy hierarchical tree, Buchheim/Junger/Leipert's linear-time
+  //               improvement of Walker's algorithm (GD 2002). Parents are
+  //               centred over their children and sibling subtrees never
+  //               overlap. Tree depth becomes the topology rank (X) and the
+  //               sibling spread becomes the lane (Y).
+  // * meshed   -> layered ranks from the feeder root with one barycentric
+  //               ordering sweep per rank to reduce crossings.
+  // * on request -> stress layout: PivotMDS (Brandes & Pich, GD 2006) refined
+  //               by SMACOF stress majorisation (Gansner, Koren & North,
+  //               GD 2004) on small components. Free-form, but deterministic:
+  //               fixed pivots, no random seeds, no animated simulation.
+  //
+  // Every routine here is pure: it reads the canonical index plus explicit
+  // layout options and returns geometry, exactly as ADR 0004 requires.
+
+  const MODULE_VERSION = "deterministic-layout-v3";
   const MIN_BUS_GAP = 64;
   const LAYER_STEP = 190;
   const CANVAS_PADDING = { left: 70, top: 86, right: 90, bottom: 82 };
+  const COMPONENT_GAP_LANES = 2;
+  const STRESS_PIVOTS = 50;
+  const STRESS_SMACOF_MAX_NODES = 400;
+  const STRESS_SMACOF_ITERATIONS = 30;
+  const STRESS_EDGE_LENGTH = 145;
+  const STRESS_COMPONENT_GAP = 2;
+
+  // --- topology -------------------------------------------------------------
+
+  // Disjoint-set over bus ids. union() returns false when both ends were
+  // already connected, which is exactly the edge that closes a cycle.
+  function createUnionFind() {
+    const parent = new Map();
+    function add(id) { if (!parent.has(id)) parent.set(id, id); }
+    function find(id) {
+      add(id);
+      let root = id;
+      while (parent.get(root) !== root) root = parent.get(root);
+      let cursor = id;
+      while (cursor !== root) { const next = parent.get(cursor); parent.set(cursor, root); cursor = next; }
+      return root;
+    }
+    function union(a, b) {
+      const rootA = find(a); const rootB = find(b);
+      if (rootA === rootB) return false;
+      parent.set(rootA, rootB);
+      return true;
+    }
+    return { add, find, union };
+  }
+
+  function classifyTopology(nodes, edges) {
+    if (!nodes.length) return "empty";
+    const groups = createUnionFind();
+    nodes.forEach((id) => groups.add(id));
+    for (const [from, to] of edges) {
+      if (from === to) return "meshed";
+      if (!groups.union(from, to)) return "meshed";
+    }
+    return "radial";
+  }
+
+  // Connected components in bus order, so the first member of each component is
+  // its lowest-index bus and the whole placement stays reproducible.
+  function componentsOf(nodes, adjacency) {
+    const seen = new Set();
+    const components = [];
+    for (const id of nodes) {
+      if (seen.has(id)) continue;
+      const members = [];
+      const queue = [id];
+      seen.add(id);
+      for (let cursor = 0; cursor < queue.length; cursor += 1) {
+        const current = queue[cursor];
+        members.push(current);
+        for (const next of adjacency.get(current) || []) if (!seen.has(next)) { seen.add(next); queue.push(next); }
+      }
+      components.push(members);
+    }
+    return components;
+  }
+
+  function hopDistances(adjacency, source) {
+    const distance = new Map([[source, 0]]);
+    const queue = [source];
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const current = queue[cursor];
+      const next = distance.get(current) + 1;
+      for (const neighbour of adjacency.get(current) || []) {
+        if (!distance.has(neighbour)) { distance.set(neighbour, next); queue.push(neighbour); }
+      }
+    }
+    return distance;
+  }
+
+  // --- tidy tree (radial) ---------------------------------------------------
+
+  function createTreeNode(id) {
+    const node = { id, parent: null, children: [], siblingIndex: 0, number: 1, x: 0, mod: 0, shift: 0, change: 0, depth: 0, thread: null, ancestor: null };
+    node.ancestor = node;
+    return node;
+  }
+
+  const leftContour = (node) => (node.children.length ? node.children[0] : node.thread);
+  const rightContour = (node) => (node.children.length ? node.children[node.children.length - 1] : node.thread);
+  const leftBrother = (node) => (node.parent && node.siblingIndex > 0 ? node.parent.children[node.siblingIndex - 1] : null);
+  const leftmostSibling = (node) => (node.parent && node.siblingIndex > 0 ? node.parent.children[0] : null);
+
+  // Spans the component reachable from rootId into a tree by breadth-first
+  // search. Neighbours are visited in bus order, so the drawing is stable.
+  function buildTree(rootId, adjacency, claimed) {
+    const root = createTreeNode(rootId);
+    claimed.add(rootId);
+    const queue = [root];
+    for (let cursor = 0; cursor < queue.length; cursor += 1) {
+      const node = queue[cursor];
+      for (const id of adjacency.get(node.id) || []) {
+        if (claimed.has(id)) continue;
+        claimed.add(id);
+        const child = createTreeNode(id);
+        child.parent = node;
+        child.siblingIndex = node.children.length;
+        child.number = node.children.length + 1;
+        node.children.push(child);
+        queue.push(child);
+      }
+    }
+    return root;
+  }
+
+  function forEachTreeNode(root, visit) {
+    const stack = [root];
+    while (stack.length) {
+      const node = stack.pop();
+      visit(node);
+      for (const child of node.children) stack.push(child);
+    }
+  }
+
+  // The Buchheim passes are written iteratively: distribution feeders are often
+  // long single-path chains whose tree depth equals the bus count, which would
+  // overflow the call stack on a recursive walk.
+  function firstWalk(root, distance) {
+    const order = [];
+    const stack = [root];
+    while (stack.length) {
+      const node = stack.pop();
+      order.push(node);
+      for (const child of node.children) stack.push(child);
+    }
+    // Children are pushed left to right and popped right to left, so reversing
+    // the traversal finalises every node after its children and after the
+    // subtrees of all its left siblings — what apportion() assumes.
+    for (let i = order.length - 1; i >= 0; i -= 1) firstWalkNode(order[i], distance);
+  }
+
+  function firstWalkNode(node, distance) {
+    if (!node.children.length) {
+      const brother = leftBrother(node);
+      node.x = leftmostSibling(node) ? brother.x + distance : 0;
+      return;
+    }
+    let defaultAncestor = node.children[0];
+    for (const child of node.children) defaultAncestor = apportion(child, defaultAncestor, distance);
+    executeShifts(node);
+    const midpoint = (node.children[0].x + node.children[node.children.length - 1].x) / 2;
+    const brother = leftBrother(node);
+    if (brother) { node.x = brother.x + distance; node.mod = node.x - midpoint; }
+    else node.x = midpoint;
+  }
+
+  function apportion(node, defaultAncestor, distance) {
+    const brother = leftBrother(node);
+    let ancestor = defaultAncestor;
+    if (!brother) return ancestor;
+    let insideRight = node; let outsideRight = node;
+    let insideLeft = brother; let outsideLeft = leftmostSibling(node);
+    let shiftInsideRight = node.mod; let shiftOutsideRight = node.mod;
+    let shiftInsideLeft = insideLeft.mod; let shiftOutsideLeft = outsideLeft.mod;
+    while (rightContour(insideLeft) && leftContour(insideRight)) {
+      insideLeft = rightContour(insideLeft);
+      insideRight = leftContour(insideRight);
+      outsideLeft = leftContour(outsideLeft);
+      outsideRight = rightContour(outsideRight);
+      outsideRight.ancestor = node;
+      const shift = (insideLeft.x + shiftInsideLeft) - (insideRight.x + shiftInsideRight) + distance;
+      if (shift > 0) {
+        moveSubtree(ancestorOf(insideLeft, node, ancestor), node, shift);
+        shiftInsideRight += shift;
+        shiftOutsideRight += shift;
+      }
+      shiftInsideLeft += insideLeft.mod;
+      shiftInsideRight += insideRight.mod;
+      shiftOutsideLeft += outsideLeft.mod;
+      shiftOutsideRight += outsideRight.mod;
+    }
+    if (rightContour(insideLeft) && !rightContour(outsideRight)) {
+      outsideRight.thread = rightContour(insideLeft);
+      outsideRight.mod += shiftInsideLeft - shiftOutsideRight;
+    } else {
+      if (leftContour(insideRight) && !leftContour(outsideLeft)) {
+        outsideLeft.thread = leftContour(insideRight);
+        outsideLeft.mod += shiftInsideRight - shiftOutsideLeft;
+      }
+      ancestor = node;
+    }
+    return ancestor;
+  }
+
+  function moveSubtree(left, right, shift) {
+    const subtrees = right.number - left.number;
+    right.change -= shift / subtrees;
+    right.shift += shift;
+    left.change += shift / subtrees;
+    right.x += shift;
+    right.mod += shift;
+  }
+
+  function executeShifts(node) {
+    let shift = 0; let change = 0;
+    for (let i = node.children.length - 1; i >= 0; i -= 1) {
+      const child = node.children[i];
+      child.x += shift;
+      child.mod += shift;
+      change += child.change;
+      shift += child.shift + change;
+    }
+  }
+
+  function ancestorOf(insideLeft, node, defaultAncestor) {
+    if (node.parent && node.parent.children.includes(insideLeft.ancestor)) return insideLeft.ancestor;
+    return defaultAncestor;
+  }
+
+  function secondWalk(root) {
+    const stack = [{ node: root, mod: 0, depth: 0 }];
+    while (stack.length) {
+      const frame = stack.pop();
+      frame.node.x += frame.mod;
+      frame.node.depth = frame.depth;
+      for (const child of frame.node.children) stack.push({ node: child, mod: frame.mod + frame.node.mod, depth: frame.depth + 1 });
+    }
+  }
+
+  // Places every component as its own tidy tree and packs the forest into
+  // adjacent lane bands. Returns bus id -> { column: rank, lane: sibling spread }.
+  function tidyTreePlacement(components, adjacency, seedsFor) {
+    const placement = new Map();
+    const claimed = new Set();
+    let laneCursor = 0;
+    for (const members of components) {
+      const root = buildTree(seedsFor(members)[0], adjacency, claimed);
+      firstWalk(root, 1);
+      secondWalk(root);
+      let minLane = Infinity; let maxLane = -Infinity;
+      forEachTreeNode(root, (node) => { minLane = Math.min(minLane, node.x); maxLane = Math.max(maxLane, node.x); });
+      const shift = laneCursor - minLane;
+      forEachTreeNode(root, (node) => placement.set(node.id, { column: node.depth, lane: node.x + shift }));
+      laneCursor += (maxLane - minLane) + COMPONENT_GAP_LANES;
+    }
+    return placement;
+  }
+
+  // --- layered ranks (meshed) -----------------------------------------------
+
+  // Breadth-first ranks outward from the feeder root, then a single barycentric
+  // ordering sweep per rank so branches leave their parents without crossing.
+  function layeredPlacement(components, adjacency, seedsFor, indexOf) {
+    const placement = new Map();
+    let laneBase = 0;
+    for (const members of components) {
+      const rankOf = new Map();
+      const queue = [];
+      for (const seed of seedsFor(members)) if (!rankOf.has(seed)) { rankOf.set(seed, 0); queue.push(seed); }
+      for (let cursor = 0; cursor < queue.length; cursor += 1) {
+        const current = queue[cursor];
+        const rank = rankOf.get(current) + 1;
+        for (const next of adjacency.get(current) || []) if (!rankOf.has(next)) { rankOf.set(next, rank); queue.push(next); }
+      }
+      const byRank = new Map();
+      for (const id of members) {
+        const rank = rankOf.get(id) || 0;
+        if (!byRank.has(rank)) byRank.set(rank, []);
+        byRank.get(rank).push(id);
+      }
+      const ranks = [...byRank.keys()].sort((a, b) => a - b);
+      const orderInRank = new Map();
+      let bandWidth = 0;
+      for (const rank of ranks) {
+        const row = byRank.get(rank);
+        if (rank === 0) row.sort((a, b) => indexOf(a) - indexOf(b));
+        else {
+          const barycentre = new Map(row.map((id) => {
+            const parents = (adjacency.get(id) || []).filter((other) => rankOf.get(other) === rank - 1 && orderInRank.has(other));
+            return [id, parents.length ? parents.reduce((sum, other) => sum + orderInRank.get(other), 0) / parents.length : indexOf(id)];
+          }));
+          row.sort((a, b) => barycentre.get(a) - barycentre.get(b) || indexOf(a) - indexOf(b));
+        }
+        row.forEach((id, position) => orderInRank.set(id, position));
+        bandWidth = Math.max(bandWidth, row.length);
+      }
+      for (const rank of ranks) {
+        const row = byRank.get(rank);
+        const centring = (bandWidth - row.length) / 2;
+        row.forEach((id, position) => placement.set(id, { column: rank, lane: laneBase + centring + position }));
+      }
+      laneBase += bandWidth + COMPONENT_GAP_LANES;
+    }
+    return placement;
+  }
+
+  function toCanvasPositions(placement, direction) {
+    const positions = new Map();
+    if (!placement.size) return positions;
+    let minLane = Infinity; let maxColumn = 0;
+    for (const spot of placement.values()) { minLane = Math.min(minLane, spot.lane); maxColumn = Math.max(maxColumn, spot.column); }
+    for (const [id, spot] of placement) {
+      const column = direction === "load-to-source" ? maxColumn - spot.column : spot.column;
+      positions.set(id, [CANVAS_PADDING.left + column * LAYER_STEP, CANVAS_PADDING.top + (spot.lane - minLane) * MIN_BUS_GAP]);
+    }
+    return positions;
+  }
+
+  // --- stress layout (PivotMDS + SMACOF) ------------------------------------
+
+  // Pivot selection by farthest-first traversal (a k-centers heuristic), seeded
+  // at the lowest-index bus so the same case always picks the same pivots.
+  function selectPivots(nodes, adjacency, count, indexOf) {
+    if (!nodes.length || count <= 0) return [];
+    const chosen = [];
+    const inChosen = new Set();
+    const minDistance = new Map(nodes.map((id) => [id, Infinity]));
+    let next = nodes[0];
+    while (chosen.length < count) {
+      chosen.push(next);
+      inChosen.add(next);
+      for (const [id, hops] of hopDistances(adjacency, next)) {
+        if (minDistance.has(id) && hops < minDistance.get(id)) minDistance.set(id, hops);
+      }
+      minDistance.set(next, 0);
+      let best = null; let bestDistance = -1; let bestIndex = Infinity;
+      for (const id of nodes) {
+        if (inChosen.has(id)) continue;
+        const hops = minDistance.get(id); const index = indexOf(id);
+        if (hops > bestDistance || (hops === bestDistance && index < bestIndex)) { best = id; bestDistance = hops; bestIndex = index; }
+      }
+      if (!best) break;
+      next = best;
+    }
+    return chosen;
+  }
+
+  // Full symmetric eigendecomposition by cyclic Jacobi rotation. Robust for the
+  // small Gram matrices PivotMDS builds, including the equal top eigenvalues of
+  // a symmetric feeder, where power iteration cannot separate the axes.
+  function jacobiEigen(input) {
+    const size = input.length;
+    const matrix = input.map((row) => [...row]);
+    const vectors = Array.from({ length: size }, (_, i) => Array.from({ length: size }, (_, j) => (i === j ? 1 : 0)));
+    for (let sweep = 0; sweep < 100; sweep += 1) {
+      let off = 0;
+      for (let p = 0; p < size; p += 1) for (let q = p + 1; q < size; q += 1) off += matrix[p][q] * matrix[p][q];
+      if (off < 1e-22) break;
+      for (let p = 0; p < size; p += 1) {
+        for (let q = p + 1; q < size; q += 1) {
+          if (Math.abs(matrix[p][q]) < 1e-20) continue;
+          const phi = 0.5 * Math.atan2(2 * matrix[p][q], matrix[p][p] - matrix[q][q]);
+          const cosine = Math.cos(phi); const sine = Math.sin(phi);
+          for (let i = 0; i < size; i += 1) {
+            const ip = matrix[i][p]; const iq = matrix[i][q];
+            matrix[i][p] = cosine * ip - sine * iq;
+            matrix[i][q] = sine * ip + cosine * iq;
+          }
+          for (let i = 0; i < size; i += 1) {
+            const pi = matrix[p][i]; const qi = matrix[q][i];
+            matrix[p][i] = cosine * pi - sine * qi;
+            matrix[q][i] = sine * pi + cosine * qi;
+          }
+          for (let i = 0; i < size; i += 1) {
+            const ip = vectors[i][p]; const iq = vectors[i][q];
+            vectors[i][p] = cosine * ip - sine * iq;
+            vectors[i][q] = sine * ip + cosine * iq;
+          }
+        }
+      }
+    }
+    return {
+      values: Array.from({ length: size }, (_, i) => matrix[i][i]),
+      vectors: Array.from({ length: size }, (_, column) => Array.from({ length: size }, (_, i) => vectors[i][column]))
+    };
+  }
+
+  // Classical multidimensional scaling on the distances to a few pivot buses.
+  function pivotMds(nodes, adjacency, indexOf) {
+    const count = nodes.length;
+    const pivots = selectPivots(nodes, adjacency, Math.min(STRESS_PIVOTS, count), indexOf);
+    const pivotCount = pivots.length;
+    const distanceMaps = pivots.map((pivot) => hopDistances(adjacency, pivot));
+    const squared = Array.from({ length: count }, (_, i) => Array.from({ length: pivotCount }, (_, j) => {
+      const hops = distanceMaps[j].has(nodes[i]) ? distanceMaps[j].get(nodes[i]) : count;
+      return hops * hops;
+    }));
+    const columnMean = new Array(pivotCount).fill(0);
+    const rowMean = new Array(count).fill(0);
+    let grandMean = 0;
+    for (let i = 0; i < count; i += 1) {
+      for (let j = 0; j < pivotCount; j += 1) { columnMean[j] += squared[i][j]; rowMean[i] += squared[i][j]; grandMean += squared[i][j]; }
+    }
+    for (let j = 0; j < pivotCount; j += 1) columnMean[j] /= count;
+    for (let i = 0; i < count; i += 1) rowMean[i] /= pivotCount;
+    grandMean /= count * pivotCount;
+    const centred = Array.from({ length: count }, (_, i) => Array.from({ length: pivotCount }, (_, j) => -0.5 * (squared[i][j] - columnMean[j] - rowMean[i] + grandMean)));
+    const gram = Array.from({ length: pivotCount }, (_, a) => Array.from({ length: pivotCount }, (_, b) => {
+      let sum = 0;
+      for (let i = 0; i < count; i += 1) sum += centred[i][a] * centred[i][b];
+      return sum;
+    }));
+    const eigen = jacobiEigen(gram);
+    const order = Array.from({ length: pivotCount }, (_, i) => i).sort((a, b) => eigen.values[b] - eigen.values[a]);
+    const first = eigen.vectors[order[0]];
+    const second = pivotCount > 1 ? eigen.vectors[order[1]] : new Array(pivotCount).fill(0);
+    const positions = new Map();
+    for (let i = 0; i < count; i += 1) {
+      let x = 0; let y = 0;
+      for (let j = 0; j < pivotCount; j += 1) { x += centred[i][j] * first[j]; y += centred[i][j] * second[j]; }
+      positions.set(nodes[i], [x, y]);
+    }
+    return positions;
+  }
+
+  // SMACOF stress majorisation against the full hop-distance matrix. Only used
+  // on small components: the matrix and each iteration are O(n^2).
+  function smacof(nodes, adjacency, positions) {
+    const count = nodes.length;
+    if (count < 3) return;
+    const target = nodes.map((id) => {
+      const hops = hopDistances(adjacency, id);
+      return nodes.map((other) => (hops.has(other) ? hops.get(other) : count));
+    });
+    let x = nodes.map((id) => positions.get(id)[0]);
+    let y = nodes.map((id) => positions.get(id)[1]);
+    for (let iteration = 0; iteration < STRESS_SMACOF_ITERATIONS; iteration += 1) {
+      const nextX = new Array(count).fill(0);
+      const nextY = new Array(count).fill(0);
+      for (let i = 0; i < count; i += 1) {
+        let diagonal = 0; let sumX = 0; let sumY = 0;
+        for (let j = 0; j < count; j += 1) {
+          if (i === j) continue;
+          const dx = x[i] - x[j]; const dy = y[i] - y[j];
+          const distance = Math.hypot(dx, dy);
+          const weight = distance > 1e-9 ? -target[i][j] / distance : 0;
+          diagonal -= weight;
+          sumX += weight * x[j];
+          sumY += weight * y[j];
+        }
+        nextX[i] = (diagonal * x[i] + sumX) / count;
+        nextY[i] = (diagonal * y[i] + sumY) / count;
+      }
+      let centreX = 0; let centreY = 0;
+      for (let i = 0; i < count; i += 1) { centreX += nextX[i]; centreY += nextY[i]; }
+      centreX /= count; centreY /= count;
+      for (let i = 0; i < count; i += 1) { nextX[i] -= centreX; nextY[i] -= centreY; }
+      x = nextX; y = nextY;
+    }
+    nodes.forEach((id, i) => positions.set(id, [x[i], y[i]]));
+  }
+
+  // Rescales an embedding so one graph hop is roughly one layout unit. The MDS
+  // axes carry an arbitrary scale, so components must be normalised before they
+  // are packed side by side.
+  function normaliseToHopLength(nodes, adjacency, positions) {
+    const lengths = [];
+    const seen = new Set();
+    for (const id of nodes) {
+      for (const other of adjacency.get(id) || []) {
+        const key = id < other ? `${id}|${other}` : `${other}|${id}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        const from = positions.get(id); const to = positions.get(other);
+        if (from && to) lengths.push(Math.hypot(to[0] - from[0], to[1] - from[1]));
+      }
+    }
+    lengths.sort((a, b) => a - b);
+    const median = lengths.length ? lengths[Math.floor(lengths.length / 2)] : 0;
+    if (!(median > 1e-9)) return;
+    for (const [id, point] of positions) positions.set(id, [point[0] / median, point[1] / median]);
+  }
+
+  // MDS axes are arbitrary up to rotation, so turn the embedding until its
+  // principal axis lies along X. A feeder then reads left to right instead of
+  // diagonally, and the drawing keeps a sensible aspect ratio. The rotation is
+  // rigid, so packed components cannot start overlapping.
+  function orientEmbedding(points) {
+    if (points.length < 2) return;
+    let centreX = 0; let centreY = 0;
+    for (const point of points) { centreX += point[0]; centreY += point[1]; }
+    centreX /= points.length; centreY /= points.length;
+    let xx = 0; let yy = 0; let xy = 0;
+    for (const point of points) {
+      const dx = point[0] - centreX; const dy = point[1] - centreY;
+      xx += dx * dx; yy += dy * dy; xy += dx * dy;
+    }
+    const angle = 0.5 * Math.atan2(2 * xy, xx - yy);
+    const cosine = Math.cos(-angle); const sine = Math.sin(-angle);
+    for (const point of points) {
+      const dx = point[0] - centreX; const dy = point[1] - centreY;
+      point[0] = centreX + dx * cosine - dy * sine;
+      point[1] = centreY + dx * sine + dy * cosine;
+    }
+  }
+
+  function stressPlacement(components, adjacency, indexOf) {
+    const placement = new Map();
+    let xCursor = 0;
+    for (const members of components) {
+      const local = members.length === 1 ? new Map([[members[0], [0, 0]]]) : pivotMds(members, adjacency, indexOf);
+      if (members.length > 1 && members.length <= STRESS_SMACOF_MAX_NODES) smacof(members, adjacency, local);
+      normaliseToHopLength(members, adjacency, local);
+      let minX = Infinity; let maxX = -Infinity; let minY = Infinity;
+      for (const [x, y] of local.values()) { minX = Math.min(minX, x); maxX = Math.max(maxX, x); minY = Math.min(minY, y); }
+      for (const [id, point] of local) placement.set(id, [point[0] - minX + xCursor, point[1] - minY]);
+      xCursor += (maxX - minX) + STRESS_COMPONENT_GAP;
+    }
+    return placement;
+  }
 
   function createDeterministicLayout(dependencies) {
     const getIndex = dependencies.getIndex;
     const getLayout = dependencies.getLayout;
 
+    // Undirected bus graph of the case. A device with several ports (including
+    // an n-winding transformer) contributes a spoke from its first port to each
+    // remaining port, matching what the single-wire renderer draws.
     function graph() {
       const index = getIndex();
       const buses = index?.buses || [];
-      const adjacency = new Map(buses.map((bus) => [bus.ref.id, new Set()]));
+      const order = new Map(buses.map((bus, position) => [bus.ref.id, position]));
+      const neighbours = new Map(buses.map((bus) => [bus.ref.id, new Set()]));
       const edges = [];
       for (const item of index?.assets || []) {
         const ports = item.ports || [];
         if (ports.length < 2) continue;
         const anchor = ports[0].busId;
+        if (!order.has(anchor)) continue;
         for (const port of ports.slice(1)) {
-          if (!adjacency.has(anchor)) adjacency.set(anchor, new Set());
-          if (!adjacency.has(port.busId)) adjacency.set(port.busId, new Set());
-          adjacency.get(anchor).add(port.busId);
-          adjacency.get(port.busId).add(anchor);
-          if (anchor !== port.busId) edges.push([anchor, port.busId]);
+          if (!order.has(port.busId)) continue;
+          edges.push([anchor, port.busId]);
+          if (anchor === port.busId) continue;
+          neighbours.get(anchor).add(port.busId);
+          neighbours.get(port.busId).add(anchor);
         }
       }
-      return { buses, adjacency, edges };
+      // Neighbour lists in bus order keep every traversal reproducible.
+      const adjacency = new Map([...neighbours].map(([id, set]) => [id, [...set].sort((a, b) => order.get(a) - order.get(b))]));
+      return { buses, adjacency, edges, order, nodes: buses.map((bus) => bus.ref.id) };
     }
 
-    function layeredPositions() {
-      const index = getIndex();
-      const layout = getLayout() || {};
-      const { buses, adjacency } = graph();
-      const roots = (index?.assets || [])
-        .filter((item) => item.ref.kind === "voltage_source" && item.ports?.[0])
-        .map((item) => item.ports[0].busId)
-        .filter((id, i, all) => all.indexOf(id) === i);
-      const depth = new Map();
-      const configuredRoot = layout.root && layout.root !== "auto" && buses.some((bus) => bus.ref.id === layout.root) ? layout.root : null;
-      const queue = configuredRoot ? [configuredRoot] : (roots.length ? roots : (buses[0] ? [buses[0].ref.id] : []));
-      queue.forEach((id) => depth.set(id, 0));
-      for (let cursor = 0; cursor < queue.length; cursor += 1) {
-        const id = queue[cursor];
-        for (const next of adjacency.get(id) || []) {
-          if (!depth.has(next)) { depth.set(next, depth.get(id) + 1); queue.push(next); }
-        }
-      }
-      let maxDepth = Math.max(0, ...depth.values());
-      buses.forEach((bus) => { if (!depth.has(bus.ref.id)) { maxDepth += 1; depth.set(bus.ref.id, maxDepth); } });
-      const byDepth = new Map();
-      buses.forEach((bus) => { const d = depth.get(bus.ref.id) || 0; if (!byDepth.has(d)) byDepth.set(d, []); byDepth.get(d).push(bus); });
-      const positions = new Map();
-      const maxLevelSize = Math.max(1, ...[...byDepth.values()].map((level) => level.length));
-      const layoutHeight = Math.max(360, (maxLevelSize - 1) * MIN_BUS_GAP);
-      for (const [d, level] of byDepth.entries()) {
-        level.sort((a, b) => a.ref.id.localeCompare(b.ref.id));
-        const start = CANVAS_PADDING.top + (layoutHeight - (level.length - 1) * MIN_BUS_GAP) / 2;
-        const column = layout.direction === "load-to-source" ? maxDepth - d : d;
-        level.forEach((bus, i) => positions.set(bus.ref.id, [CANVAS_PADDING.left + column * LAYER_STEP, start + i * MIN_BUS_GAP]));
-      }
-      return positions;
-    }
-
-    function hash(value) {
-      let result = 2166136261;
-      for (const character of String(value)) { result ^= character.charCodeAt(0); result = Math.imul(result, 16777619); }
-      return (result >>> 0) / 4294967296;
-    }
-
-    function treeSeedPositions() {
-      const index = getIndex();
-      const layout = getLayout() || {};
-      const { buses, adjacency, edges } = graph();
-      const edgeKeys = new Set();
-      const uniqueEdges = edges.filter(([from, to]) => {
-        const key = [from, to].sort().join("|");
-        if (edgeKeys.has(key)) return false;
-        edgeKeys.add(key);
-        return true;
-      });
-      if (buses.length < 2 || uniqueEdges.length !== buses.length - 1) return null;
-      const ids = new Set(buses.map((bus) => bus.ref.id));
-      const sourceRoot = index?.assets?.find((item) => item.ref.kind === "voltage_source" && item.ports?.[0])?.ports?.[0]?.busId;
-      const root = layout.root && layout.root !== "auto" && ids.has(layout.root) ? layout.root : ids.has(sourceRoot) ? sourceRoot : buses[0]?.ref.id;
-      if (!root) return null;
-      const parent = new Map([[root, null]]); const depth = new Map([[root, 0]]); const queue = [root];
-      for (let cursor = 0; cursor < queue.length; cursor += 1) {
-        const id = queue[cursor];
-        for (const next of [...(adjacency.get(id) || [])].sort()) {
-          if (!ids.has(next) || parent.has(next)) continue;
-          parent.set(next, id); depth.set(next, depth.get(id) + 1); queue.push(next);
-        }
-      }
-      if (parent.size !== buses.length) return null;
-      const children = new Map(buses.map((bus) => [bus.ref.id, []]));
-      parent.forEach((ancestor, id) => { if (ancestor) children.get(ancestor).push(id); });
-      children.forEach((list) => list.sort());
-      const leaves = [...children.values()].filter((list) => list.length === 0).length;
-      const leafGap = Math.max(30, Math.min(58, 12000 / Math.max(1, leaves)));
-      const maxDepth = Math.max(0, ...depth.values());
-      const depthStep = Math.max(100, Math.min(165, 9000 / Math.max(1, maxDepth)));
-      const positions = new Map(); let leafIndex = 0;
-      const assign = (id) => {
-        const descendants = children.get(id) || [];
-        const y = descendants.length ? descendants.map(assign).reduce((sum, value) => sum + value, 0) / descendants.length : 110 + leafIndex++ * leafGap;
-        const column = layout.direction === "load-to-source" ? maxDepth - depth.get(id) : depth.get(id);
-        positions.set(id, [CANVAS_PADDING.left + column * depthStep, y]);
-        return y;
+    // Feeder roots for a component: the explicitly selected root when it lives
+    // there, otherwise every voltage source in it, otherwise its lowest-index
+    // bus, so a forest of islands never piles up on rank 0.
+    function createSeedSelector(index, layout, order) {
+      const configured = typeof layout.root === "string" && layout.root !== "auto" && order.has(layout.root) ? layout.root : null;
+      const sources = [...new Set((index?.assets || [])
+        .filter((item) => item.ref.kind === "voltage_source" && item.ports?.[0] && order.has(item.ports[0].busId))
+        .map((item) => item.ports[0].busId))].sort((a, b) => order.get(a) - order.get(b));
+      return (members) => {
+        const inComponent = new Set(members);
+        if (configured && inComponent.has(configured)) return [configured];
+        const found = sources.filter((id) => inComponent.has(id));
+        return found.length ? found : [members[0]];
       };
-      assign(root);
+    }
+
+    function autoPlacement() {
+      const index = getIndex();
+      const layout = getLayout() || {};
+      const { buses, adjacency, edges, order, nodes } = graph();
+      const topology = classifyTopology(nodes, edges);
+      if (topology === "empty") return { topology, strategy: "empty", placement: new Map() };
+      const components = componentsOf(nodes, adjacency);
+      const seedsFor = createSeedSelector(index, layout, order);
+      const indexOf = (id) => (order.has(id) ? order.get(id) : buses.length);
+      return topology === "radial"
+        ? { topology, strategy: "tidy-tree", placement: tidyTreePlacement(components, adjacency, seedsFor) }
+        : { topology, strategy: "layered", placement: layeredPlacement(components, adjacency, seedsFor, indexOf) };
+    }
+
+    // Topology-aware placement: tidy tree for radial feeders, layered ranks for
+    // meshed networks.
+    function singleAutoPositions() {
+      const layout = getLayout() || {};
+      return toCanvasPositions(autoPlacement().placement, layout.direction);
+    }
+
+    // Deterministic stress embedding, offered as the explicit exploratory mode
+    // for dense or meshed networks. Mirrored, when needed, so the feeder root
+    // still reads on the side the chosen direction implies.
+    function singleStressPositions() {
+      const index = getIndex();
+      const layout = getLayout() || {};
+      const { buses, adjacency, order, nodes } = graph();
+      if (!nodes.length) return new Map();
+      const components = componentsOf(nodes, adjacency);
+      const seedsFor = createSeedSelector(index, layout, order);
+      const indexOf = (id) => (order.has(id) ? order.get(id) : buses.length);
+      const placement = stressPlacement(components, adjacency, indexOf);
+      const points = [...placement.values()];
+      orientEmbedding(points);
+      const root = seedsFor(components[0])[0];
+      const meanX = points.reduce((sum, point) => sum + point[0], 0) / points.length;
+      const rootX = placement.get(root)?.[0] ?? meanX;
+      const towardsLoad = layout.direction !== "load-to-source";
+      const mirror = towardsLoad ? rootX > meanX : rootX < meanX;
+      let minX = Infinity; let minY = Infinity;
+      for (const point of points) {
+        if (mirror) point[0] = -point[0];
+        minX = Math.min(minX, point[0]);
+        minY = Math.min(minY, point[1]);
+      }
+      const positions = new Map();
+      for (const [id, point] of placement) {
+        positions.set(id, [
+          CANVAS_PADDING.left + (point[0] - minX) * STRESS_EDGE_LENGTH,
+          CANVAS_PADDING.top + (point[1] - minY) * STRESS_EDGE_LENGTH
+        ]);
+      }
       return positions;
     }
 
-    function singleForcePositions() {
-      const { buses, edges } = graph();
-      const positions = treeSeedPositions() || layeredPositions();
-      const nodes = buses.map((bus) => bus.ref.id);
-      if (nodes.length < 2) return positions;
-      const nodeSet = new Set(nodes);
-      const velocities = new Map(nodes.map((id) => [id, [0, 0]]));
-      nodes.forEach((id, index) => {
-        const point = positions.get(id) || [CANVAS_PADDING.left, CANVAS_PADDING.top];
-        const angle = hash(`${id}:angle`) * Math.PI * 2;
-        const jitter = (hash(`${id}:jitter`) - 0.5) * 46;
-        positions.set(id, [point[0] + Math.cos(angle) * jitter + (index % 3 - 1) * 12, point[1] + Math.sin(angle) * jitter]);
-      });
-      const edgeKeys = new Set();
-      const uniqueEdges = edges.filter(([from, to]) => {
-        if (!nodeSet.has(from) || !nodeSet.has(to)) return false;
-        const key = [from, to].sort().join("|");
-        if (edgeKeys.has(key)) return false;
-        edgeKeys.add(key);
-        return true;
-      });
-      const iterations = Math.max(32, Math.min(110, Math.round(18000 / nodes.length)));
-      const springLength = 145;
-      const repulsion = 9000;
-      const springStrength = 0.035;
-      const bounds = nodes.map((id) => positions.get(id));
-      const centreX = (Math.min(...bounds.map((point) => point[0])) + Math.max(...bounds.map((point) => point[0]))) / 2;
-      const centreY = (Math.min(...bounds.map((point) => point[1])) + Math.max(...bounds.map((point) => point[1]))) / 2;
-      for (let iteration = 0; iteration < iterations; iteration += 1) {
-        const forces = new Map(nodes.map((id) => [id, [0, 0]]));
-        for (let i = 0; i < nodes.length; i += 1) {
-          const first = positions.get(nodes[i]);
-          for (let j = i + 1; j < nodes.length; j += 1) {
-            const second = positions.get(nodes[j]);
-            let dx = second[0] - first[0]; let dy = second[1] - first[1];
-            const distance = Math.max(18, Math.hypot(dx, dy));
-            dx /= distance; dy /= distance;
-            const force = repulsion / (distance * distance);
-            forces.get(nodes[i])[0] -= dx * force; forces.get(nodes[i])[1] -= dy * force;
-            forces.get(nodes[j])[0] += dx * force; forces.get(nodes[j])[1] += dy * force;
-          }
-        }
-        uniqueEdges.forEach(([from, to]) => {
-          const first = positions.get(from); const second = positions.get(to);
-          let dx = second[0] - first[0]; let dy = second[1] - first[1];
-          const distance = Math.max(18, Math.hypot(dx, dy));
-          const force = (distance - springLength) * springStrength;
-          dx /= distance; dy /= distance;
-          forces.get(from)[0] += dx * force; forces.get(from)[1] += dy * force;
-          forces.get(to)[0] -= dx * force; forces.get(to)[1] -= dy * force;
-        });
-        nodes.forEach((id) => {
-          const point = positions.get(id); const velocity = velocities.get(id); const force = forces.get(id);
-          force[0] += (centreX - point[0]) * 0.0008; force[1] += (centreY - point[1]) * 0.0008;
-          velocity[0] = (velocity[0] + force[0]) * 0.82; velocity[1] = (velocity[1] + force[1]) * 0.82;
-          const magnitude = Math.hypot(velocity[0], velocity[1]);
-          const step = Math.min(22, magnitude);
-          if (magnitude > 0) { velocity[0] = velocity[0] / magnitude * step; velocity[1] = velocity[1] / magnitude * step; }
-          positions.set(id, [Math.max(36, point[0] + velocity[0]), Math.max(CANVAS_PADDING.top, point[1] + velocity[1])]);
-        });
-      }
-      return positions;
+    function lockedPositions(layout) {
+      return new Map(Object.entries(layout.locked || {})
+        .filter(([, point]) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite))
+        .map(([id, point]) => [id, [point[0], point[1]]]));
     }
 
     function singlePositions() {
       const layout = getLayout() || {};
-      const forcePositions = new Map(Object.entries(layout.locked || {}).filter(([, point]) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)).map(([id, point]) => [id, [...point]]));
+      const locked = lockedPositions(layout);
       const expectedBuses = getIndex()?.buses?.length || 0;
-      const positions = layout.engine === "force" && forcePositions.size === expectedBuses ? forcePositions : layeredPositions();
-      for (const [id, point] of Object.entries(layout.locked || {})) {
-        if (Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) positions.set(id, [point[0], point[1]]);
-      }
+      // "force" is the pre-v3 identifier for the same explicit engine; profiles
+      // saved under it keep restoring their persisted positions.
+      const explicitEngine = layout.engine === "stress" || layout.engine === "force";
+      const positions = explicitEngine && expectedBuses > 0 && locked.size === expectedBuses ? locked : singleAutoPositions();
+      for (const [id, point] of locked) positions.set(id, point);
       return positions;
+    }
+
+    // What the status line reports: the classification and the strategy it
+    // selected, without recomputing the whole placement.
+    function singleLayoutInfo() {
+      const layout = getLayout() || {};
+      const { edges, nodes } = graph();
+      const topology = classifyTopology(nodes, edges);
+      const engine = layout.engine === "force" ? "stress" : layout.engine;
+      const strategy = engine === "elk" ? "elk"
+        : engine === "stress" ? "stress"
+        : topology === "radial" ? "tidy-tree"
+        : topology === "empty" ? "empty"
+        : "layered";
+      return { topology, strategy, engine: engine || "deterministic" };
     }
 
     function singleBounds(positions) {
@@ -200,8 +679,8 @@
       };
     }
 
-    return Object.freeze({ MODULE_VERSION, singlePositions, singleForcePositions, singleBounds });
+    return Object.freeze({ MODULE_VERSION, singlePositions, singleAutoPositions, singleStressPositions, singleLayoutInfo, singleBounds });
   }
 
-  globalThis.BMOPFLayouts = Object.freeze({ MODULE_VERSION, createDeterministicLayout });
+  globalThis.BMOPFLayouts = Object.freeze({ MODULE_VERSION, createDeterministicLayout, classifyTopology });
 })();
