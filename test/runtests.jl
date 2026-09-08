@@ -32,7 +32,7 @@ const MULTINETWORK_RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro"
     @test occursin("BMOPFRenderers", html)
     @test occursin("multi-wire-projection-v1", html)
     @test occursin("BMOPFProjections", html)
-    @test occursin("deterministic-layout-v2", html)
+    @test occursin("deterministic-layout-v3", html)
     @test occursin("BMOPFLayouts", html)
     @test occursin("geospatial-renderer-v1", html)
     @test occursin("single-wire-renderer-v1", html)

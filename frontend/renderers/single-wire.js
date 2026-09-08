@@ -171,10 +171,14 @@
       content += `<g class="sld-embedded-legend"><text x="24" y="474" fill="#70695f" font-size="10">Legend: ${busLegend} · ○ = source/generator · paired coils = transformer · □ = load · ║ = capacitor · ⏚ = shunt · open blade/dashed path = open switch · dashed leader = moved symbol</text>${dependencies.resultLegend()}</g>`;
       const directionLabel = state.layout?.direction === "load-to-source" ? "load-to-source" : "source-to-load";
       const rootLabel = state.layout?.root && state.layout.root !== "auto" ? ` · root ${state.layout.root}` : " · automatic feeder root";
-      const engineLabel = state.layout?.engine === "elk" ? " · ELK" : state.layout?.engine === "force" ? " · force-directed" : " · deterministic";
+      // The layout module classifies the network and reports which strategy it
+      // selected, so the status line names the drawing the reader is looking at.
+      const info = dependencies.singleLayoutInfo ? dependencies.singleLayoutInfo() : null;
+      const engineLabel = info?.engine === "elk" ? " · ELK" : info?.engine === "stress" ? " · stress (PivotMDS + SMACOF)" : " · deterministic";
       const cacheLabel = state.layout?.cacheState === "stale" ? " · stale cached layout ignored" : "";
-      const layoutLabel = state.layout?.engine === "force" ? "force-directed" : "layered";
-      setStatus(`Single-line diagram: ${directionLabel} ${layoutLabel} layout${rootLabel}${engineLabel}${cacheLabel} with ${showBusBars ? "conventional busbars" : "compact bus dots"} and device symbols.`);
+      const layoutLabel = { "tidy-tree": "tidy-tree", layered: "layered", stress: "stress", elk: "ELK layered" }[info?.strategy] || "layered";
+      const topologyLabel = info?.topology === "radial" ? "radial network, " : info?.topology === "meshed" ? "meshed network, " : "";
+      setStatus(`Single-line diagram: ${topologyLabel}${directionLabel} ${layoutLabel} layout${rootLabel}${engineLabel}${cacheLabel} with ${showBusBars ? "conventional busbars" : "compact bus dots"} and device symbols.`);
       setCanvas(svgShell(content, { className: "single-wire-svg", size: canvasSize(positions) }));
       bindSvgSelection();
     }

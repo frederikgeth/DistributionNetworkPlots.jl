@@ -5,6 +5,11 @@
   const LAYOUT_MAX_PROFILES = 8;
   const ELK_VERSION = "0.10.2";
   const LAYOUT_ROUTE_SPACE = "single-svg-v2";
+  // Explicit layout engines, alongside the default topology-aware deterministic
+  // placement. "force" is the pre-v3 identifier for the stress engine and is
+  // still accepted so persisted profiles keep their positions.
+  const LAYOUT_ENGINES = ["elk", "stress"];
+  const normaliseLayoutEngine = (engine) => (engine === "force" ? "stress" : LAYOUT_ENGINES.includes(engine) ? engine : "deterministic");
   const SIDEBAR_WIDTH_KEY = "bmopf-sidebar-width-v1";
   const TABLE_WIDTHS_KEY = "bmopf-table-widths-v1";
   const SIDEBAR_WIDTH_DEFAULT = 360;
@@ -441,7 +446,7 @@
     const positions = profile.positions && typeof profile.positions === "object" ? profile.positions : {};
     const routes = profile.routes && typeof profile.routes === "object" ? profile.routes : {};
     const lastUsed = Number.isFinite(Number(profile.lastUsed)) ? Number(profile.lastUsed) : 0;
-    return { locked, positions, routes, engine: ["elk", "force"].includes(profile.engine) ? profile.engine : "deterministic", lastUsed };
+    return { locked, positions, routes, engine: normaliseLayoutEngine(profile.engine), lastUsed };
   }
 
   function pruneLayoutProfiles(profiles, activeKey) {
@@ -483,7 +488,7 @@
         const direction = legacy.direction === "load-to-source" ? legacy.direction : "source-to-load";
         const root = typeof legacy.root === "string" ? legacy.root : "auto";
         const profileKey = layoutProfileKey(direction, root);
-        const engine = ["elk", "force"].includes(legacy.engine) ? legacy.engine : "deterministic";
+        const engine = normaliseLayoutEngine(legacy.engine);
         return { version: LAYOUT_CACHE_VERSION, key, locked: legacy.locked, positions: {}, routes: {}, direction, root, engine, profiles: { [profileKey]: { locked: legacy.locked, positions: {}, routes: {}, engine } }, graphSignature, cacheState: "migrated" };
       }
     } catch (_) { /* localStorage is optional in static reports */ }
@@ -495,7 +500,7 @@
     try {
       const profileKey = layoutProfileKey(state.layout.direction, state.layout.root);
       const graphSignature = layoutGraphSignature();
-      const engine = ["elk", "force"].includes(state.layout.engine) ? state.layout.engine : "deterministic";
+      const engine = normaliseLayoutEngine(state.layout.engine);
       const profiles = pruneLayoutProfiles({ ...(state.layout.profiles || {}), [profileKey]: { graphSignature, optionsSignature: profileKey, routeSpace: LAYOUT_ROUTE_SPACE, elkVersion: ELK_VERSION, locked: state.layout.locked || {}, positions: state.layout.positions || {}, routes: state.layout.routes || {}, engine, lastUsed: Date.now() } }, profileKey);
       state.layout.profiles = profiles;
       localStorage.setItem(`bmopf-layout-v3:${state.layout.key}`, JSON.stringify({ version: LAYOUT_CACHE_VERSION, key: state.layout.key, graphSignature, optionsSignature: profileKey, routeSpace: LAYOUT_ROUTE_SPACE, elkVersion: ELK_VERSION, direction: state.layout.direction, root: state.layout.root, profiles }));
@@ -604,18 +609,18 @@
     }
   }
 
-  function applyForceLayout() {
+  function applyStressLayout() {
     if (!state.index || state.view !== "single") return;
-    const positions = deterministicLayout.singleForcePositions();
+    const positions = deterministicLayout.singleStressPositions();
     const nextLocked = {};
     positions.forEach((point, id) => { if (Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) nextLocked[id] = [...point]; });
     state.layout.locked = nextLocked;
     state.layout.routes = {};
-    state.layout.engine = "force";
+    state.layout.engine = "stress";
     saveLayout();
     renderView();
     renderCameraControls();
-    setStatus(`Force-directed layout applied to ${positions.size} buses; positions are now locally persisted.`);
+    setStatus(`Stress layout applied to ${positions.size} buses; positions are now locally persisted.`);
   }
 
   function layoutLocked(id) { return Array.isArray(state.layout?.locked?.[id]); }
@@ -679,7 +684,7 @@
       const item = itemFor(state.selected);
       if (button.dataset.layout === "reset") { resetLayout(); return; }
       if (button.dataset.layout === "elk") { applyElkLayout(); return; }
-      if (button.dataset.layout === "force") { applyForceLayout(); return; }
+      if (button.dataset.layout === "stress") { applyStressLayout(); return; }
       if (!item || item.ref.kind !== "bus") return;
       if (button.dataset.layout === "lock") {
         const point = singlePositions().get(item.ref.id); if (point) state.layout.locked[item.ref.id] = [...point];
@@ -1465,8 +1470,8 @@
     if (state.view === "single") {
       const elkButton = document.createElement("button"); elkButton.dataset.layout = "elk"; elkButton.textContent = "Apply ELK layout";
       controls.querySelector('[data-layout="left"]')?.before(elkButton);
-      const forceButton = document.createElement("button"); forceButton.dataset.layout = "force"; forceButton.textContent = "Apply force layout"; forceButton.title = "Recompute a deterministic force-directed arrangement";
-      controls.querySelector('[data-layout="left"]')?.before(forceButton);
+      const stressButton = document.createElement("button"); stressButton.dataset.layout = "stress"; stressButton.textContent = "Apply stress layout"; stressButton.title = "Recompute a deterministic PivotMDS + SMACOF stress arrangement";
+      controls.querySelector('[data-layout="left"]')?.before(stressButton);
     }
     controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
       const camera = state.cameras[state.view];
@@ -1644,6 +1649,7 @@
     bindSvgSelection,
     singlePositions,
     singleBounds: deterministicLayout.singleBounds,
+    singleLayoutInfo: deterministicLayout.singleLayoutInfo,
     overviewAssets,
     overviewBuses,
     sameRef,
