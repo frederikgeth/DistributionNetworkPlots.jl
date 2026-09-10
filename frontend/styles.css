@@ -334,3 +334,10 @@ pre.raw { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 9px; bor
 .trace-stop, .trace-ground, .trace-winding { color: #844c16; }
 .trace-connection { border-left: 3px solid #7739a6; padding-left: 6px !important; }
 .map-detail-active .multi-detail-canvas { max-height: 75vh; min-height: 360px; overflow: auto; }
+
+.region-layer-control { display: flex; align-items: center; gap: 10px; margin: 12px 0; flex-wrap: wrap; }
+.region-layer-control select { max-width: 100%; }
+#region-operating-legend { font-size: 12px; }
+.operating-scale { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.operating-ramp { width: 180px; height: 14px; background: linear-gradient(to right,#dceaf1,#a5c9dc,#68a1c4,#dba95e,#ca6747); }
+#region-operating-evidence article { padding: 10px 0; border-bottom: 1px solid #ddd8cf; font-size: 12px; overflow-wrap: anywhere; }

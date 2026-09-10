@@ -20,6 +20,12 @@ try {
   await page.locator('#import-progress').waitFor({state:'detached'});
   await page.locator('[data-view="geo"]').click();
   await page.locator('#region-evidence').waitFor();
+  for(const layer of ['voltage','loading','deviation']) {
+   await page.locator('#region-operating-layer').selectOption(layer);
+   assert.match(await page.locator('#region-operating-legend').innerText(),/No results attached/);
+   assert.ok(await page.locator('#region-map *').count()<3000);
+  }
+  await page.locator('#region-operating-layer').selectOption('topology');
   const stats=await page.locator('#region-map').evaluate(el=>({nodes:el.querySelectorAll('*').length,circles:[...el.querySelectorAll('circle')].map(c=>[+c.getAttribute('cx'),+c.getAttribute('cy')])}));
   assert.ok(stats.nodes<3000);assert.ok(stats.circles.length>0);
   assert.ok(stats.circles.every(p=>p.every(Number.isFinite)));

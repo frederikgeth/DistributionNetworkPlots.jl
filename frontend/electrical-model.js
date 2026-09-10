@@ -282,5 +282,47 @@
     return { rows, terminals, busIds, assetPointers, truncated, origin: { busId, terminal } };
   }
 
-  globalThis.BMOPFElectrical = Object.freeze({ VERSION, traceTerminal, interpret, topology, loadModel, loadResponse, lineModel, manifest, flatten, unit, number, diffRecords, componentValue, resultFields, voltagePhasors });
+  // Map values retain their evidence and denominator. Zero is data; null is not.
+  function operatingMetric(item, record, layer, index) {
+    const samples = [], unavailable = reason => ({ value: null, samples, available: 0, total: 1, reason });
+    if (!record) return unavailable("No result record in the selected scenario");
+    if (layer === "loading") {
+      if (own(record, "loading")) {
+        if (!number(record.loading) || record.loading < 0 || (record.loading_unit && record.loading_unit !== "p.u.")) return unavailable("Invalid loading or incompatible unit");
+        return { value: record.loading, available: 1, total: 1, samples: [{ value: record.loading, path: "loading", basis: "Reported p.u. loading; rating basis not verified" }] };
+      }
+      if (item.ref.kind !== "line") return unavailable("No reported loading; current/rating derivation supported for lines only");
+      if (record.current_unit && record.current_unit !== "A") return unavailable("Current unit conflicts with BMOPF amperes");
+      const from = item.ports?.[0]?.terminals || [], to = item.ports?.[1]?.terminals || [];
+      const code = index.byKind.get("linecode")?.get(String(item.sourceRecord.linecode));
+      const source = own(item.sourceRecord, "i_max") ? item : code;
+      const ratings = source?.sourceRecord.i_max;
+      if (!from.length || from.length !== to.length || new Set(from).size !== from.length || new Set(to).size !== to.length || !Array.isArray(ratings) || ratings.length !== from.length) return unavailable("Current ratings and terminal maps are unavailable or incompatible");
+      from.forEach((terminal, i) => ["fr", "to"].forEach(end => {
+        const current = record[terminal]?.[`cm_${end}`], rating = ratings[i];
+        if (number(current) && current >= 0 && number(rating) && rating > 0 && number(current/rating)) samples.push({ value: current/rating, path: `${terminal}/cm_${end}`, basis: `${current} A ÷ ${rating} A at ${source.ref.pointer}/i_max/${i}` });
+      }));
+      return { value: samples.length ? samples.reduce((max,s)=>Math.max(max,s.value),-Infinity) : null, samples, available: samples.length, total: from.length*2, reason: "Missing or invalid end currents / positive ratings" };
+    }
+    if (layer === "deviation") {
+      if (typeof record.voltage_reference !== "string" || !record.voltage_reference.trim()) return unavailable("Voltage reference not declared; deviation is not inferred from magnitude");
+      const key = ["voltage_deviation", "vm_deviation", "v_deviation"].find(k=>own(record,k));
+      if (!key || !number(record[key]) || (record.voltage_deviation_unit && record.voltage_deviation_unit !== "p.u.")) return unavailable("No valid reported p.u. deviation");
+      return { value: Math.abs(record[key]), available: 1, total: 1, samples: [{value: record[key], path: key, basis: record.voltage_reference}] };
+    }
+    const terminals = item.terminals || [];
+    if (!terminals.length || new Set(terminals).size !== terminals.length) return unavailable("Terminal identities unavailable or ambiguous");
+    if (record.voltage_unit && record.voltage_unit !== "V") return unavailable("Voltage unit conflicts with BMOPF volts");
+    const flat = Array.isArray(record.vm), map = record.terminal_map || terminals;
+    if (flat && (!Array.isArray(map) || map.length !== record.vm.length || new Set(map.map(String)).size !== map.length)) return unavailable("Voltage array cannot be aligned to terminals");
+    const offsets = new Map(flat ? map.map((terminal,i)=>[String(terminal),i]) : []);
+    terminals.forEach(terminal => {
+      const i = flat ? offsets.get(terminal) : -1;
+      const value = flat ? record.vm[i] : record[terminal]?.vm;
+      if (number(value) && value >= 0) samples.push({ value, path: flat ? `vm/${i}` : `${terminal}/vm`, basis: `Terminal ${terminal}; ${record.voltage_reference || (flat ? "reference not declared" : "BMOPFTools phase-to-ground")}` });
+    });
+    return { value: samples.length ? samples.reduce((max,s)=>Math.max(max,s.value),-Infinity) : null, samples, available: samples.length, total: terminals.length, reason: "Missing or invalid terminal voltage magnitudes" };
+  }
+
+  globalThis.BMOPFElectrical = Object.freeze({ VERSION, operatingMetric, traceTerminal, interpret, topology, loadModel, loadResponse, lineModel, manifest, flatten, unit, number, diffRecords, componentValue, resultFields, voltagePhasors });
 })();

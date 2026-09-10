@@ -165,3 +165,30 @@ test("trace rejects ambiguous maps and terminates loops without crossing load te
   assert.ok(trace.rows.some(r=>r.ref.id==='bad' && r.type==='stop'));
   assert.ok(!trace.terminals.some(t=>t.terminal==='n'));
 });
+
+test("operating layers preserve zero, terminal coverage and declared voltage references", () => {
+  const index=build({bus:{b:{terminal_names:["a","n"]}}}), bus=get(index,"bus","b");
+  const metric=record=>E.operatingMetric(bus,record,"voltage",index);
+  assert.equal(metric({vm:[null,0]}).value,0);
+  assert.equal(metric({vm:[null,0]}).available,1);
+  assert.equal(metric({vm:[false,"230"]}).value,null);
+  assert.equal(metric({vm:[230]}).value,null);
+  assert.equal(metric({vm:[230,0],terminal_map:["a","a"]}).value,null);
+  assert.equal(metric({a:{vm:230},n:{vm:0}}).available,2);
+  assert.equal(metric({vm:[230,0],voltage_unit:"kV"}).value,null);
+  assert.equal(E.operatingMetric(bus,{vm:[1.1,0],voltage_deviation:.1},"deviation",index).value,null);
+  assert.equal(E.operatingMetric(bus,{voltage_deviation:-.1,voltage_reference:"nominal phase-to-ground 230 V"},"deviation",index).value,.1);
+});
+test("line loading uses both ends and exact positive conductor ratings", () => {
+  const index=oneLine({i_max:[100]}), line=get(index,"line","l");
+  const metric=record=>E.operatingMetric(line,record,"loading",index);
+  assert.equal(metric({x:{cm_fr:0,cm_to:120}}).value,1.2);
+  assert.equal(metric({x:{cm_fr:0,cm_to:120}}).available,2);
+  assert.equal(metric({x:{cm_fr:0,cm_to:null}}).available,1);
+  assert.equal(metric({loading:0}).value,0);
+  assert.equal(metric({loading:null,x:{cm_fr:20,cm_to:20}}).value,null);
+  for(const rating of [0,-1,null,"100",false]) {
+    line.sourceRecord.i_max=[rating]; assert.equal(metric({x:{cm_fr:1,cm_to:1}}).value,null);
+  }
+  line.sourceRecord.i_max=[100,200];assert.equal(metric({x:{cm_fr:1,cm_to:1}}).value,null);
+});

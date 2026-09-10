@@ -1479,6 +1479,8 @@
     entityLabelSvg,
     resultTooltip,
     resultVoltageVisual,
+    resultRecordFor,
+    resultPairingStatus,
     resultLegend,
     select
   });

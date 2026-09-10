@@ -92,9 +92,66 @@
     }
     const glyph = type => type === "source" ? '<path d="M0 -8L8 0 0 8 -8 0Z" fill="#fffdf9"/><path d="M-4 0Q-2 -5 0 0T4 0" fill="none"/>' : type === "transformer" ? '<circle cx="-4" cy="0" r="6" fill="#fffdf9"/><circle cx="4" cy="0" r="6" fill="#fffdf9"/>' : type === "open switch" ? '<path d="M-10 3H-5M5 3H10M-5 3L4 -5" fill="none"/><circle cx="-5" cy="3" r="1.5"/><circle cx="5" cy="3" r="1.5"/>' : '<path d="M0 -8V1M-8 1H8M-5 5H5M-2 9H2" fill="none"/>';
 
+    let operatingLayer = "topology", operatingCache = null, operatingRows = [], operatingPage = 0, operatingOpen = false, operatingFilter = null;
+    const layerNames = { topology: "Connectivity", voltage: "Maximum terminal voltage · V", deviation: "Maximum absolute voltage deviation · p.u.", loading: "Maximum loading · p.u." };
+    function operatingData() {
+      if (operatingCache?.index === state.index && operatingCache.result === state.result && operatingCache.scenario === state.resultScenario && operatingCache.layer === operatingLayer) return operatingCache;
+      const items = operatingLayer === "loading" ? state.index.assets.filter(item=>["line","switch","transformer"].includes(item.ref.kind)) : state.index.buses;
+      const rows = operatingLayer === "topology" ? [] : items.map(item=>({ item, metric: globalThis.BMOPFElectrical.operatingMetric(item, dependencies.resultRecordFor(item), operatingLayer, state.index) }));
+      const byBus = new Map(), byItem = new Map();
+      let min=Infinity, max=-Infinity;
+      for (const row of rows) {
+        byItem.set(row.item,row);
+        if (row.metric.value !== null) { min=Math.min(min,row.metric.value); max=Math.max(max,row.metric.value); }
+        const ids = row.item.ref.kind === "bus" ? [row.item.ref.id] : [...new Set(row.item.ports.map(p=>p.busId))];
+        for (const id of ids) { if(!byBus.has(id))byBus.set(id,[]);byBus.get(id).push(row); }
+      }
+      rows.sort((a,b)=>(b.metric.value ?? -Infinity)-(a.metric.value ?? -Infinity));
+      operatingCache = { index: state.index, result: state.result, scenario: state.resultScenario, layer: operatingLayer, rows, byBus, byItem, min: Number.isFinite(min) ? min : 0, max: Number.isFinite(max) ? max : 1 };
+      operatingFilter=null; operatingPage=0;
+      return operatingCache;
+    }
+    function groupOperating(ids) {
+      const data=operatingData(), rows=[...new Set(ids.flatMap(id=>data.byBus.get(id)||[]))];
+      const available=rows.filter(row=>row.metric.value!==null);
+      return { rows, value: available.length ? available.reduce((max,row)=>Math.max(max,row.metric.value),-Infinity) : null, count: available.length, total: rows.length, partial: rows.some(row=>row.metric.available<row.metric.total) };
+    }
+    const metricText = metric => metric.value === null ? `Unavailable: ${metric.reason}` : `${metric.value.toPrecision(4)} ${operatingLayer === "voltage" ? "V" : "p.u."} · ${metric.available}/${metric.total} samples${metric.available<metric.total ? ` · partial: ${metric.reason}` : ""}`;
+    function operatingFill(value) {
+      if (operatingLayer === "topology") return "#fffdf9";
+      if (value === null || dependencies.resultPairingStatus()?.kind === "mismatch") return "url(#operating-missing)";
+      const data=operatingData(), low=operatingLayer === "voltage" ? data.min : 0, high=operatingLayer === "voltage" ? data.max : operatingLayer === "loading" ? 1.2 : .1;
+      const t=Math.max(0,Math.min(1,(value-low)/Math.max(high-low,1e-12)));
+      return ["#dceaf1","#a5c9dc","#68a1c4","#dba95e","#ca6747"][Math.min(4,Math.floor(t*5))];
+    }
+    function operatingLegend() {
+      const target=document.getElementById("region-operating-legend"); if(!target)return;
+      if(operatingLayer === "topology") {target.innerHTML="";target.operatingData=null;return;}
+      const data=operatingData(); if(target.operatingData === data)return; target.operatingData=data;
+      const available=data.rows.filter(r=>r.metric.value!==null).length, complete=data.rows.filter(r=>r.metric.value!==null && r.metric.available===r.metric.total).length;
+      const pairing=state.result ? dependencies.resultPairingStatus() : null;
+      const scenarios=state.result ? globalThis.BMOPFModel.resultScenarios(state.result) : [];
+      const scenario=state.resultScenario || (scenarios.length>1 ? "Choose a scenario in Results" : "single scenario");
+      const low=operatingLayer === "voltage" ? data.min : 0, high=operatingLayer === "voltage" ? data.max : operatingLayer === "loading" ? 1.2 : .1;
+      target.innerHTML=`<strong>${h(layerNames[operatingLayer])}</strong><p>${h(state.resultLabel || "No results attached")} · ${h(scenario)}${pairing ? ` · Pairing: ${h(pairing.label)}. ${h(pairing.message)}` : ""}</p><div class="operating-scale"><span>${available ? low.toPrecision(3) : "No available values · scale"}</span><span class="operating-ramp" aria-hidden="true"></span><span>${high.toPrecision(3)}${operatingLayer === "voltage" ? " V" : " p.u. (higher values saturate)"}</span></div><p>${available}/${data.rows.length} elements have values · ${complete} complete · ${available-complete} partial · ${data.rows.length-available} unavailable, including elements without coordinates. Hatched fill: unavailable${pairing?.kind === "mismatch" ? " or suppressed because case identity mismatches" : ""}. A small dot marks incomplete group/sample coverage. Colours show magnitude, not a pass/fail assessment.</p><p>${operatingLayer === "voltage" ? "Scale spans this case and scenario, including all voltage levels, and stays fixed while panning. Group maximum is not a voltage violation. Zero and neutral voltages are retained in evidence." : operatingLayer === "loading" ? "Bus/group fill shows maximum incident branch loading, deduplicated within each group. Reported loading is used as supplied; line loading can be derived from matching per-conductor end currents and positive current ratings. Coverage includes lines, switches and transformers." : "Only reported deviation with a declared voltage reference is coloured. No nominal voltage or allowable limit is inferred."}</p><button id="region-operating-show">Inspect operating evidence (${data.rows.length})</button>`;
+      target.querySelector("button").onclick=()=>{operatingFilter=null;operatingPage=0;operatingOpen=true;renderOperatingEvidence();};
+    }
+    function renderOperatingEvidence() {
+      const target=document.getElementById("region-operating-evidence");if(!target)return;
+      if(!operatingOpen || operatingLayer === "topology"){target.innerHTML="";return;}
+      const data=operatingData(); operatingRows=operatingFilter ? data.rows.filter(r=>operatingFilter.has(r)) : data.rows;
+      const pages=Math.max(1,Math.ceil(operatingRows.length/50));operatingPage=Math.min(operatingPage,pages-1);
+      target.innerHTML=`<h3>Operating evidence · ${operatingFilter ? "selected group" : "entire case"} · ${operatingRows.length} elements</h3><p>Largest available values first; unavailable records follow. Select an element for its full source and result fields.</p>${operatingRows.slice(operatingPage*50,(operatingPage+1)*50).map((row,i)=>`<article><button data-operating-row="${operatingPage*50+i}">${h(row.item.ref.kind)} ${h(row.item.ref.id)}</button> <strong>${h(metricText(row.metric))}</strong>${row.metric.samples.slice(0,8).map(s=>`<div><code>${h(s.path)}</code>: ${h(s.value)} · ${h(s.basis)}</div>`).join("")}${row.metric.samples.length>8 ? `<p>${row.metric.samples.length-8} more samples in the full element results.</p>` : ""}</article>`).join("")}<p><button data-operating-prev ${operatingPage ? "" : "disabled"}>Previous values</button> Page ${operatingPage+1} / ${pages} <button data-operating-next ${operatingPage+1<pages ? "" : "disabled"}>Next values</button> <button data-operating-close>Close operating evidence</button></p>`;
+      target.querySelectorAll("[data-operating-row]").forEach(b=>b.onclick=()=>dependencies.select(operatingRows[Number(b.dataset.operatingRow)].item.ref));
+      target.querySelector("[data-operating-prev]").onclick=()=>{operatingPage--;renderOperatingEvidence();};
+      target.querySelector("[data-operating-next]").onclick=()=>{operatingPage++;renderOperatingEvidence();};
+      target.querySelector("[data-operating-close]").onclick=()=>{operatingOpen=false;renderOperatingEvidence();};
+    }
+
     function refresh() {
       if (!regional || !document.getElementById("region-map")) return;
       prepareRegion();
+      operatingData(); operatingLegend();
       const { positions, unmapped } = dependencies.busCoordinates(), camera = state.cameras.geo;
       const screen = point => [point[0]*camera.scale+camera.x, point[1]*camera.scale+camera.y];
       const visible = [], bins = new Map();
@@ -106,7 +163,7 @@
         if (!bins.has(key)) bins.set(key, []); bins.get(key).push({ bus, x, y });
       }
       const detailed = visible.length <= 300;
-      let content = '<rect width="760" height="500" fill="#f3f6f4"/><path d="M20 470v-28m-5 8l5-8 5 8" stroke="#70695f" fill="none"/><text x="20" y="485" text-anchor="middle" font-size="10">N</text>';
+      let content = '<defs><pattern id="operating-missing" width="6" height="6" patternUnits="userSpaceOnUse"><rect width="6" height="6" fill="#eceae7"/><path d="M0 0L6 6" stroke="#898680"/></pattern></defs><rect width="760" height="500" fill="#f3f6f4"/><path d="M20 470v-28m-5 8l5-8 5 8" stroke="#70695f" fill="none"/><text x="20" y="485" text-anchor="middle" font-size="10">N</text>';
       let edgeCount = 0, drawnEdges = 0;
       if (detailed) for (const item of state.index.assets) for (const connection of item.connections || []) {
         const pa=positions.get(connection.from.busId), pb=positions.get(connection.to.busId); if (!pa || !pb) continue;
@@ -117,8 +174,9 @@
         edgeCount++; if (drawnEdges>=600) continue; drawnEdges++;
         const traced = state.terminalTrace?.assetPointers.has(item.ref.pointer);
         const selected = dependencies.sameRef(item.ref,state.selected), status=dependencies.resultStatus(item);
+        const operating=operatingLayer === "loading" ? operatingData().byItem.get(item)?.metric : null;
         const transformer=item.ref.kind === "transformer";
-        content += `<polyline points="${points.map(p=>p.join(",")).join(" ")}" fill="none" stroke="${traced ? "#7739a6" : selected ? "#b34712" : transformer ? "#a25316" : "#64877b"}" stroke-width="${traced ? 4 : selected ? 4 : transformer ? 3 : 1.5}" ${status === "open" || status === "out_of_service" ? 'stroke-dasharray="5 4"' : ""} data-kind="${h(item.ref.kind)}" data-id="${h(item.ref.id)}"><title>${h(dependencies.titleOf(item))} · ${h(status)} · ${route.length >= 2 ? "supplied route" : "straight endpoint connection"}</title></polyline>`;
+        content += `<polyline points="${points.map(p=>p.join(",")).join(" ")}" fill="none" stroke="${traced ? "#7739a6" : selected ? "#b34712" : operating ? operatingFill(operating.value) : transformer ? "#a25316" : "#64877b"}" stroke-width="${traced ? 4 : selected ? 4 : transformer ? 3 : 1.5}" ${status === "open" || status === "out_of_service" ? 'stroke-dasharray="5 4"' : ""} data-kind="${h(item.ref.kind)}" data-id="${h(item.ref.id)}"><title>${h(dependencies.titleOf(item))}${operating ? ` · ${h(metricText(operating))}` : ""} · ${h(status)} · ${route.length >= 2 ? "supplied route" : "straight endpoint connection"}</title></polyline>`;
       }
       // Group close/coincident points even in detail mode so none covers another.
       cells = [...bins.values()];
@@ -127,13 +185,15 @@
         if (detailed && entries.length <= 8 && new Set(entries.map(e=>`${e.x.toFixed(1)}:${e.y.toFixed(1)}`)).size === entries.length) {
           for (const {bus,x,y} of entries) {
             const selected=dependencies.sameRef(bus.ref,state.selected), traced=state.terminalTrace?.busIds.has(bus.ref.id);
-            content += `<g role="button" tabindex="0" data-kind="bus" data-id="${h(bus.ref.id)}" aria-label="Inspect bus ${h(bus.ref.id)}"><circle cx="${x}" cy="${y}" r="${selected ? 8 : 4}" fill="${selected ? "#dbeafd" : "#fffdf9"}" stroke="${traced ? "#7739a6" : selected ? "#b34712" : "#2f6fb3"}" stroke-width="2"/><title>${h(bus.ref.id)} · network ${memberships.get(bus.ref.id)+1}</title></g>`;
+            const op=groupOperating([bus.ref.id]);
+            content += `<g role="button" tabindex="0" data-kind="bus" data-id="${h(bus.ref.id)}" aria-label="Inspect bus ${h(bus.ref.id)}"><circle cx="${x}" cy="${y}" r="${selected ? 8 : 4}" fill="${operatingLayer === "topology" ? selected ? "#dbeafd" : "#fffdf9" : operatingFill(op.value)}" stroke="${traced ? "#7739a6" : selected ? "#b34712" : "#2f6fb3"}" stroke-width="2"/><title>${h(bus.ref.id)} · network ${memberships.get(bus.ref.id)+1}${operatingLayer !== "topology" ? ` · maximum ${op.value ?? "unavailable"} · ${op.count}/${op.total} elements with values` : ""}</title>${operatingLayer !== "topology" && op.partial ? `<circle cx="${x+5}" cy="${y-5}" r="2" fill="#25231f"/>` : ""}</g>`;
           }
         } else {
           const x=Math.floor(entries[0].x/50)*50+25, y=Math.floor(entries[0].y/50)*50+25;
+          const op=groupOperating(entries.map(e=>e.bus.ref.id));
           const networks=new Set(entries.map(e=>memberships.get(e.bus.ref.id))).size;
           const traced = entries.some(e=>state.terminalTrace?.busIds.has(e.bus.ref.id));
-          content += `<g role="button" tabindex="0" data-region-cell="${i}" aria-label="${entries.length} buses in ${networks} networks. Expand group"><circle cx="${x}" cy="${y}" r="20" fill="#fffdf9" stroke="${traced ? "#7739a6" : networks>1 ? "#b26c2a" : "#2f6fb3"}" stroke-width="2" ${networks>1 ? 'stroke-dasharray="3 2"' : ""}/><text x="${x}" y="${y+4}" text-anchor="middle" font-size="11" fill="#25231f">${entries.length}</text><title>${entries.length} buses · ${networks} separate networks. Geographic grouping does not join networks.</title></g>`;
+          content += `<g role="button" tabindex="0" data-region-cell="${i}" aria-label="${entries.length} buses in ${networks} networks. Expand group"><circle cx="${x}" cy="${y}" r="20" fill="${operatingFill(op.value)}" stroke="${traced ? "#7739a6" : networks>1 ? "#b26c2a" : "#2f6fb3"}" stroke-width="2" ${networks>1 ? 'stroke-dasharray="3 2"' : ""}/><text x="${x}" y="${y+4}" text-anchor="middle" font-size="11" fill="#25231f">${entries.length}</text><title>${entries.length} buses · ${networks} separate networks. Geographic grouping does not join networks.${operatingLayer !== "topology" ? ` Maximum ${op.value ?? "unavailable"}; ${op.count}/${op.total} elements with values.` : ""}</title>${operatingLayer !== "topology" ? `<text x="${x}" y="${y-25}" text-anchor="middle" font-size="10" stroke="#f3f6f4" stroke-width="3" paint-order="stroke">${op.value === null ? "Unavailable" : op.value.toPrecision(3)}</text><text x="${x}" y="${y+15}" text-anchor="middle" font-size="8">${op.count}/${op.total}</text>${op.partial ? `<circle cx="${x+15}" cy="${y-15}" r="3" fill="#25231f"/>` : ""}` : ""}</g>`;
         }
       }
       const landmarkBins=new Map(); visibleLandmarks=[];
@@ -172,6 +232,7 @@
         const activate = () => {
           const entries=cells[Number(node.dataset.regionCell)], ids=entries.map(e=>e.bus.ref.id);
           showMembers(ids);
+          if(operatingLayer !== "topology"){operatingFilter=new Set(groupOperating(ids).rows);operatingPage=0;operatingOpen=true;renderOperatingEvidence();}
           if (camera.scale < 512) {
             const x=entries.reduce((v,e)=>v+e.x,0)/entries.length, y=entries.reduce((v,e)=>v+e.y,0)/entries.length;
             const factor=Math.min(2,512/camera.scale); camera.x=380-(x-camera.x)*factor; camera.y=250-(y-camera.y)*factor; camera.scale*=factor; refresh();
@@ -195,14 +256,15 @@
       const coordinates=state.index.raw.meta?.coordinates;
       const placement=coordinates?.coordinate_space || state.index.raw.meta?.coordinate_provenance;
       const provenance = placement ? `<p class="region-provenance"><strong>Coordinate provenance:</strong> ${h(typeof placement === "string" ? placement : JSON.stringify(placement))}${coordinates?.geographic_anchor?.label ? ` · anchor: ${h(coordinates.geographic_anchor.label)}` : ""}</p>` : "";
-      setCanvas(`<section class="regional-map"><header><h2>Regional connectivity</h2><p><strong>${state.index.componentCount.toLocaleString()} connected network${state.index.componentCount === 1 ? "" : "s"}</strong> · ${transformerCount.toLocaleString()} transformer models supplied · ${(state.index.counts.voltage_source || 0).toLocaleString()} voltage source${state.index.counts.voltage_source === 1 ? "" : "s"}</p><p>${transformerCount ? "Transformer links follow the supplied model." : "No transformer models supplied; MV/LV bridges are not inferred."} ${multiWindingCount ? `${multiWindingCount} multi-winding transformer models: inspect their winding connections in Electrical detail. ` : ""}Dashed amber groups contain multiple separate networks. Group outlines represent geographic aggregation, not electrical boundaries.</p><button id="region-reset">Show entire region</button> <button id="region-network" ${state.selected ? "" : "disabled"}>Fit selected network</button></header>${provenance}<div id="region-map">${svgShell("", { camera: { scale:1,x:0,y:0 } })}</div><div id="region-landmark-legend"></div><div id="region-landmark-list"></div><p id="region-evidence" role="status"></p><p class="muted">Uses supplied latitude/longitude in a local aspect-preserving projection. North is up. Straight links connect model endpoints; supplied route geometry is retained. No basemap or coordinate accuracy is implied. Select a bus or branch for its source evidence and conductor model.</p><div id="region-members"></div></section>`);
+      setCanvas(`<section class="regional-map"><header><h2>Regional connectivity</h2><p><strong>${state.index.componentCount.toLocaleString()} connected network${state.index.componentCount === 1 ? "" : "s"}</strong> · ${transformerCount.toLocaleString()} transformer models supplied · ${(state.index.counts.voltage_source || 0).toLocaleString()} voltage source${state.index.counts.voltage_source === 1 ? "" : "s"}</p><p>${transformerCount ? "Transformer links follow the supplied model." : "No transformer models supplied; MV/LV bridges are not inferred."} ${multiWindingCount ? `${multiWindingCount} multi-winding transformer models: inspect their winding connections in Electrical detail. ` : ""}Dashed amber groups contain multiple separate networks. Group outlines represent geographic aggregation, not electrical boundaries.</p><button id="region-reset">Show entire region</button> <button id="region-network" ${state.selected ? "" : "disabled"}>Fit selected network</button></header>${provenance}<label class="region-layer-control">Colour layer <select id="region-operating-layer">${Object.entries(layerNames).map(([key,label])=>`<option value="${key}" ${operatingLayer===key ? "selected" : ""}>${h(label)}</option>`).join("")}</select></label><div id="region-operating-legend"></div><div id="region-map">${svgShell("", { camera: { scale:1,x:0,y:0 } })}</div><div id="region-landmark-legend"></div><div id="region-landmark-list"></div><p id="region-evidence" role="status"></p><p class="muted">Uses supplied latitude/longitude in a local aspect-preserving projection. North is up. Straight links connect model endpoints; supplied route geometry is retained. No basemap or coordinate accuracy is implied. Select a bus or branch for its source evidence and conductor model.</p><div id="region-members"></div><div id="region-operating-evidence"></div></section>`);
+      document.getElementById("region-operating-layer").onchange=event=>{operatingLayer=event.target.value;refresh();renderOperatingEvidence();};
       document.getElementById("region-reset").onclick=()=>{state.cameras.geo={scale:1,x:0,y:0}; showMembers([]); refresh();};
       document.getElementById("region-network").onclick=()=>{
         const selected=state.index.byKind.get(state.selected?.kind)?.get(state.selected?.id);
         const busId=selected?.ref.kind === "bus" ? selected.ref.id : selected?.ports[0]?.busId;
         const network=state.index.components[memberships.get(busId)]; if(network) fit(network.busIds);
       };
-      refresh(); renderMembers(); renderLandmarkList();
+      refresh(); renderMembers(); renderLandmarkList(); renderOperatingEvidence();
     }
 
     return Object.freeze({ MODULE_VERSION, drawGeo, refresh, scheduleRefresh, isRegional: () => regional });
