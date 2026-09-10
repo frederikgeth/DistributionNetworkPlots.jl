@@ -45,10 +45,16 @@
 
     let regional = false, cachedIndex = null, memberships = new Map(), cells = [], memberRows = [], memberPage = 0;
     const h = escapeHtml;
+    let landmarks = [], landmarkGroups = [], visibleLandmarks = [], landmarkRows = [], landmarkPage = 0;
     function prepareRegion() {
       if (cachedIndex === state.index) return;
+      landmarks = []; landmarkRows = [];
       cachedIndex = state.index; memberships = new Map(); memberRows = [];
       state.index.components.forEach((network, i) => network.busIds.forEach(id => memberships.set(id, i)));
+      for (const item of state.index.assets) {
+        const type = item.ref.kind === "voltage_source" ? "source" : item.ref.kind === "transformer" ? "transformer" : item.ref.kind === "switch" && item.status === "open" ? "open switch" : item.ref.kind === "bus" && item.groundedTerminals.length ? "ground" : null;
+        if (type) landmarks.push({ item, type, ids: item.ref.kind === "bus" ? [item.ref.id] : item.ports.map(port=>port.busId) });
+      }
     }
     function fit(ids) {
       const positions = dependencies.busCoordinates().positions;
@@ -74,6 +80,18 @@
       target.querySelector("[data-member-next]").onclick = () => { memberPage++; renderMembers(); };
       target.querySelector("[data-member-close]").onclick = () => showMembers([]);
     }
+    function renderLandmarkList() {
+      const target = document.getElementById("region-landmark-list"); if (!target) return;
+      if (!landmarkRows.length) { target.innerHTML = ""; return; }
+      const pages=Math.ceil(landmarkRows.length/50);
+      target.innerHTML=`<h3>Equipment & grounding · ${landmarkRows.length} entries</h3>${landmarkRows.slice(landmarkPage*50,(landmarkPage+1)*50).map((entry,i)=>`<button data-landmark-entry="${landmarkPage*50+i}">${h(entry.type)} · ${h(entry.item.ref.id)}${entry.type === "ground" ? ` · terminals ${h(entry.item.groundedTerminals.join(", "))}` : ""}</button>`).join(" ")}<p><button data-landmark-prev ${landmarkPage ? "" : "disabled"}>Previous equipment</button> Page ${landmarkPage+1} / ${pages} <button data-landmark-next ${landmarkPage+1<pages ? "" : "disabled"}>Next equipment</button> <button data-landmark-close>Close equipment list</button></p>`;
+      target.querySelectorAll("[data-landmark-entry]").forEach(button=>button.onclick=()=>dependencies.select(landmarkRows[Number(button.dataset.landmarkEntry)].item.ref));
+      target.querySelector("[data-landmark-prev]").onclick=()=>{landmarkPage--;renderLandmarkList();};
+      target.querySelector("[data-landmark-next]").onclick=()=>{landmarkPage++;renderLandmarkList();};
+      target.querySelector("[data-landmark-close]").onclick=()=>{landmarkRows=[];renderLandmarkList();};
+    }
+    const glyph = type => type === "source" ? '<path d="M0 -8L8 0 0 8 -8 0Z" fill="#fffdf9"/><path d="M-4 0Q-2 -5 0 0T4 0" fill="none"/>' : type === "transformer" ? '<circle cx="-4" cy="0" r="6" fill="#fffdf9"/><circle cx="4" cy="0" r="6" fill="#fffdf9"/>' : type === "open switch" ? '<path d="M-10 3H-5M5 3H10M-5 3L4 -5" fill="none"/><circle cx="-5" cy="3" r="1.5"/><circle cx="5" cy="3" r="1.5"/>' : '<path d="M0 -8V1M-8 1H8M-5 5H5M-2 9H2" fill="none"/>';
+
     function refresh() {
       if (!regional || !document.getElementById("region-map")) return;
       prepareRegion();
@@ -116,10 +134,38 @@
           content += `<g role="button" tabindex="0" data-region-cell="${i}" aria-label="${entries.length} buses in ${networks} networks. Expand group"><circle cx="${x}" cy="${y}" r="20" fill="#fffdf9" stroke="${networks>1 ? "#b26c2a" : "#2f6fb3"}" stroke-width="2" ${networks>1 ? 'stroke-dasharray="3 2"' : ""}/><text x="${x}" y="${y+4}" text-anchor="middle" font-size="11" fill="#25231f">${entries.length}</text><title>${entries.length} buses · ${networks} separate networks. Geographic grouping does not join networks.</title></g>`;
         }
       }
+      const landmarkBins=new Map(); visibleLandmarks=[];
+      let unplacedLandmarks=0;
+      for (const entry of landmarks) {
+        const points=entry.ids.map(id=>positions.get(id)).filter(Boolean);
+        if (!points.length || points.length !== entry.ids.length) { unplacedLandmarks++; continue; }
+        const anchor=screen([points.reduce((v,p)=>v+p[0],0)/points.length, points.reduce((v,p)=>v+p[1],0)/points.length]);
+        const [x,y]=anchor; if(x<15 || x>745 || y<15 || y>485) continue;
+        const placed={...entry,x,y}; visibleLandmarks.push(placed);
+        const key=`${Math.floor(x/50)}:${Math.floor(y/50)}`;
+        if(!landmarkBins.has(key))landmarkBins.set(key,[]);landmarkBins.get(key).push(placed);
+      }
+      landmarkGroups=[...landmarkBins.values()];
+      landmarkGroups.forEach((group,i)=>{
+        if (detailed && group.length === 1) {
+          const {item,type,x,y}=group[0];
+          content+=`<g data-landmark-symbol="${h(type)}" data-kind="${h(item.ref.kind)}" data-id="${h(item.ref.id)}"><path d="M${x} ${y}l12 -12" stroke="#a6a098" stroke-dasharray="1 2"/><g transform="translate(${x+12} ${y-12})" stroke="${dependencies.sameRef(item.ref,state.selected) ? "#b34712" : "#403830"}" stroke-width="2">${glyph(type)}</g><title>${h(type)} · ${h(item.ref.id)} · ${h(item.status)}${type === "ground" ? ` · ideal ground terminals ${h(item.groundedTerminals.join(", "))}` : ""}</title></g>`;
+        } else {
+          const x=Math.floor(group[0].x/50)*50+25, y=Math.floor(group[0].y/50)*50+43;
+          content+=`<g role="button" tabindex="0" data-landmark-cell="${i}" aria-label="Inspect ${group.length} equipment and grounding entries"><rect x="${x-18}" y="${y-7}" width="36" height="14" rx="3" fill="#403830"/><text x="${x}" y="${y+3}" text-anchor="middle" fill="white" font-size="9">◆ ${group.length}</text><title>${[...new Set(group.map(e=>e.type))].map(type=>`${group.filter(e=>e.type===type).length} ${type}`).join(" · ")}</title></g>`;
+        }
+      });
+      const legend=document.getElementById("region-landmark-legend");
+      legend.innerHTML=`<strong>Landmarks in view:</strong> ${["source","transformer","open switch","ground"].map(type=>`<button data-landmark-type="${type}"><svg viewBox="-12 -12 24 24" width="20" height="20" aria-hidden="true"><g stroke="currentColor" stroke-width="2">${glyph(type)}</g></svg>${type}: ${visibleLandmarks.filter(e=>e.type===type).length}</button>`).join(" ")}<p>${unplacedLandmarks} unplaced · ${landmarks.length-visibleLandmarks.length-unplacedLandmarks} outside viewport. Ground counts are buses with declared ideal-ground terminals. Equipment symbols are offset for legibility; dotted leaders are not wires. Transformer locations use the mean of their endpoint coordinates.</p>`;
+      legend.querySelectorAll("[data-landmark-type]").forEach(button=>button.onclick=()=>{landmarkRows=visibleLandmarks.filter(e=>e.type===button.dataset.landmarkType);landmarkPage=0;renderLandmarkList();});
       document.querySelector("#region-map #viewport").innerHTML = content;
       const grouped = cells.filter(entries => !(detailed && entries.length <= 8 && new Set(entries.map(e=>`${e.x.toFixed(1)}:${e.y.toFixed(1)}`)).size === entries.length)).reduce((n,e)=>n+e.length,0);
       document.getElementById("region-evidence").textContent = `${visible.length.toLocaleString()} buses in viewport · ${grouped.toLocaleString()} grouped · ${(state.index.buses.length-unmapped.length-visible.length).toLocaleString()} outside viewport · ${unmapped.length.toLocaleString()} without coordinates. ${detailed ? `${drawnEdges}/${edgeCount} intersecting connections drawn.` : "Connections appear at closer zoom."} Zoom ${camera.scale.toFixed(1)}×.`;
       dependencies.bindSvgSelection();
+      document.querySelectorAll("[data-landmark-cell]").forEach(node=>{
+        const activate=()=>{landmarkRows=landmarkGroups[Number(node.dataset.landmarkCell)];landmarkPage=0;renderLandmarkList();};
+        node.onclick=activate;node.onkeydown=event=>{if(event.key === "Enter" || event.key === " "){event.preventDefault();activate();}};
+      });
       document.querySelectorAll("[data-region-cell]").forEach(node => {
         const activate = () => {
           const entries=cells[Number(node.dataset.regionCell)], ids=entries.map(e=>e.bus.ref.id);
@@ -147,14 +193,14 @@
       const coordinates=state.index.raw.meta?.coordinates;
       const placement=coordinates?.coordinate_space || state.index.raw.meta?.coordinate_provenance;
       const provenance = placement ? `<p class="region-provenance"><strong>Coordinate provenance:</strong> ${h(typeof placement === "string" ? placement : JSON.stringify(placement))}${coordinates?.geographic_anchor?.label ? ` · anchor: ${h(coordinates.geographic_anchor.label)}` : ""}</p>` : "";
-      setCanvas(`<section class="regional-map"><header><h2>Regional connectivity</h2><p><strong>${state.index.componentCount.toLocaleString()} connected network${state.index.componentCount === 1 ? "" : "s"}</strong> · ${transformerCount.toLocaleString()} transformer models supplied · ${(state.index.counts.voltage_source || 0).toLocaleString()} voltage source${state.index.counts.voltage_source === 1 ? "" : "s"}</p><p>${transformerCount ? "Transformer links follow the supplied model." : "No transformer models supplied; MV/LV bridges are not inferred."} ${multiWindingCount ? `${multiWindingCount} multi-winding transformer models: inspect their winding connections in Electrical detail. ` : ""}Dashed amber groups contain multiple separate networks. Group outlines represent geographic aggregation, not electrical boundaries.</p><button id="region-reset">Show entire region</button> <button id="region-network" ${state.selected ? "" : "disabled"}>Fit selected network</button></header>${provenance}<div id="region-map">${svgShell("", { camera: { scale:1,x:0,y:0 } })}</div><p id="region-evidence" role="status"></p><p class="muted">Uses supplied latitude/longitude in a local aspect-preserving projection. North is up. Straight links connect model endpoints; supplied route geometry is retained. No basemap or coordinate accuracy is implied. Select a bus or branch for its source evidence and conductor model.</p><div id="region-members"></div></section>`);
+      setCanvas(`<section class="regional-map"><header><h2>Regional connectivity</h2><p><strong>${state.index.componentCount.toLocaleString()} connected network${state.index.componentCount === 1 ? "" : "s"}</strong> · ${transformerCount.toLocaleString()} transformer models supplied · ${(state.index.counts.voltage_source || 0).toLocaleString()} voltage source${state.index.counts.voltage_source === 1 ? "" : "s"}</p><p>${transformerCount ? "Transformer links follow the supplied model." : "No transformer models supplied; MV/LV bridges are not inferred."} ${multiWindingCount ? `${multiWindingCount} multi-winding transformer models: inspect their winding connections in Electrical detail. ` : ""}Dashed amber groups contain multiple separate networks. Group outlines represent geographic aggregation, not electrical boundaries.</p><button id="region-reset">Show entire region</button> <button id="region-network" ${state.selected ? "" : "disabled"}>Fit selected network</button></header>${provenance}<div id="region-map">${svgShell("", { camera: { scale:1,x:0,y:0 } })}</div><div id="region-landmark-legend"></div><div id="region-landmark-list"></div><p id="region-evidence" role="status"></p><p class="muted">Uses supplied latitude/longitude in a local aspect-preserving projection. North is up. Straight links connect model endpoints; supplied route geometry is retained. No basemap or coordinate accuracy is implied. Select a bus or branch for its source evidence and conductor model.</p><div id="region-members"></div></section>`);
       document.getElementById("region-reset").onclick=()=>{state.cameras.geo={scale:1,x:0,y:0}; showMembers([]); refresh();};
       document.getElementById("region-network").onclick=()=>{
         const selected=state.index.byKind.get(state.selected?.kind)?.get(state.selected?.id);
         const busId=selected?.ref.kind === "bus" ? selected.ref.id : selected?.ports[0]?.busId;
         const network=state.index.components[memberships.get(busId)]; if(network) fit(network.busIds);
       };
-      refresh(); renderMembers();
+      refresh(); renderMembers(); renderLandmarkList();
     }
 
     return Object.freeze({ MODULE_VERSION, drawGeo, refresh, scheduleRefresh, isRegional: () => regional });

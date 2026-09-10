@@ -7,6 +7,7 @@ try {
  const page=await browser.newPage(), errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto(pathToFileURL(resolve('frontend/index.html')).href);await page.locator('#case-summary h2').waitFor();
  const raw={name:'coincident-networks',meta:{coordinates:{coordinate_space:'Derived local XY',geographic_anchor:{label:'Example anchor'}}},bus:Object.fromEntries(Array.from({length:600},(_,i)=>['b'+i,{terminal_names:['1'],longitude:i<550?-2.6:-2.61,latitude:i<550?53.48:53.49}]))};
+ raw.voltage_source=Object.fromEntries(Object.keys(raw.bus).map(id=>["source_"+id,{bus:id,terminal_map:["1"]}]));
  raw.bus.missing={terminal_names:['1'],latitude:null,longitude:null};
  await page.locator('#file-input').setInputFiles({name:'region.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(raw))});await page.locator('#import-progress').waitFor({state:'detached'});
  await page.locator('[data-view="geo"]').click();
@@ -16,6 +17,11 @@ try {
  assert.equal(await page.locator('#large-case-dialog').count(),0);
  assert.equal(await page.locator('[data-region-cell]').count(),2);
  assert.equal(await page.locator('[data-region-cell] circle[stroke-dasharray]').count(),2);
+ await page.locator('[data-landmark-cell]').first().press('Enter');
+ assert.equal(await page.locator('[data-landmark-entry]').count(),50);
+ await page.locator('[data-landmark-next]').click();
+ assert.match(await page.locator('#region-landmark-list').innerText(),/Page 2/);
+ await page.locator('[data-landmark-close]').click();
  await page.locator('[data-region-cell]').first().press('Enter');
  assert.equal(await page.locator('[data-region-bus]').count(),50);
  await page.locator('[data-member-next]').click();
@@ -26,5 +32,26 @@ try {
  await page.locator('#region-reset').click();
  assert.match(await page.locator('#region-evidence').innerText(),/600 buses in viewport/);
  assert.ok(await page.locator('#region-map *').count()<100);
+ const equipment={name:'equipment-review',bus:{a:{terminal_names:['1'],longitude:-2.60,latitude:53.48},b:{terminal_names:['1'],perfectly_grounded_terminals:['1'],longitude:-2.61,latitude:53.49},c:{terminal_names:['1'],longitude:-2.62,latitude:53.48}},voltage_source:{grid:{bus:'a',terminal_map:['1'],v_magnitude:[230],v_angle:[0],extra_model_field:7}},transformer:{t:{bus_from:'a',bus_to:'b',terminal_map_from:['1'],terminal_map_to:['1']}},switch:{sw:{bus_from:'b',bus_to:'c',terminal_map_from:['1'],terminal_map_to:['1'],open_switch:true}}};
+ await page.locator('#file-input').setInputFiles({name:'equipment.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(equipment))});await page.locator('#import-progress').waitFor({state:'detached'});
+ await page.locator('#region-reset').click();
+ for(const type of ['source','transformer','open switch','ground'])assert.match(await page.locator(`[data-landmark-type="${type}"]`).innerText(),/: 1/);
+ assert.ok(await page.locator('[data-landmark-symbol]').count()>0);
+ assert.equal(await page.locator('#region-landmark-legend svg').first().evaluate(el=>el.getBoundingClientRect().height),20);
+ await page.locator('[data-landmark-type="source"]').click();await page.locator('[data-landmark-entry]').first().click();
+ await page.locator('#multi-detail-panel .map-detail').waitFor();
+ assert.match(await page.locator('.map-detail').innerText(),/230 V/);
+ assert.match(await page.locator('.map-detail').innerText(),/extra_model_field/);
+ assert.match(await page.locator('.map-detail').innerText(),/No results attached/);
+ assert.equal(await page.locator('#region-map').isVisible(),true);
+ await page.locator('#result-input').setInputFiles({name:'operating.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify({voltage_source:{grid:{p:0}},objective:0}))});await page.locator('#import-progress').waitFor({state:'detached'});
+ assert.match(await page.locator('.map-detail').innerText(),/operating.json/);
+ assert.match(await page.locator('.map-detail').innerText(),/0 W/);
+ await page.setViewportSize({width:1440,height:1000});await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/tmp/map-landmarks-detail.png'});
+ await page.locator('#multi-detail-close').click();assert.equal(await page.locator('#multi-detail-panel').isVisible(),false);
+ await page.getByRole('button',{name:'Show component detail'}).click();await page.locator('.map-detail').waitFor();
+ await page.locator('#multi-detail-open').click();await page.locator('#canvas .model-sheet').waitFor();
+ await page.goBack();await page.locator('.map-detail').waitFor();
+ await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
  assert.deepEqual(errors,[]);
 } finally { await browser.close(); }

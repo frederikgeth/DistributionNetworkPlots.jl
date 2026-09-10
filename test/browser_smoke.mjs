@@ -140,7 +140,7 @@ try {
     await multiDetailHandle.focus();
     await multiDetailHandle.press("ArrowLeft");
     assert.ok(Number(await multiDetailHandle.getAttribute("aria-valuenow")) > detailWidthBefore);
-    await page.getByRole("button", { name: "Collapse Electrical detail detail" }).click();
+    await page.getByRole("button", { name: "Collapse Electrical detail" }).click();
     assert.equal(await multiDetailPane.isVisible(), false);
     await page.getByRole("button", { name: "Show component detail" }).click();
     assert.equal(await multiDetailPane.isVisible(), true);

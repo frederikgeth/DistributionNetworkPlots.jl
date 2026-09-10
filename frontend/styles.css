@@ -314,3 +314,16 @@ pre.raw { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 9px; bor
 #region-members button { overflow-wrap: anywhere; max-width: 100%; margin: 4px; }
 #region-map svg { height: min(60vh, 500px); }
 .region-provenance { background: var(--accent-soft); font-size: 12px; }
+.map-detail { padding: 12px; font-size: 12px; overflow-wrap: anywhere; }
+.map-detail section { border-bottom: 1px solid var(--line); padding: 8px 0; }
+.map-detail h3 { margin: 6px 0; font-size: 13px; }
+.map-detail-table { width: 100%; border-collapse: collapse; }
+.map-detail-table th, .map-detail-table td { padding: 5px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); }
+.map-detail-table th { width: 38%; font-weight: 500; }
+.map-detail-table small { display: block; color: var(--muted); }
+#region-landmark-legend, #region-landmark-list { padding: 12px 20px; border-top: 1px solid var(--line); font-size: 12px; }
+#region-landmark-legend button { display: inline-flex; align-items: center; gap: 4px; margin: 3px; }
+#region-landmark-list button { max-width: 100%; overflow-wrap: anywhere; margin: 3px; }
+#region-map [data-landmark-cell] { cursor: pointer; }
+#region-landmark-legend svg { display: inline-block; width: 20px; height: 20px; min-width: 20px; min-height: 0; flex: 0 0 20px; }
+@media (max-width: 640px) { .topbar { flex-wrap: wrap; } .topbar .file-actions { justify-content: flex-start; width: 100%; min-width: 0; } }

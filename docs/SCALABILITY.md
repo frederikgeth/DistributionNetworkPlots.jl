@@ -166,3 +166,35 @@ at the same location, missing coordinates, provenance, keyboard group expansion,
 member pagination, selection, fitting and reset. The map continues to use SVG;
 no WebGL/WebGPU dependency was added. GPU rendering of all regional branches and
 operating-value overlays remain separate future work.
+
+## Equipment landmarks and map detail panel
+
+The regional map now includes distinct glyphs for voltage sources, transformers,
+open switches and buses with explicitly grounded terminals. At wide zoom, or when
+several landmarks share a screen cell, an equipment-count badge opens a list with
+50 entries per page. Per-type viewport counts are clickable, and off-screen and
+unplaced counts remain visible. Individual symbols appear at closer zoom for cells
+with one landmark. Grounding entries count buses, with terminal IDs in the entry;
+they do not imply that every terminal is grounded. Voltage sources are the source
+landmarks; generators/IBRs are not reclassified as voltage-source models.
+
+Symbols are offset from their geographic anchor for legibility. Dotted leaders are
+placement guides, not electrical connections. Transformer anchors use the mean of
+all supplied endpoint positions, and transformers with missing endpoint positions
+are reported as unplaced. This is a schematic device location, not a surveyed
+transformer position. Equipment-count lists retain every member despite overlap.
+
+Selecting an element in Geospatial opens a compact resizable panel alongside the
+map (below it on narrow screens). It displays ports, terminal order, grounding,
+ratings/nominal values including inherited linecode ratings, source paths, operating
+values with their units/references and case/result pairing, and interpreter warnings.
+Uninterpreted-field counts remain visible. The compact panel shows up to 12 result
+fields and 8 uninterpreted fields, explicitly counting the remainder and linking to
+the full electrical sheet. Zero remains distinct from missing data. Full-view/back,
+collapse/reopen and bus navigation are supported.
+
+Validation covers all four landmark types, selection from equipment lists, zero
+operating values, unknown fields, panel/full-sheet/back navigation, collapsing,
+legend sizing and a 390-pixel mobile viewport. Springfield and all 25 ENWL cases
+were rechecked with landmarks enabled, without browser errors; Springfield's initial
+map used 269 SVG descendants. No private case files were added to the repository.

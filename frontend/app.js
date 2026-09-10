@@ -352,7 +352,7 @@
 
   function navigateTo(entry) {
     const current = state.navigation.entries[state.navigation.cursor];
-    if (entry.view === "single" && (!current || current.view !== "single" || JSON.stringify(current.selected) !== JSON.stringify(entry.selected))) state.multiDetailCollapsed = false;
+    if (["single", "geo"].includes(entry.view) && (!current || current.view !== "single" || JSON.stringify(current.selected) !== JSON.stringify(entry.selected))) state.multiDetailCollapsed = false;
     if (current && current.view === entry.view && JSON.stringify(current.selected) === JSON.stringify(entry.selected)) {
       applyNavigationEntry(entry);
       return;
@@ -1285,7 +1285,7 @@
       ? `<span class="layout-label">Layout:</span><label class="layout-select">Direction<select id="sld-direction" aria-label="Single-line direction"><option value="source-to-load" ${state.layout.direction === "source-to-load" ? "selected" : ""}>Source → load</option><option value="load-to-source" ${state.layout.direction === "load-to-source" ? "selected" : ""}>Load → source</option></select></label><label class="layout-select">Root${state.index.buses.length > 500 ? `<input id="sld-root" aria-label="Single-line root bus" placeholder="Bus ID or auto" value="${escapeHtml(state.layout.root || "auto")}" title="Enter any bus ID, or auto for automatic roots">` : `<select id="sld-root" aria-label="Single-line root bus"><option value="auto" ${state.layout.root === "auto" ? "selected" : ""}>Automatic</option>${state.index.buses.map((bus) => `<option value="${escapeHtml(bus.ref.id)}" ${state.layout.root === bus.ref.id ? "selected" : ""}>${escapeHtml(bus.ref.id)}</option>`).join("")}</select>`}</label><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
     const overviewButton = state.view === "single" ? `<button data-navigation="overview" aria-label="Show full overview" ${state.selected ? "" : "disabled"}>Overview</button>` : "";
     const detailTarget = itemFor(state.selected);
-    const detailButton = state.view === "single" && state.multiDetailCollapsed && multiDetailAvailable(detailTarget) ? `<button data-navigation="multi-detail">Show component detail</button>` : "";
+    const detailButton = ["single", "geo"].includes(state.view) && state.multiDetailCollapsed && multiDetailAvailable(detailTarget) ? `<button data-navigation="multi-detail">Show component detail</button>` : "";
     controls.innerHTML = `<span>View:</span><button data-navigation="back" aria-label="Go back" ${navigationDisabled("back") ? "disabled" : ""}>Back</button><button data-navigation="forward" aria-label="Go forward" ${navigationDisabled("forward") ? "disabled" : ""}>Forward</button>${overviewButton}${detailButton}<button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export-svg">Export SVG</button><button data-camera="export-png">Export PNG</button>${layoutControls}`;
     if (state.view === "multi") controls.querySelectorAll("[data-camera]").forEach((button) => button.remove());
     if (state.view === "single") {
@@ -1384,7 +1384,7 @@
     }, { passive: false });
     let drag = null;
     svg.addEventListener("pointerdown", (event) => {
-      if (event.target.closest("[data-kind], [data-region-cell]")) return;
+      if (event.target.closest("[data-kind], [data-region-cell], [data-landmark-cell]")) return;
       drag = { x: event.clientX, y: event.clientY, camera: { ...state.cameras[state.view] } };
       svg.setPointerCapture(event.pointerId);
     });
@@ -1518,6 +1518,24 @@
 
   function multiDetailAvailable(item) { return Boolean(item); }
 
+  function renderMapDetail(target, item) {
+    const E = globalThis.BMOPFElectrical, model = E.interpret(item, state.index), h = escapeHtml;
+    const value = v => h(v === undefined ? "not supplied" : typeof v === "object" ? JSON.stringify(v) : String(v));
+    const table = rows => `<table class="map-detail-table"><tbody>${rows.map(([label,v,unit,path])=>`<tr><th>${h(label)}</th><td>${value(v)} ${h(unit || "")} ${path ? `<small>${h(path)}</small>` : ""}</td></tr>`).join("")}</tbody></table>`;
+    const rows = fields => fields.map(f=>[(f.label || f.keys.join(" / ")) + (f.reference ? ` · ${f.reference}` : ""), f.value, f.unit, f.path]);
+    const section = (title, content) => `<section><h3>${title}</h3>${content}</section>`;
+    const ports = item.ref.kind === "bus" ? [{ role: "bus", busId: item.ref.id, terminals: item.terminals }] : item.ports;
+    const connections = ports.map(port=>`<div><strong>${h(port.role)}</strong> <button class="sheet-link" data-map-bus="${h(port.busId)}">${h(port.busId)}</button><p>Terminals: ${h(port.terminals.join(" · ") || "not supplied")}</p><p>Ideal ground: ${h(state.index.busById.get(port.busId)?.groundedTerminals.join(" · ") || "not declared")}</p></div>`).join("");
+    const ratingFields = model.fields.filter(f=>/^(v_nom|v_magnitude|p_nom|q_nom|[is]_(max|rating)|tap|length)/.test(f.keys[0]));
+    const inherited = model.line?.ratings.filter(r=>r.value !== undefined && !ratingFields.some(f=>f.path === r.path)).map(r=>[r.key,r.value,r.unit,r.path]) || [];
+    const result = E.resultFields(item, resultRecordFor(item));
+    const unknown = model.fields.filter(f=>f.category === "unrepresented");
+    const scenario = state.resultScenario || (state.result && globalThis.BMOPFModel.resultScenarios(state.result).length > 1 ? "Choose a scenario" : "single network");
+    const pairing = state.result ? resultPairingStatus() : null;
+    target.innerHTML = `<article class="map-detail"><p>Service: <strong>${h(item.status)}</strong> · Frequency: ${value(model.frequency)} ${model.frequency === undefined ? "" : "Hz"}</p>${section("Connections & grounding", connections || "<p>No connection ports supplied.</p>")}${section("Ratings & nominal values", ratingFields.length || inherited.length ? table([...rows(ratingFields),...inherited]) : "<p>Not supplied for this element.</p>")}${section("Operating values", `<p>${state.result ? `${h(state.resultLabel)} · ${h(scenario)}` : "No results attached."}</p>${pairing ? `<p class="muted">Pairing: ${h(pairing.label)} · ${h(pairing.message)}</p>` : ""}${result.length ? table(rows(result.slice(0,12))) : state.result ? "<p>No values for this element in the selected scenario.</p>" : ""}${result.length > 12 ? `<p>${result.length-12} more result fields in the full electrical sheet.</p>` : ""}`)}${section("Unresolved model information", model.problems.length ? `<ul>${model.problems.map(p=>`<li>${h(p)}</li>`).join("")}</ul>` : "<p>No issues found by the available model checks.</p>")}${unknown.length ? `<p><strong>${unknown.length} uninterpreted source fields</strong></p>${table(rows(unknown.slice(0,8)))}${unknown.length>8 ? `<p>${unknown.length-8} more in the full electrical sheet.</p>` : ""}` : ""}<p class="muted">${model.fields.length} source fields retained. Open the full view for matrices, all results and source evidence.</p></article>`;
+    target.querySelectorAll("[data-map-bus]").forEach(button=>button.onclick=()=>select({kind:"bus",id:button.dataset.mapBus}));
+  }
+
   function renderMultiDetail() {
     const stage = $("single-view-layout");
     const pane = $("multi-detail-panel");
@@ -1525,14 +1543,15 @@
     const target = $("multi-detail-canvas");
     if (!stage || !pane || !resizer || !target) return;
     const item = itemFor(state.selected);
-    const visible = state.view === "single" && !state.multiDetailCollapsed && multiDetailAvailable(item);
+    const visible = ["single", "geo"].includes(state.view) && !state.multiDetailCollapsed && multiDetailAvailable(item);
     stage.classList.toggle("has-detail", visible);
     pane.hidden = !visible;
     resizer.hidden = !visible;
     if (!visible) { target.innerHTML = ""; return; }
     $("multi-detail-selection").innerHTML = entityLabelHtml(item.ref.kind, item.ref.id);
     setMultiDetailWidth(state.multiDetailWidth);
-    drawMulti(target, { announce: false });
+    if (state.view === "geo") renderMapDetail(target, item);
+    else drawMulti(target, { announce: false });
   }
 
   function bindMultiDetailActions() {
