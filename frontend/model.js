@@ -91,7 +91,7 @@
       return {
         from,
         to,
-        pairs: from.terminals.map((terminal, i) => [terminal, to.terminals[i] ?? "?"]),
+        pairs: Array.from({ length: Math.max(from.terminals.length, to.terminals.length) }, (_, i) => [from.terminals[i] ?? "?", to.terminals[i] ?? "?"]),
         warning: mismatch ? `Terminal-map length mismatch (${from.terminals.length} → ${to.terminals.length}).` : null
       };
     });
@@ -99,8 +99,8 @@
 
   function statusOf(kind, record) {
     if (kind === "switch" && record.open_switch === true) return "open";
-    if (record.status === 0 || record.in_service === false) return "out_of_service";
-    if (record.status === 1 || record.in_service === true) return "in_service";
+    if (record.status === 0 || record.status === "out_of_service" || record.in_service === false) return "out_of_service";
+    if (record.status === 1 || record.status === "in_service" || record.in_service === true) return "in_service";
     return "unknown";
   }
 

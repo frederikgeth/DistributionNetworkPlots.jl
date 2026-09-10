@@ -11,7 +11,7 @@ python3 -m http.server 8765 --directory frontend
 Open <http://127.0.0.1:8765/> and choose a built-in example, or drop a BMOPF
 case such as `fixtures/micro/micro_bmopf.json` onto the page. The prototype supports the
 features listed below. The Single-wire view is the default starting overview; the tabs
-then proceed through Multi-wire, Geospatial, and Diagnostics.
+then proceed through Electrical detail, Geospatial, and Diagnostics.
 
 For a single-directory distribution build, run `npm run build` from the
 repository root. This writes `dist/` with a bundled `index.html`, stylesheet,
@@ -39,21 +39,21 @@ be matched for best-effort inspection.
 - Copy controls are available on inspector property/port/result rows, raw component/result/comparison records, diagnostics, and branch impedance/admittance matrices. Values copy in readable text with units; raw records copy formatted JSON.
 - Endpoint links from devices to buses.
 - Geospatial and schematic single-wire projections.
-- Focused multi-wire terminal stacks and conductor pairing for selected buses, lines, switches, and transformers, including phase permutations, explicit neutral/ground cues, one switch blade per conductor, one panel per multi-winding transformer port, and compact WYE/DELTA/single-phase connection glyphs plus model annotations for nodal devices (for example constant-power/current/impedance/ZIP loads). Bus terminals are shown as labelled dots on a vertical dotted bus spine, without a surrounding panel box. Phase conductors terminate at the WYE/DELTA connection points using the same A/B/C red/green/blue convention as the rest of the multi-wire view; neutral and ground remain patterned grey. Single-bus devices use a compact topology-first card; their exact terminal map remains in the card and inspector.
+- Electrical model sheets combine connected terminal graphs, coupled matrices, load laws, winding data, results, source evidence and visible unsupported fields. See [ADR 0005](../docs/adr/0005-electrical-model-sheets.md).
 - One- and two-hop neighbourhood expansion from a selected bus.
 - Back and Forward controls for stepping through selected assets and view changes; browser history and deep links remain supported.
 - The single-line **Overview** control clears the focused asset and returns to the whole-network diagram; on oversized cases it re-enters the full-render confirmation.
-- When Single-wire has a selected bus or asset with terminal data, a resizable Multi-wire component-detail pane appears alongside it. The pane can be collapsed, reopened, or promoted to the standalone Multi-wire view.
+- When Single-wire has a selected bus or asset with terminal data, a resizable Electrical detail component-detail pane appears alongside it. The pane can be collapsed, reopened, or promoted to the standalone Electrical detail view.
 - Single-wire uses a collapsible floating HTML legend so symbol and result conventions stay readable while the SVG pans and zooms; exported SVG/PNG and print output retain an embedded legend.
 - Pan, zoom, and fit/reset controls for the static SVG views.
 - On desktop, drag the divider beside the details panel to change its width. The divider also supports Arrow keys, Home (default width), and End (widest width), and the preference is retained locally.
 - Class overview and inventory columns have the same drag/keyboard resize affordance; widths are retained locally so result ranges and long asset names can stay readable.
 - Single-wire buses and device symbols can be dragged to refine the diagram; bus/device positions are stored in the active case layout profile and moved symbols retain a dashed leader to their electrical anchor.
 - Single-wire Display options start with only bus IDs shown. They can temporarily enable device IDs and connection arrows, hide bus IDs, or show labels only for the selected asset; these decluttering choices apply for the current page session and do not change the case or saved layout.
-- Selecting a line or DC branch in Multi-wire shows its Π-model data. Series entries are absolute `R+jX` values in Ω; linecode values in Ω/m are multiplied by the line length. Shunt `G/B` sections are shown in S only when nonzero, and pure-series branches explicitly omit them.
+- Line sheets show full coupled matrices, source and segment units, and both shunt sections. Missing shunts stay explicitly unknown; segment totals require a valid length for per-metre linecodes.
 - Shared `renderer-contract-v1` boundary for SVG shells and canonical selectable asset references.
 - Contract-backed `renderers/symbols.js` module for IEEE/IEC-inspired device symbols.
-- Contract-backed `projections/multi-wire.js` and `layout/deterministic.js` modules keep terminal semantics and deterministic positioning independent from UI orchestration.
+- `electrical-model.js` interprets model data independently from `renderers/model-sheets.js`; the atlas reuses the same sheets as the Single-wire detail pane.
 - Contract-backed `renderers/geospatial.js` and `renderers/single-wire.js` modules keep overview SVG composition independent from UI orchestration.
 - Versioned layout profiles with deterministic fallback and bounded local retention (eight profiles per case).
 - Distinct single-wire symbols for supported device classes and state styling.
@@ -62,7 +62,7 @@ be matched for best-effort inspection.
 - Geographic views omit buses without coordinates when a geographic frame is available and report the omission.
 - Diagram assets expose keyboard focus, Enter/Space selection, and accessible names.
 - The case summary and inspector expose support levels for rendered versus raw-only records. Class overview support counts are renderer coverage: full (overview + focused), focused (selected detail), partial (some semantics), or raw-only (inspector only).
-- Multi-wire conductor rows show phase, neutral, and ground cues with colour, patterns, and labels.
+- Electrical sheet conductors use solid connections with explicit terminal IDs and local grounding. Selection colour links facts without assigning phase identity.
 - Terminal-map length mismatches are reported instead of silently padded in focused views.
 - Clear load errors for invalid JSON, oversized files, and oversized JSON documents.
 - Cases above the overview budget remain loadable. The viewer asks for confirmation before full geospatial or single-line rendering, with a page-session bypass checkbox and a focused-mode option.

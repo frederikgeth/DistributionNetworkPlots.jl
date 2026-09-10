@@ -67,7 +67,7 @@ The prototype supports:
 - Single-line rendering with source-to-load layering, compact bus dots or
   optional heavy busbars, orthogonal branch routing, labeled equipment, and
   IEEE/IEC-inspired symbols.
-- Bus- and device-focused multi-wire drill-down with terminal stacks, phase permutations, open-switch interruptions, and explicit transformer winding ports.
+- Electrical model sheets with conductor permutations, contact states, load-element laws, winding connections, and explicit missing-data diagnostics.
 - Local-only case loading with no runtime backend.
 - Browser-side guardrails for invalid JSON and oversized case files.
 - Optional BMOPFTools-style result JSON sidecars with objective/status summary and asset-level metrics.
@@ -81,7 +81,7 @@ The prototype supports:
 - Resizable desktop details panel with keyboard-accessible divider and a remembered width preference.
 - Resizable class-overview and inventory columns, with keyboard-accessible separators and remembered widths for long result ranges and asset names.
 - Draggable single-wire buses and device symbols with locally persisted layout overrides and dashed leaders for moved symbols.
-- Branch-focused multi-wire Π-model views with series R+jX values in Ω and conditional shunt G/B sections in S.
+- Coupled line matrices with source/segment units, exact provenance, and both shunt sections; missing and supplied-zero values remain distinct.
 - An explicit **Overview** control in the single-line view clears the focused selection; oversized cases re-show the full-render confirmation before expanding.
 - Built-in accessible help and conventions guide covering views, symbols, conductor cues, units, interactions, performance, and provenance.
 - Export of the active geospatial or single-line SVG for reports and issue attachments.
@@ -175,3 +175,25 @@ and pull requests.
 - [Frontend prototype notes](frontend/README.md)
 
 The architecture and roadmap describe the intended production boundaries, supported behaviours, and staged path from this prototype to a stable viewer.
+
+### Electrical model sheets and atlas
+
+Select a device in Single-wire to open its model sheet, or use **Electrical detail** for the full atlas. Connections, model parameters, operating values,
+unknowns, and unrepresented fields are visible together. Legacy `#/multi/...`
+links still resolve. Network zoom does not resize sheet text.
+
+- Select matrix terms or load elements to highlight the corresponding paths.
+- Pin buses or devices, then arrange pinned sheets in a route's reading order.
+- Capture a case baseline or load **Compare model JSON** to inspect parameter,
+  terminal-map, grounding and referenced-linecode differences. Result scenario
+  comparisons remain separate.
+- Export individual drawings as SVG or complete sheets/atlases as standalone,
+  printable HTML. Exports preserve tables, units, provenance and available results.
+- Terminal-keyed BMOPFTools results expose per-terminal quantities and voltage
+  phasors from rectangular voltages. Ambiguous arrays or incompatible references
+  are preserved without fabricated deltas.
+
+The model adapter follows the contracts documented in
+[the implementation ADR](docs/adr/0005-electrical-model-sheets.md). Unsupported
+internal circuitry, unresolved result references, and invalid configuration
+arity remain explicit; these sheets do not solve a power flow.

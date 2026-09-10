@@ -49,7 +49,7 @@ try {
     await page.goto(baseUrl, { waitUntil: "networkidle" });
     assert.equal(await page.locator('script[src="renderer-contract.js"]').count(), 1);
     assert.equal(await page.locator('script[src="renderers/symbols.js"]').count(), 1);
-    assert.equal(await page.locator('script[src="projections/multi-wire.js"]').count(), 1);
+    assert.equal(await page.locator('script[src="electrical-model.js"]').count(), 1);
     assert.equal(await page.locator('script[src="layout/deterministic.js"]').count(), 1);
     assert.equal(await page.locator('script[src="renderers/geospatial.js"]').count(), 1);
     assert.equal(await page.locator('script[src="renderers/single-wire.js"]').count(), 1);
@@ -90,21 +90,21 @@ try {
     assert.ok(await page.locator("#inspector .copy-button").count() > 0);
     assert.equal(await page.locator('#inspector [data-copy-target="pre.raw"]').count(), 1);
     assert.equal(await page.locator("#inspector .property-table tr").count(), await page.locator("#inspector .property-table tr .copy-button").count());
-    await page.getByRole("tab", { name: "Multi-wire" }).click();
+    await page.getByRole("tab", { name: "Electrical detail" }).click();
     await page.getByPlaceholder("Search assets, buses, or result fields").fill("load_three_phase");
     await page.locator('button[data-kind="load"][data-id="load_three_phase"]').click();
     assert.match(await page.locator("#canvas").innerText(), /DELTA connection/);
-    assert.match(await page.locator("#canvas").innerText(), /load model: ZIP/);
+    assert.match(await page.locator("#canvas").innerText(), /load model: zip/);
     assert.equal(await page.locator('#canvas rect[x="180"][y="85"]').count(), 0);
-    const deltaPhaseStrokes = await page.locator("#canvas line, #canvas path").evaluateAll((lines) => [...new Set(lines.map((line) => line.getAttribute("stroke")))]);
-    assert.ok(["#c2564b", "#4a8f5f", "#3f6fb9"].every((stroke) => deltaPhaseStrokes.includes(stroke)));
-    assert.ok(await page.locator('#canvas g[aria-label="DELTA connection for load"] circle').count() >= 3);
+    assert.equal(await page.locator('#canvas [data-sheet-element]').count(), 3);
+    await page.locator('#canvas [data-sheet-element="1"]').click();
+    assert.equal(await page.locator('#canvas [data-sheet-element-mark="1"]').getAttribute("class"), "sheet-highlight");
+    await page.locator('#canvas [data-sheet-u]').fill("0.9");
+    assert.match(await page.locator('#canvas [data-sheet-response]').innerText(), /8388/);
     await page.getByPlaceholder("Search assets, buses, or result fields").fill("utility_ibr_three_phase");
     await page.locator('button[data-kind="ibr"][data-id="utility_ibr_three_phase"]').click();
-    assert.match(await page.locator("#canvas").innerText(), /WYE connection/);
-    const wyePhaseStrokes = await page.locator("#canvas line, #canvas path").evaluateAll((lines) => [...new Set(lines.map((line) => line.getAttribute("stroke")))]);
-    assert.ok(["#c2564b", "#4a8f5f", "#3f6fb9"].every((stroke) => wyePhaseStrokes.includes(stroke)));
-    assert.ok(await page.locator('#canvas g[aria-label="WYE connection for ibr"] circle').count() >= 4);
+    assert.match(await page.locator("#canvas").innerText(), /Configuration[\s\S]*WYE/);
+    assert.equal(await page.locator('#canvas .sheet-diagram .sheet-terminal').count(), 4);
     await page.getByRole("tab", { name: "Single-wire" }).click();
     const attachedTransforms = await page.locator('#canvas g[data-kind="load"], #canvas g[data-kind="ibr"], #canvas g[data-kind="capacitor"]').evaluateAll((nodes) => nodes.map((node) => node.getAttribute("transform")));
     assert.equal(new Set(attachedTransforms).size, attachedTransforms.length);
@@ -126,56 +126,20 @@ try {
     await page.locator('button[data-kind="line"][data-id="line_main"]').click();
     const multiDetailPane = page.locator("#multi-detail-panel");
     assert.equal(await multiDetailPane.isVisible(), true);
-    assert.match(await page.locator("#multi-detail-canvas").innerText(), /terminal detail|Π branch model/);
-    const branchMatricesCopy = page.locator('#multi-detail-canvas [data-copy-text][aria-label="Copy branch matrices"]');
+    assert.match(await page.locator("#multi-detail-canvas").innerText(), /Series impedance Z/);
+    const branchMatricesCopy = page.locator('#multi-detail-canvas [data-sheet-copy]');
     assert.equal(await branchMatricesCopy.count(), 1);
-    const copyGeometryBefore = await branchMatricesCopy.evaluate((node) => {
-      const bounds = node.getBoundingClientRect();
-      const background = node.querySelector(":scope > .copy-button-svg-bg");
-      return {
-        width: bounds.width,
-        height: bounds.height,
-        backgroundWidth: Number(background?.getAttribute("width")),
-        backgroundHeight: Number(background?.getAttribute("height")),
-        iconRects: [...node.querySelectorAll(":scope > g > svg > rect")].map((rect) => [
-          Number(rect.getAttribute("width")), Number(rect.getAttribute("height"))
-        ])
-      };
-    });
-    const copyFeedback = await branchMatricesCopy.evaluate(async (node) => {
-      node.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
-      const deadline = Date.now() + 1000;
-      while (node.getAttribute("aria-label") === "Copy branch matrices" && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-      return { label: node.getAttribute("aria-label"), connected: node.isConnected };
-    });
-    assert.deepEqual(copyFeedback, { label: "Copied", connected: true });
-    const copyGeometryAfter = await branchMatricesCopy.evaluate((node) => {
-      const bounds = node.getBoundingClientRect();
-      const background = node.querySelector(":scope > .copy-button-svg-bg");
-      return {
-        width: bounds.width,
-        height: bounds.height,
-        backgroundWidth: Number(background?.getAttribute("width")),
-        backgroundHeight: Number(background?.getAttribute("height")),
-        iconRects: [...node.querySelectorAll(":scope > g > svg > rect")].map((rect) => [
-          Number(rect.getAttribute("width")), Number(rect.getAttribute("height"))
-        ])
-      };
-    });
-    assert.deepEqual(copyGeometryAfter, copyGeometryBefore);
-    const busGroups = page.locator('#multi-detail-canvas g[data-kind="bus"]');
-    assert.ok(await busGroups.count() >= 2);
-    assert.equal(await busGroups.locator("rect").count(), 0);
-    assert.ok(await busGroups.locator('line[stroke-dasharray="2 5"]').count() >= 2);
+    await branchMatricesCopy.click();
+    await page.waitForFunction(() => document.querySelector('#multi-detail-canvas [data-sheet-copy]').textContent === "Copied");
+    assert.ok(await page.locator('#multi-detail-canvas [data-sheet-select]').count() >= 2);
+    assert.equal(await page.locator('#multi-detail-canvas .sheet-junction').count(), 0);
     const multiDetailHandle = page.locator("#multi-detail-resizer");
     assert.equal(await multiDetailHandle.getAttribute("role"), "separator");
     const detailWidthBefore = Number(await multiDetailHandle.getAttribute("aria-valuenow"));
     await multiDetailHandle.focus();
     await multiDetailHandle.press("ArrowLeft");
     assert.ok(Number(await multiDetailHandle.getAttribute("aria-valuenow")) > detailWidthBefore);
-    await page.getByRole("button", { name: "Collapse Multi-wire detail" }).click();
+    await page.getByRole("button", { name: "Collapse Electrical detail detail" }).click();
     assert.equal(await multiDetailPane.isVisible(), false);
     await page.getByRole("button", { name: "Show component detail" }).click();
     assert.equal(await multiDetailPane.isVisible(), true);
@@ -221,30 +185,30 @@ try {
     assert.match(await page.locator("#view-status").textContent(), /Force-directed layout applied/);
     const forceLayout = JSON.parse(await page.evaluate(() => localStorage.getItem("bmopf-layout-v3:example-complete-feeder")));
     assert.ok(Object.values(forceLayout.profiles).some((profile) => profile.engine === "force" && Object.keys(profile.locked || {}).length >= 4));
-    await page.getByRole("tab", { name: "Multi-wire" }).click();
-    assert.match(await page.locator("#canvas").innerText(), /Π branch model/);
-    assert.match(await page.locator("#canvas").innerText(), /Series Zs \[Ω\]/);
+    await page.getByRole("tab", { name: "Electrical detail" }).click();
+    assert.match(await page.locator("#canvas").innerText(), /Series impedance Z/);
+    assert.match(await page.locator("#canvas").innerText(), /Series impedance Z/);
     assert.match(await page.locator("#canvas").innerText(), /0\.054/);
-    assert.match(await page.locator("#canvas").innerText(), /Pure series branch · shunt admittance omitted/);
+    assert.match(await page.locator("#canvas").innerText(), /From shunt admittance[\s\S]*not supplied/);
     const inventorySearch = page.getByPlaceholder("Search assets, buses, or result fields");
     await inventorySearch.fill("tx_lv");
     await page.locator('button[data-kind="transformer"][data-id="tx_lv"]').click();
-    assert.match(await page.locator("#canvas").innerText(), /from: DELTA/);
-    assert.match(await page.locator("#canvas").innerText(), /to: WYE/);
+    assert.match(await page.locator("#canvas").innerText(), /W1[\s\S]*DELTA/);
+    assert.match(await page.locator("#canvas").innerText(), /W2[\s\S]*WYE/);
     await inventorySearch.fill("load_a");
     await page.locator('button[data-kind="load"][data-id="load_a"]').click();
     const loadText = await page.locator("#canvas").innerText();
-    assert.match(loadText, /connection: SINGLE PHASE/);
-    assert.match(loadText, /SINGLE PHASE connection/);
-    assert.match(loadText, /load model: CONSTANT POWER \(default\)/);
+    assert.match(loadText, /SINGLE_PHASE connection/);
+    assert.match(loadText, /SINGLE_PHASE connection/);
+    assert.match(loadText, /load model: constant_power/);
     await inventorySearch.fill("backup_gen");
     await page.locator('button[data-kind="generator"][data-id="backup_gen"]').click();
-    assert.match(await page.locator("#canvas").innerText(), /connection: WYE/);
-    assert.match(await page.locator("#canvas").innerText(), /WYE connection/);
-    assert.ok(await page.locator('#canvas g[aria-label="WYE connection for generator"] circle').count() >= 3);
+    assert.match(await page.locator("#canvas").innerText(), /Configuration[\s\S]*WYE/);
+    assert.match(await page.locator("#canvas").innerText(), /WYE/);
+    assert.match(await page.locator("#canvas").innerText(), /needs 4 distinct terminals/);
     await page.getByRole("tab", { name: "Single-wire" }).click();
     assert.ok(await page.locator("#multi-detail-canvas").evaluate((node) => node.scrollWidth <= node.clientWidth + 1));
-    await page.getByRole("tab", { name: "Multi-wire" }).click();
+    await page.getByRole("tab", { name: "Electrical detail" }).click();
     await page.locator("#file-input").setInputFiles(resolve(fixtureRoot, "micro_bmopf.json"));
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");
@@ -349,42 +313,32 @@ try {
     // The overview action clears the selection, and multi-wire focus mode needs a
     // selected multi-terminal device, so re-select the line before switching tabs.
     await page.locator('button[data-kind="line"][data-id="line_main"]').click();
-    await page.getByRole("tab", { name: "Multi-wire" }).click();
+    await page.getByRole("tab", { name: "Electrical detail" }).click();
     const multiText = await page.locator("#canvas").innerText();
-    assert.match(multiText, /terminal detail/);
+    assert.match(multiText, /External terminals/);
     // A line renders the Pi branch model detail and returns before the generic
     // conductor view, so the ordered-pairing note is asserted on the transformer.
-    assert.match(multiText, /\u03a0 branch model/);
+    assert.match(multiText, /Series impedance Z/);
     await inventorySearch.fill("switch_open");
     await page.locator('button[data-kind="switch"][data-id="switch_open"]').click();
     assert.match(await page.locator("#canvas").innerText(), /Open switch/);
-    assert.equal(await page.locator('#canvas g[data-kind="switch"][data-id="switch_open"]').count(), 4);
+    assert.equal(await page.locator('#canvas [data-sheet-conductor]').count(), 4);
     await inventorySearch.fill("tx_lv");
     await page.locator('button[data-kind="transformer"][data-id="tx_lv"]').click();
     const transformerText = await page.locator("#canvas").innerText();
     assert.match(transformerText, /transformer/);
-    assert.match(transformerText, /Ordered conductor pairing/);
-    // The micro fixture keeps tx_lv under the two_winding class key and declares no
-    // winding configuration, so the viewer draws generic terminal windings: one dot
-    // per terminal and a schematic link, without the DELTA/WYE phase coils.
-    assert.equal(await page.locator('#canvas g[aria-label="left terminal winding"] circle').count(), 3);
-    assert.equal(await page.locator('#canvas g[aria-label="right terminal winding"] circle').count(), 4);
-    assert.ok(await page.locator('#canvas g[aria-label="left terminal winding"] path[stroke="#4f789f"]').count() >= 1);
-    assert.ok(await page.locator('#canvas g[aria-label="right terminal winding"] path[stroke="#4f789f"]').count() >= 1);
-    assert.equal(await page.locator('#canvas rect[x="280"][y="88"]').count(), 1);
-    const transformerLabelXs = await page.locator('#canvas text[data-role="conductor-label"]').evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute("x"))));
-    assert.ok(transformerLabelXs.length >= 3 && transformerLabelXs.every((x) => x < 285));
+    assert.match(transformerText, /Connection topology not established/);
+    assert.equal(await page.locator('#canvas .sheet-winding').count(), 2);
+    assert.equal(await page.locator('#canvas .sheet-winding .sheet-wire').count(), 0);
     await inventorySearch.fill("tx_three");
     await page.locator('button[data-kind="transformer"][data-id="tx_three"]').click();
     const multiWindingText = await page.locator("#canvas").innerText();
-    assert.match(multiWindingText, /winding detail/);
+    assert.match(multiWindingText, /Winding connections/);
     assert.match(multiWindingText, /WYE/);
     assert.match(multiWindingText, /DELTA/);
-    assert.match(multiWindingText, /galvanically isolated windings/);
-    assert.ok(await page.locator('#canvas g[aria-label="left WYE winding"] circle').count() >= 3);
-    assert.ok(await page.locator('#canvas g[aria-label="right WYE winding"] circle').count() >= 4);
-    assert.ok(await page.locator('#canvas g[aria-label="bottom DELTA winding"] circle').count() >= 3);
-    assert.match(multiWindingText, /Each winding keeps its bus and terminal stack/);
+    assert.equal(await page.locator('#canvas .sheet-winding').count(), 3);
+    assert.match(multiWindingText, /referred to winding 1 coil-voltage base/);
+    assert.match(multiWindingText, /needs 4 distinct terminals/);
     await page.locator("#file-input").setInputFiles({ name: "large-browser-smoke-case.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(largeCase)) });
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     await page.getByRole("tab", { name: "Single-wire" }).click();
