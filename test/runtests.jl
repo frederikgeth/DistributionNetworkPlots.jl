@@ -34,7 +34,7 @@ const MULTINETWORK_RESULT_FIXTURE = joinpath(@__DIR__, "..", "fixtures", "micro"
     @test occursin("BMOPFElectrical", html)
     @test occursin("model-sheets-v1", html)
     @test !occursin("src=\"renderers/model-sheets.js\"", html)
-    @test occursin("deterministic-layout-v2", html)
+    @test occursin("deterministic-layout-v3", html)
     @test occursin("BMOPFLayouts", html)
     @test occursin("geospatial-renderer-v1", html)
     @test occursin("single-wire-renderer-v1", html)

@@ -80,7 +80,7 @@ try {
   await page.locator('[data-network-root="b599"]').click();
   await page.locator('#multi-detail-panel .model-sheet').waitFor();
   assert.match(await page.locator('#selection-label').textContent(), /b599/);
-  await page.getByRole('button', { name: 'Apply force layout', exact: true }).click();
+  await page.getByRole('button', { name: 'Apply stress layout', exact: true }).click();
   assert.match(await page.locator('#view-status').textContent(), /applied to 1 buses/);
   await page.getByRole('button', { name: 'Show full overview', exact: true }).click();
   await page.locator('.network-directory').waitFor();
