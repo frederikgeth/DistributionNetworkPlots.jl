@@ -1,3 +1,4 @@
+import { assertNoHorizontalOverflow } from './responsive_assertions.mjs';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { readFile } from 'node:fs/promises';
@@ -41,7 +42,7 @@ try {
  await page.locator('#region-operating-layer').selectOption('voltage');
  await page.locator('[data-operating-close]').click();
  await page.screenshot({path:'/tmp/operating-layers.png',fullPage:true});
- await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
+ await page.setViewportSize({width:390,height:844});await assertNoHorizontalOverflow(page);
  await upload('#result-input','scenarios.json',{objective:0,nw:{day:results,night:{bus:{b0:{vm:[220,0]}}}}});
  assert.match(await page.locator('#region-operating-legend').innerText(),/Choose a scenario/);
  assert.match(await page.locator('#region-operating-legend').innerText(),/0\/600/);

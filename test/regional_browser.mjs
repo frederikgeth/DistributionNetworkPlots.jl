@@ -1,3 +1,4 @@
+import { assertNoHorizontalOverflow } from './responsive_assertions.mjs';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright';
 import { resolve } from 'node:path';
@@ -52,7 +53,7 @@ try {
  await page.getByRole('button',{name:'Show component detail'}).click();await page.locator('.map-detail').waitFor();
  await page.locator('#multi-detail-open').click();await page.locator('#canvas .model-sheet').waitFor();
  await page.goBack();await page.locator('.map-detail').waitFor();
- await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
+ await page.setViewportSize({width:390,height:844});await assertNoHorizontalOverflow(page);
  await page.setViewportSize({width:1440,height:1000});
  const tracing={name:'trace-review',bus:{a:{terminal_names:['x'],longitude:-2.60,latitude:53.48},b:{terminal_names:['y'],longitude:-2.61,latitude:53.49},c:{terminal_names:['z'],perfectly_grounded_terminals:['z'],longitude:-2.62,latitude:53.48}},line:{ab:{bus_from:'a',bus_to:'b',terminal_map_from:['x'],terminal_map_to:['y']}},switch:{sw:{bus_from:'b',bus_to:'c',terminal_map_from:['y'],terminal_map_to:['z'],open_switch:true}}};
  await page.locator('#file-input').setInputFiles({name:'trace.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(tracing))});await page.locator('#import-progress').waitFor({state:'detached'});

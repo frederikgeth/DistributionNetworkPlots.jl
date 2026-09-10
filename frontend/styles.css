@@ -91,7 +91,7 @@ body.resizing-sidebar, body.resizing-sidebar * { cursor: col-resize !important; 
 .empty-panel { padding: 16px; color: var(--muted); }
 .drop-zone { margin-bottom: 12px; padding: 11px; border: 1px dashed #b9b0a2; border-radius: 7px; color: var(--muted); text-align: center; }
 .drop-zone.dragging { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
-.view-tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.view-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
 .view-tab { border: 1px solid var(--line); border-radius: 6px; padding: 8px 11px; color: var(--muted); background: var(--panel); cursor: pointer; }
 .view-tab.active, .view-tab:focus-visible { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .view-status { min-height: 22px; color: var(--muted); }

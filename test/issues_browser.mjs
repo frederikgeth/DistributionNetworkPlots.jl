@@ -1,3 +1,4 @@
+import { assertNoHorizontalOverflow } from './responsive_assertions.mjs';
 import assert from 'node:assert/strict';
 import {chromium} from 'playwright';
 import {resolve} from 'node:path';
@@ -23,6 +24,8 @@ try {
  await page.locator('[data-summary-category="violation"]').click();
  await page.locator('[data-issue-entry]').filter({hasText:'bus b1 ·'}).click();
  assert.match(await page.locator('#region-issue-location').innerText(),/network fitted/);
- await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
+ await page.setViewportSize({width:390,height:844});await assertNoHorizontalOverflow(page);
+ await page.addStyleTag({content:'.view-tabs { font-size: 18px; }'});
+ await assertNoHorizontalOverflow(page);
  assert.deepEqual(errors,[]);
 }finally{await browser.close();}
