@@ -303,3 +303,14 @@ pre.raw { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 9px; bor
 .network-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
 .network-grid article { padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 .network-grid h3 { overflow-wrap: anywhere; font-size: 13px; font-family: ui-monospace, monospace; }
+
+.regional-map header, .regional-map > p, #region-members { padding: 12px 20px; margin: 0; }
+.regional-map header { border-bottom: 1px solid var(--line); }
+.regional-map header h2 { margin: 4px 0 12px; }
+.regional-map button { padding: 6px 10px; border: 1px solid var(--line); border-radius: 4px; background: var(--panel); color: var(--ink); cursor: pointer; }
+#region-map svg { display: block; width: 100%; height: auto; }
+#region-map [role=button] { cursor: pointer; }
+#region-map [role=button]:focus { outline: 2px solid var(--accent); }
+#region-members button { overflow-wrap: anywhere; max-width: 100%; margin: 4px; }
+#region-map svg { height: min(60vh, 500px); }
+.region-provenance { background: var(--accent-soft); font-size: 12px; }

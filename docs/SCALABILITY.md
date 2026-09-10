@@ -119,3 +119,50 @@ already embedded in a Julia report still uses synchronous startup indexing; file
 imports inside that report use the worker. Full-region GPU rendering, viewport
 culling, large diagnostics/results tables and unbounded pinned sheets remain
 future work. No GPU renderer was added.
+
+## Regional connectivity map (2026-09-11)
+
+The Geospatial view now opens the entire placed region independently of the
+single-line overview budget. It uses supplied bus latitude/longitude, caches a
+local aspect-preserving projection, and corrects the previous bounds calculation
+that incorrectly included zero longitude/latitude. Missing/null/boolean/out-of-range
+coordinates are not plotted as geographic zero. Local x/y values remain in source
+records; the renderer uses the supplied latitude/longitude when both are present.
+ENWL's declared coordinate space and geographic anchor are shown as provenance.
+This is local geographic visualisation, not a surveyed basemap or global projection.
+
+At wide zoom, 50-unit screen cells aggregate buses. Markers sit at cell centres to
+avoid overlapping counts; they are geographic groups, not equipment positions.
+Dashed amber groups contain multiple separate structural networks. Clicking or
+keyboard-activating a group zooms in and opens all members in pages of 50, including
+buses with exactly coincident coordinates. Zoom is anchored at the mouse position;
+pan/zoom redraws are scheduled once per animation frame. Region reset and fitting
+the selected electrical network are explicit controls.
+
+When at most 300 buses are in the viewport, individual buses and up to 600
+intersecting two-port connections are drawn. Exact displayed/total connection counts
+and grouped/off-screen/unplaced bus counts remain visible. Dense groups still
+expand through their member lists. Routed geometry is used when supplied; other
+links are straight endpoint connections. Open/out-of-service paths are dashed.
+Transformer-model and source counts remain visible; missing transformer bridges
+are never invented from nearby coordinates. Multi-winding models are explicitly
+flagged for inspection in the electrical sheets rather than drawn as direct links.
+This map currently shows topology, not a voltage/loading colour layer.
+
+Validation used Springfield and all 25 individual JSON cases in the ENWL archive.
+All 26 loaded and passed geographic-spread, bounded-SVG and group/member/network
+navigation checks without browser errors. Springfield's initial map contained 137
+SVG descendants for 24,385 buses; the ENWL checks used 57–706 descendants. The cases
+were inspected separately, not merged or uploaded. Private case files are excluded
+from the repository. Reproduce with:
+
+```sh
+node scripts/check-regional-cases.mjs /path/to/springfield.bmopf.json /path/to/extracted-enwl-json
+node --test test/regional_browser.mjs
+```
+
+The regional regression fixture covers coincident coordinates, multiple networks
+at the same location, missing coordinates, provenance, keyboard group expansion,
+member pagination, selection, fitting and reset. The map continues to use SVG;
+no WebGL/WebGPU dependency was added. GPU rendering of all regional branches and
+operating-value overlays remain separate future work.

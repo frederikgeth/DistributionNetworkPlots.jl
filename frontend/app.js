@@ -388,6 +388,7 @@
     try {
       state.index = preparedIndex || globalThis.BMOPFModel.buildCaseIndex(caseDocument);
       modelSheets.reset();
+      state.cameras.geo = { scale: 1, x: 0, y: 0 };
       state.layout = loadLayout();
       state.selected = requestedSelection && itemFor(requestedSelection) ? requestedSelection : null;
       state.activeKind = null;
@@ -730,11 +731,11 @@
     const coordinateProvenance = index.raw?.meta?.coordinate_provenance;
     const coordinateHtml = coordinateProvenance ? `<p class="report-meta">Coordinate provenance: ${escapeHtml(coordinateProvenance)}</p>` : "";
     const budget = overviewBudget();
-    const budgetHtml = budget.over && state.largeCaseDecision !== "full"
+    const budgetHtml = state.view === "geo" ? `<p class="budget-meta">Regional map · bounded geographic groups; zoom to inspect connections.</p>` : budget.over && state.largeCaseDecision !== "full"
       ? `<p class="budget-warning"><strong>Focused overview mode</strong> · ${escapeHtml(budget.message)} Select an asset to render its one-hop context.</p>`
       : budget.over ? `<p class="budget-meta"><strong>Full overview enabled</strong> · ${escapeHtml(budget.message)}</p>`
       : `<p class="budget-meta">Overview budget: ${budget.elements.toLocaleString()} estimated SVG elements of ${budget.limit.toLocaleString()}.</p>`;
-    const largeCasePrompt = budget.over && state.largeCaseDecision === "pending"
+    const largeCasePrompt = state.view === "geo" ? "" : budget.over && state.largeCaseDecision === "pending"
       ? `<div id="large-case-dialog" class="large-case-dialog" role="dialog" aria-labelledby="large-case-title"><strong id="large-case-title">This is a large case</strong><p>${escapeHtml(budget.message)} Rendering the full geospatial or single-wire overview may be slow in this browser.</p><label><input id="large-case-bypass" type="checkbox"> Continue without asking again while this page remains open</label><div class="large-case-actions"><button id="large-case-continue">Render full overview</button><button id="large-case-focused">Keep focused view</button></div></div>`
       : budget.over && state.largeCaseDecision === "focused"
         ? `<div class="large-case-dialog"><strong>Focused overview enabled</strong><p>Full overview rendering is paused for this case.</p><button id="large-case-continue">Render full overview</button></div>` : "";
@@ -1263,7 +1264,13 @@
 
   function svgShell(content, options = {}) { const rendererContract = globalThis.BMOPFRendererContract; const camera = options.camera || state.cameras[state.view]; const shellOptions = { camera, view: state.view, escapeHtml, ...options }; return rendererContract ? rendererContract.svgShell(content, shellOptions) : `<svg${options.className ? ` class="${escapeHtml(options.className)}"` : ""}${options.size ? ` width="${Math.ceil(options.size.width)}" height="${Math.ceil(options.size.height)}" style="width:${Math.ceil(options.size.width)}px;height:${Math.ceil(options.size.height)}px;max-width:none"` : ""} viewBox="0 0 ${Math.ceil(options.size?.width || 760)} ${Math.ceil(options.size?.height || 500)}" role="img" aria-label="${escapeHtml(state.view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`; }
 
+  function zoomCamera(factor, x = 380, y = 250) {
+    const camera = state.cameras[state.view], previous = camera.scale;
+    camera.scale = Math.max(.5, Math.min(state.view === "geo" ? 512 : 3, previous * factor));
+    if (state.view === "geo") { const ratio = camera.scale / previous; camera.x = x - (x-camera.x)*ratio; camera.y = y - (y-camera.y)*ratio; }
+  }
   function updateCamera() {
+    if (state.view === "geo" && geospatialRenderer.isRegional()) { geospatialRenderer.scheduleRefresh(); return; }
     const viewport = $("canvas").querySelector("#viewport");
     if (!viewport) return;
     const camera = state.cameras[state.view];
@@ -1290,8 +1297,8 @@
     if ($("canvas").querySelector(".network-directory")) controls.querySelectorAll("[data-camera], [data-layout], .layout-select, .layout-label").forEach(node => { node.hidden = true; });
     controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
       const camera = state.cameras[state.view];
-      if (button.dataset.camera === "zoom-in") camera.scale = Math.min(3, camera.scale * 1.25);
-      else if (button.dataset.camera === "zoom-out") camera.scale = Math.max(.5, camera.scale / 1.25);
+      if (button.dataset.camera === "zoom-in") zoomCamera(1.25);
+      else if (button.dataset.camera === "zoom-out") zoomCamera(1/1.25);
       else if (button.dataset.camera === "focus") { focusSelection(); return; }
       else if (button.dataset.camera === "export-svg") { exportCurrentSvg(); return; }
       else if (button.dataset.camera === "export-png") { exportCurrentPng(); return; }
@@ -1370,38 +1377,44 @@
     svg.addEventListener("wheel", (event) => {
       event.preventDefault();
       const camera = state.cameras[state.view];
-      camera.scale = Math.max(.5, Math.min(3, camera.scale * (event.deltaY < 0 ? 1.1 : .9)));
+      const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
+      const local = point.matrixTransform(svg.getScreenCTM().inverse());
+      zoomCamera(event.deltaY < 0 ? 1.1 : .9, local.x, local.y);
       updateCamera();
     }, { passive: false });
     let drag = null;
     svg.addEventListener("pointerdown", (event) => {
-      if (event.target.closest("[data-kind]")) return;
+      if (event.target.closest("[data-kind], [data-region-cell]")) return;
       drag = { x: event.clientX, y: event.clientY, camera: { ...state.cameras[state.view] } };
       svg.setPointerCapture(event.pointerId);
     });
     svg.addEventListener("pointermove", (event) => {
       if (!drag) return;
       const camera = state.cameras[state.view];
-      camera.x = drag.camera.x + event.clientX - drag.x;
-      camera.y = drag.camera.y + event.clientY - drag.y;
+      camera.x = drag.camera.x + (event.clientX - drag.x) / svg.getScreenCTM().a;
+      camera.y = drag.camera.y + (event.clientY - drag.y) / svg.getScreenCTM().d;
       updateCamera();
     });
     svg.addEventListener("pointerup", () => { drag = null; });
     svg.addEventListener("pointercancel", () => { drag = null; });
   }
+  let geographicCache = null;
   function busCoordinates() {
-    const buses = state.index.buses;
-    const mapped = buses.filter((b) => b.coordinates);
-    const source = mapped.length >= 2 ? mapped : [];
-    const xs = source.map((b) => b.coordinates.longitude); const ys = source.map((b) => b.coordinates.latitude);
-    const minX = Math.min(...xs, 0); const maxX = Math.max(...xs, 1); const minY = Math.min(...ys, 0); const maxY = Math.max(...ys, 1);
-    const project = (longitude, latitude) => [55 + ((Number(longitude) - minX) / (maxX - minX || 1)) * 650, 440 - ((Number(latitude) - minY) / (maxY - minY || 1)) * 380];
-    const positions = new Map();
-    buses.forEach((bus, i) => {
-      if (source.length >= 2) positions.set(bus.ref.id, bus.coordinates ? project(bus.coordinates.longitude, bus.coordinates.latitude) : null);
-      else positions.set(bus.ref.id, [90 + (i % 4) * 210, 110 + Math.floor(i / 4) * 140]);
-    });
-    return { positions, geographic: source.length >= 2, project, unmapped: buses.filter((bus) => source.length >= 2 && !bus.coordinates) };
+    if (geographicCache?.index === state.index) return geographicCache.value;
+    const buses = state.index.buses, mapped = buses.filter(b => b.coordinates);
+    const geographic = mapped.length > 0;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const bus of mapped) {
+      minX = Math.min(minX, bus.coordinates.longitude); maxX = Math.max(maxX, bus.coordinates.longitude);
+      minY = Math.min(minY, bus.coordinates.latitude); maxY = Math.max(maxY, bus.coordinates.latitude);
+    }
+    const centerX = geographic ? (minX + maxX) / 2 : 0, centerY = geographic ? (minY + maxY) / 2 : 0;
+    const longitudeScale = Math.max(.01, Math.cos(centerY * Math.PI / 180));
+    const scale = geographic ? Math.min(650 / Math.max((maxX - minX) * longitudeScale, .00001), 380 / Math.max(maxY - minY, .00001)) : 1;
+    const project = (longitude, latitude) => [380 + (Number(longitude) - centerX) * longitudeScale * scale, 250 - (Number(latitude) - centerY) * scale];
+    const positions = new Map(buses.map((bus, i) => [bus.ref.id, geographic ? (bus.coordinates ? project(bus.coordinates.longitude, bus.coordinates.latitude) : null) : [90 + i % 4 * 210, 110 + Math.floor(i / 4) * 140]]));
+    const value = { positions, geographic, project, unmapped: buses.filter(bus => !bus.coordinates) };
+    geographicCache = { index: state.index, value }; return value;
   }
 
   // Lay out the visible neighbourhood, not all 24,000+ buses behind it.
@@ -1465,7 +1478,8 @@
     entityLabelSvg,
     resultTooltip,
     resultVoltageVisual,
-    resultLegend
+    resultLegend,
+    select
   });
   function drawGeo() { return geospatialRenderer.drawGeo(); }
 
@@ -1659,7 +1673,7 @@
   function renderView() {
     if (!state.index) { $("canvas").innerHTML = `<div class="message">Open a BMOPF JSON case to see its views.</div>`; return; }
     const budget = overviewBudget();
-    if (budget.over && state.largeCaseDecision !== "full" && ["geo", "single"].includes(state.view) && !state.selected) {
+    if (budget.over && state.largeCaseDecision !== "full" && state.view === "single" && !state.selected) {
       setStatus(`Focused overview mode: ${budget.message} Select a bus or device from the inventory to render nearby topology.`);
       renderNetworkDirectory();
       document.querySelectorAll(".view-tab").forEach((button) => { const active = button.dataset.view === state.view; button.classList.toggle("active", active); button.setAttribute("aria-selected", String(active)); button.setAttribute("tabindex", active ? "0" : "-1"); });

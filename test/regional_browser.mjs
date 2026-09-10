@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+const browser=await chromium.launch({headless:true});
+try {
+ const page=await browser.newPage(), errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await page.goto(pathToFileURL(resolve('frontend/index.html')).href);await page.locator('#case-summary h2').waitFor();
+ const raw={name:'coincident-networks',meta:{coordinates:{coordinate_space:'Derived local XY',geographic_anchor:{label:'Example anchor'}}},bus:Object.fromEntries(Array.from({length:600},(_,i)=>['b'+i,{terminal_names:['1'],longitude:i<550?-2.6:-2.61,latitude:i<550?53.48:53.49}]))};
+ raw.bus.missing={terminal_names:['1'],latitude:null,longitude:null};
+ await page.locator('#file-input').setInputFiles({name:'region.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(raw))});await page.locator('#import-progress').waitFor({state:'detached'});
+ await page.locator('[data-view="geo"]').click();
+ assert.match(await page.locator('#region-evidence').innerText(), /600 buses in viewport/);
+ assert.match(await page.locator('#region-evidence').innerText(), /1 without coordinates/);
+ assert.match(await page.locator('.region-provenance').innerText(), /Derived local XY.*Example anchor/);
+ assert.equal(await page.locator('#large-case-dialog').count(),0);
+ assert.equal(await page.locator('[data-region-cell]').count(),2);
+ assert.equal(await page.locator('[data-region-cell] circle[stroke-dasharray]').count(),2);
+ await page.locator('[data-region-cell]').first().press('Enter');
+ assert.equal(await page.locator('[data-region-bus]').count(),50);
+ await page.locator('[data-member-next]').click();
+ assert.match(await page.locator('#region-members').innerText(),/Page 2/);
+ await page.locator('[data-region-bus]').first().click();
+ assert.match(await page.locator('#selection-label').innerText(),/bus/i);
+ await page.locator('#region-network').click();
+ await page.locator('#region-reset').click();
+ assert.match(await page.locator('#region-evidence').innerText(),/600 buses in viewport/);
+ assert.ok(await page.locator('#region-map *').count()<100);
+ assert.deepEqual(errors,[]);
+} finally { await browser.close(); }

@@ -42,7 +42,7 @@
     if (!isObject(record)) return null;
     const longitude = record.longitude ?? record.lon;
     const latitude = record.latitude ?? record.lat;
-    return Number.isFinite(Number(longitude)) && Number.isFinite(Number(latitude))
+    return longitude !== null && latitude !== null && longitude !== "" && latitude !== "" && typeof longitude !== "boolean" && typeof latitude !== "boolean" && Number.isFinite(Number(longitude)) && Number.isFinite(Number(latitude)) && Math.abs(Number(longitude)) <= 180 && Math.abs(Number(latitude)) <= 90
       ? { longitude: Number(longitude), latitude: Number(latitude), space: "geographic" }
       : null;
   }
