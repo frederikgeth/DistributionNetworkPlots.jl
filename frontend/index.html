@@ -25,13 +25,13 @@
       <div id="drop-zone" class="drop-zone">Drop a BMOPF case or result JSON here, or use the file controls above.</div>
       <div class="view-tabs" role="tablist" aria-label="Views">
         <button class="view-tab active" data-view="single" role="tab">Single-wire</button>
-        <button class="view-tab" data-view="multi" role="tab">Multi-wire</button>
+        <button class="view-tab" data-view="multi" role="tab">Electrical detail</button>
         <button class="view-tab" data-view="geo" role="tab">Geospatial</button>
         <button class="view-tab" data-view="diagnostics" role="tab">Diagnostics</button>
       </div>
       <div id="view-status" class="view-status" role="status" aria-live="polite"></div>
       <div id="camera-controls" class="camera-controls" hidden aria-label="View controls"></div>
-      <div id="multi-hop-controls" class="multi-hop-controls" hidden aria-label="Multi-wire neighbourhood depth"></div>
+      <div id="multi-hop-controls" class="multi-hop-controls" hidden aria-label="Electrical detail neighbourhood depth"></div>
       <details id="display-options" class="display-options-panel" hidden>
         <summary>Display options</summary>
         <div class="display-options-list">
@@ -45,9 +45,9 @@
       </details>
       <div id="single-view-layout" class="single-view-layout">
         <div id="canvas" class="canvas" aria-live="polite"></div>
-        <div id="multi-detail-resizer" class="multi-detail-resizer" role="separator" aria-label="Resize Multi-wire detail" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="560" aria-valuenow="380" tabindex="0" title="Drag to resize the Multi-wire detail pane; use arrow keys for precise sizing" hidden></div>
-        <section id="multi-detail-panel" class="multi-detail-panel" aria-label="Multi-wire component detail" hidden>
-          <div class="multi-detail-heading"><div><h2>Multi-wire detail</h2><span id="multi-detail-selection" class="muted"></span></div><div class="multi-detail-actions"><button id="multi-detail-open" type="button">Open full view</button><button id="multi-detail-close" type="button" aria-label="Collapse Multi-wire detail">Collapse</button></div></div>
+        <div id="multi-detail-resizer" class="multi-detail-resizer" role="separator" aria-label="Resize Electrical detail" aria-orientation="vertical" aria-valuemin="280" aria-valuemax="560" aria-valuenow="380" tabindex="0" title="Drag to resize the Electrical detail pane; use arrow keys for precise sizing" hidden></div>
+        <section id="multi-detail-panel" class="multi-detail-panel" aria-label="Electrical detail component detail" hidden>
+          <div class="multi-detail-heading"><div><h2>Electrical detail</h2><span id="multi-detail-selection" class="muted"></span></div><div class="multi-detail-actions"><button id="multi-detail-open" type="button">Open full view</button><button id="multi-detail-close" type="button" aria-label="Collapse Electrical detail">Collapse</button></div></div>
           <div id="multi-detail-canvas" class="multi-detail-canvas" aria-live="polite"></div>
         </section>
         <details id="floating-legend" class="floating-legend" aria-label="Single-wire legend" open>
@@ -69,7 +69,7 @@
             <ol>
               <li>Choose a built-in example, open a case JSON, or drop a case into the drop zone. Single-wire opens first as the default overview.</li>
               <li>Use the Inventory or Class overview to select a bus or asset.</li>
-              <li>Switch views to compare geographic placement, a compact single-wire overview, and terminal-level multi-wire detail.</li>
+              <li>Switch views to compare geographic placement, a compact single-wire overview, and electrical model sheets.</li>
               <li>Attach a result JSON after loading a case to colour assets and inspect solution metrics.</li>
             </ol>
           </details>
@@ -77,13 +77,13 @@
             <summary>Views</summary>
             <p><strong>Geospatial</strong> uses supplied bus coordinates and line geometry. Buses without coordinates stay explicitly unplaced; synthetic built-in coordinates are labelled as illustrative.</p>
             <p><strong>Single-wire</strong> collapses phase conductors into an engineering-style overview. Buses are compact dots by default; Display options can show conventional heavy busbars. Paired coils are transformers, and open blades/dashed paths identify open switches.</p>
-            <p><strong>Multi-wire</strong> expands terminal maps for a selected bus or device. Bus terminals are shown as labelled dots on a vertical dotted bus spine without a surrounding panel box. Phase, neutral, and ground cues are labelled as well as patterned. Nodal devices show compact WYE, DELTA, or single-phase connection glyphs; phase conductors terminate at the WYE/DELTA points using the A/B/C red/green/blue convention, while neutral and ground remain patterned grey. Loads also show their model. Branches show their Π-model matrices when supported.</p>
+            <p><strong>Electrical detail</strong> opens model sheets: terminal connections, coupled matrices, winding and load-element graphs, controls, limits, results, and unresolved fields together. Pin sheets into an atlas, capture a baseline or compare model JSON, and export standalone HTML. The old multi-wire deep links still open this view.</p>
             <p><strong>Diagnostics</strong> collects validation, bounds, residual, and solution-profile findings from the active result slice.</p>
           </details>
           <details>
             <summary>Visual conventions</summary>
             <ul>
-              <li>Phase conductors use red/green/blue; neutral and ground use patterned grey lines with labels.</li>
+              <li>Electrical sheets use solid connections, labelled terminal rings, and junction dots. Ground symbols attach to the local bus terminal. Selection links conductors, load elements and matrix entries; colour does not assign a phase role.</li>
               <li>Asset labels separate the semantic class from the identifier: the class is muted italic small-caps, while the identifier is darker and monospaced for quick scanning.</li>
               <li>An open switch uses an open blade and a dashed connection. Out-of-service assets are faded.</li>
               <li>Result overlays use green for nominal, amber for moderate, and red for high loading or voltage deviation; patterns and text repeat the meaning.</li>
@@ -99,7 +99,7 @@
             <ul>
               <li>Terminal maps are ordered: a pair such as <code>2→3</code> means source terminal 2 is connected to destination terminal 3.</li>
               <li>Branch series entries are <code>R+jX</code> in absolute Ω. Linecode values in Ω/m are multiplied by the branch length.</li>
-              <li>Branch shunt <code>G/B</code> entries are absolute admittances in S and are shown as from/to Π half-sections only when nonzero.</li>
+              <li>Both branch shunt sections remain visible. Missing entries, supplied zeros, and invalid data are distinct; no physical grounding branch or equal shunt split is inferred.</li>
               <li>Missing or unsupported semantics remain inspectable as raw properties and are called out rather than silently inferred.</li>
             </ul>
           </details>
@@ -135,9 +135,11 @@
   </main>
   <script src="examples.js"></script>
   <script src="model.js"></script>
+  <script src="importer.js"></script>
   <script src="renderer-contract.js"></script>
   <script src="renderers/symbols.js"></script>
-  <script src="projections/multi-wire.js"></script>
+  <script src="electrical-model.js"></script>
+  <script src="renderers/model-sheets.js"></script>
   <script src="layout/deterministic.js"></script>
   <script src="renderers/geospatial.js"></script>
   <script src="renderers/single-wire.js"></script>

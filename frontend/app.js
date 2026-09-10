@@ -15,9 +15,8 @@
   const SIDEBAR_WIDTH_DEFAULT = 360;
   const SIDEBAR_WIDTH_MIN = 280;
   const SIDEBAR_WIDTH_MAX = 640;
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusBars: false, showBusLabels: true, showDeviceLabels: false, showArrows: false, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
-  const MAX_FILE_BYTES = 25 * 1024 * 1024;
-  const MAX_JSON_ELEMENTS = 100000;
+  const state = { index: null, selected: null, terminalTrace: null, tracePage: 0, traceLimit: 2000, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, searchPage: 0, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusBars: false, showBusLabels: true, showDeviceLabels: false, showArrows: false, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const SEARCH_PAGE_SIZE = 100;
   const $ = (id) => document.getElementById(id);
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const titleOf = (item) => `${item.ref.kind.replaceAll("_", " ")} ${item.ref.id}`;
@@ -298,19 +297,6 @@
     window.addEventListener("resize", () => setMultiDetailWidth(state.multiDetailWidth));
   }
 
-  function countJsonElements(value, limit) {
-    let count = 0;
-    const pending = [value];
-    while (pending.length) {
-      const current = pending.pop();
-      count += 1;
-      if (count > limit) return count;
-      if (Array.isArray(current)) pending.push(...current);
-      else if (current && typeof current === "object") pending.push(...Object.values(current));
-    }
-    return count;
-  }
-
   function showLoadError(message, label) {
     state.index = null;
     state.selected = null;
@@ -371,7 +357,7 @@
 
   function navigateTo(entry) {
     const current = state.navigation.entries[state.navigation.cursor];
-    if (entry.view === "single" && (!current || current.view !== "single" || JSON.stringify(current.selected) !== JSON.stringify(entry.selected))) state.multiDetailCollapsed = false;
+    if (["single", "geo"].includes(entry.view) && (!current || current.view !== "single" || JSON.stringify(current.selected) !== JSON.stringify(entry.selected))) state.multiDetailCollapsed = false;
     if (current && current.view === entry.view && JSON.stringify(current.selected) === JSON.stringify(entry.selected)) {
       applyNavigationEntry(entry);
       return;
@@ -397,13 +383,18 @@
 
   function itemFor(ref) {
     if (!state.index || !ref) return null;
-    return state.index.entities.find((item) => item.ref.kind === ref.kind && item.ref.id === ref.id) || null;
+    return state.index.byKind.get(ref.kind)?.get(ref.id) || null;
   }
 
-  function loadDocument(caseDocument, label) {
+  function loadDocument(caseDocument, label, preparedIndex = null) {
+    cancelImport();
+    networkPage = 0; networkQuery = "";
+    state.terminalTrace = null; state.tracePage = 0; state.traceLimit = 2000;
     const requestedSelection = state.selected;
     try {
-      state.index = globalThis.BMOPFModel.buildCaseIndex(caseDocument);
+      state.index = preparedIndex || globalThis.BMOPFModel.buildCaseIndex(caseDocument);
+      modelSheets.reset();
+      state.cameras.geo = { scale: 1, x: 0, y: 0 };
       state.layout = loadLayout();
       state.selected = requestedSelection && itemFor(requestedSelection) ? requestedSelection : null;
       state.activeKind = null;
@@ -430,14 +421,7 @@
 
   function layoutGraphSignature() {
     if (!state.index) return "sld-elk-graph-v1:none";
-    const buses = state.index.buses.map((bus) => bus.ref.id).sort();
-    const edges = [];
-    state.index.assets.forEach((item) => (item.connections || []).forEach((connection) => edges.push({ kind: item.ref.kind, id: item.ref.id, from: connection.from.busId, to: connection.to.busId })));
-    edges.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
-    const input = JSON.stringify({ buses, edges });
-    let hash = 2166136261;
-    for (let i = 0; i < input.length; i += 1) { hash ^= input.charCodeAt(i); hash = Math.imul(hash, 16777619); }
-    return `sld-elk-graph-v1:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+    return state.index.graphSignature ||= globalThis.BMOPFModel.layoutGraphSignature(state.index);
   }
 
   function normaliseLayoutProfile(profile) {
@@ -560,22 +544,24 @@
     if (!state.index || state.view !== "single") return;
     if (elkBusy) return;
     elkBusy = true;
+    const layoutIndex = state.index, activeLayout = state.layout, selection = state.selected;
     setStatus("Loading ELK layered layout…");
     try {
       const direction = state.layout.direction === "load-to-source" ? "LEFT" : "RIGHT";
-      const graph = { id: "bmopf-root", layoutOptions: { "elk.algorithm": "layered", "elk.direction": direction, "elk.edgeRouting": "ORTHOGONAL", "elk.spacing.nodeNode": "64", "elk.layered.spacing.nodeNodeBetweenLayers": "150" }, children: state.index.buses.map((bus) => ({ id: `bus:${bus.ref.id}`, width: 84, height: 24, ports: [{ id: `port:${bus.ref.id}`, width: 4, height: 4, layoutOptions: { "elk.port.side": state.layout.direction === "load-to-source" ? "EAST" : "WEST" } }] })), edges: [] };
-      const busIds = new Set(state.index.buses.map((bus) => bus.ref.id));
+      const graph = { id: "bmopf-root", layoutOptions: { "elk.algorithm": "layered", "elk.direction": direction, "elk.edgeRouting": "ORTHOGONAL", "elk.spacing.nodeNode": "64", "elk.layered.spacing.nodeNodeBetweenLayers": "150" }, children: overviewBuses().map((bus) => ({ id: `bus:${bus.ref.id}`, width: 84, height: 24, ports: [{ id: `port:${bus.ref.id}`, width: 4, height: 4, layoutOptions: { "elk.port.side": state.layout.direction === "load-to-source" ? "EAST" : "WEST" } }] })), edges: [] };
+      const busIds = new Set(overviewBuses().map((bus) => bus.ref.id));
       if (state.layout.root && state.layout.root !== "auto" && busIds.has(state.layout.root)) {
         graph.layoutOptions["org.eclipse.elk.processingOrder.rootSelection"] = "FIXED";
         graph.layoutOptions["org.eclipse.elk.processingOrder.preferredRoot"] = `bus:${state.layout.root}`;
       }
-      state.index.assets.forEach((item) => {
+      overviewAssets().forEach((item) => {
         (item.connections || []).forEach((connection) => {
           const from = connection.from.busId; const to = connection.to.busId;
           if (busIds.has(from) && busIds.has(to)) graph.edges.push({ id: `edge:${item.ref.kind}:${item.ref.id}:${from}:${to}`, sources: [`port:${from}`], targets: [`port:${to}`] });
         });
       });
       const result = await layoutWithElk(graph);
+      if (state.index !== layoutIndex || state.layout !== activeLayout || state.selected !== selection) return;
       const children = result.children || [];
       const xs = children.map((node) => Number(node.x) || 0); const ys = children.map((node) => Number(node.y) || 0);
       const minX = Math.min(...xs, 0); const maxX = Math.max(...xs, 1); const minY = Math.min(...ys, 0); const maxY = Math.max(...ys, 1);
@@ -611,8 +597,8 @@
 
   function applyStressLayout() {
     if (!state.index || state.view !== "single") return;
-    const positions = deterministicLayout.singleStressPositions();
-    const nextLocked = {};
+    const positions = (overviewScope() ? focusedLayout : deterministicLayout).singleStressPositions();
+    const nextLocked = overviewScope() ? { ...state.layout.locked } : {};
     positions.forEach((point, id) => { if (Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) nextLocked[id] = [...point]; });
     state.layout.locked = nextLocked;
     state.layout.routes = {};
@@ -628,7 +614,7 @@
   function renderDisplayOptions() {
     const pane = $("display-options");
     if (!pane) return;
-    const visible = Boolean(state.index && state.view === "single");
+    const visible = Boolean(state.index && state.view === "single" && !$("canvas").querySelector(".network-directory"));
     pane.hidden = !visible;
     if (!visible) return;
     pane.querySelectorAll("[data-display-option]").forEach((input) => {
@@ -739,7 +725,8 @@
     const stats = [
       [index.buses.length, "buses"],
       [index.assets.length - index.buses.length, "devices"],
-      [index.coordinateCount, "mapped buses"]
+      [index.coordinateCount, "mapped buses"],
+      [index.componentCount, "connected networks"]
     ];
     const warningHtml = index.warnings.length
       ? `<ul class="warnings">${index.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>` : "";
@@ -750,11 +737,11 @@
     const coordinateProvenance = index.raw?.meta?.coordinate_provenance;
     const coordinateHtml = coordinateProvenance ? `<p class="report-meta">Coordinate provenance: ${escapeHtml(coordinateProvenance)}</p>` : "";
     const budget = overviewBudget();
-    const budgetHtml = budget.over && state.largeCaseDecision !== "full"
+    const budgetHtml = state.view === "geo" ? `<p class="budget-meta">Regional map · bounded geographic groups; zoom to inspect connections.</p>` : budget.over && state.largeCaseDecision !== "full"
       ? `<p class="budget-warning"><strong>Focused overview mode</strong> · ${escapeHtml(budget.message)} Select an asset to render its one-hop context.</p>`
       : budget.over ? `<p class="budget-meta"><strong>Full overview enabled</strong> · ${escapeHtml(budget.message)}</p>`
       : `<p class="budget-meta">Overview budget: ${budget.elements.toLocaleString()} estimated SVG elements of ${budget.limit.toLocaleString()}.</p>`;
-    const largeCasePrompt = budget.over && state.largeCaseDecision === "pending"
+    const largeCasePrompt = state.view === "geo" ? "" : budget.over && state.largeCaseDecision === "pending"
       ? `<div id="large-case-dialog" class="large-case-dialog" role="dialog" aria-labelledby="large-case-title"><strong id="large-case-title">This is a large case</strong><p>${escapeHtml(budget.message)} Rendering the full geospatial or single-wire overview may be slow in this browser.</p><label><input id="large-case-bypass" type="checkbox"> Continue without asking again while this page remains open</label><div class="large-case-actions"><button id="large-case-continue">Render full overview</button><button id="large-case-focused">Keep focused view</button></div></div>`
       : budget.over && state.largeCaseDecision === "focused"
         ? `<div class="large-case-dialog"><strong>Focused overview enabled</strong><p>Full overview rendering is paused for this case.</p><button id="large-case-continue">Render full overview</button></div>` : "";
@@ -1023,7 +1010,7 @@
   function renderFloatingLegend() {
     const panel = $("floating-legend");
     if (!panel) return;
-    const visible = Boolean(state.index && state.view === "single");
+    const visible = Boolean(state.index && state.view === "single" && !$("canvas").querySelector(".network-directory"));
     panel.hidden = !visible;
     if (!visible) return;
     const content = panel.querySelector(".floating-legend-content");
@@ -1084,19 +1071,25 @@
       return { item, score };
     }).filter((entry) => entry.score < 99).sort((a, b) => a.score - b.score || a.item.ref.id.localeCompare(b.item.ref.id)).map((entry) => entry.item) : null;
     const filtered = ranked;
+    const pageCount = filtered ? Math.ceil(filtered.length / SEARCH_PAGE_SIZE) : 0;
+    state.searchPage = Math.max(0, Math.min(state.searchPage, pageCount - 1));
+    const pageStart = state.searchPage * SEARCH_PAGE_SIZE;
+    const pageRows = filtered?.slice(pageStart, pageStart + SEARCH_PAGE_SIZE);
     const body = filtered
-      ? filtered.map((item, i) => `<button class="inventory-row ${sameRef(item.ref, state.selected) ? "selected" : ""} ${state.searchFocus === i ? "focused" : ""}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}" role="option" aria-selected="${sameRef(item.ref, state.selected)}" aria-posinset="${i + 1}" aria-setsize="${filtered.length}"><span>${entityLabelHtml(item.ref.kind, item.ref.id)}</span><span class="count">›</span></button>`).join("")
+      ? pageRows.map((item, offset) => { const i = pageStart + offset; return `<button class="inventory-row ${sameRef(item.ref, state.selected) ? "selected" : ""} ${state.searchFocus === i ? "focused" : ""}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}" role="option" aria-selected="${sameRef(item.ref, state.selected)}" aria-posinset="${i + 1}" aria-setsize="${filtered.length}"><span>${entityLabelHtml(item.ref.kind, item.ref.id)}</span><span class="count">›</span></button>`; }).join("")
       : rows.map(([kind, count]) => `<button class="inventory-row ${state.activeKind === kind ? "selected" : ""}" data-kind-filter="${escapeHtml(kind)}"><span class="kind">${escapeHtml(kind.replaceAll("_", " "))}</span><span class="count">${count}</span></button>`).join("");
-    const resultNote = filtered ? `<p class="search-meta" role="status">${filtered.length} ranked match${filtered.length === 1 ? "" : "es"} · Enter opens the first result</p>` : "";
+    const resultNote = filtered ? `<p class="search-meta" role="status">${filtered.length} ranked match${filtered.length === 1 ? "" : "es"} · Showing ${filtered.length ? pageStart + 1 : 0}–${Math.min(pageStart + SEARCH_PAGE_SIZE, filtered.length)} · Enter opens the focused result</p>${pageCount > 1 ? `<div class="search-pages"><button id="search-previous" ${state.searchPage === 0 ? "disabled" : ""}>Previous matches</button><span> Page ${state.searchPage + 1} / ${pageCount} </span><button id="search-next" ${state.searchPage + 1 >= pageCount ? "disabled" : ""}>Next matches</button></div>` : ""}` : "";
     $("inventory").innerHTML = `<div class="panel-heading"><h2>Inventory</h2><input id="search" type="search" placeholder="Search assets, buses, or result fields" value="${escapeHtml(state.query)}" aria-label="Search assets, buses, or result fields" aria-controls="inventory-list" aria-autocomplete="list"></div>${resultNote}<div class="inventory-header" role="row"><span>asset / class</span><span class="inventory-column-resizer" role="separator" aria-orientation="vertical" aria-label="Resize inventory name column" tabindex="0" title="Drag to resize this column; use Arrow keys for precise sizing"></span><span>count</span></div><div id="inventory-list" class="inventory-list" role="listbox">${body || `<p class="muted" style="padding:12px 14px">No matching assets.</p>`}</div>`;
+    $("search-previous")?.addEventListener("click", () => { state.searchPage--; state.searchFocus = -1; renderInventory(); });
+    $("search-next")?.addEventListener("click", () => { state.searchPage++; state.searchFocus = -1; renderInventory(); });
     bindResizableInventory();
     const search = $("search");
-    search.addEventListener("input", (event) => { state.query = event.target.value; state.searchFocus = -1; renderInventory(); $("search")?.focus(); });
+    search.addEventListener("input", (event) => { state.query = event.target.value; state.searchFocus = -1; state.searchPage = 0; renderInventory(); $("search")?.focus(); });
     search.addEventListener("keydown", (event) => {
       if (!filtered?.length) return;
-      if (event.key === "ArrowDown") { event.preventDefault(); state.searchFocus = Math.min(filtered.length - 1, state.searchFocus + 1); renderInventory(); $("search")?.focus(); }
-      else if (event.key === "ArrowUp") { event.preventDefault(); state.searchFocus = Math.max(0, state.searchFocus - 1); renderInventory(); $("search")?.focus(); }
-      else if (event.key === "Enter") { event.preventDefault(); select(filtered[state.searchFocus >= 0 ? state.searchFocus : 0].ref); }
+      if (event.key === "ArrowDown") { event.preventDefault(); state.searchFocus = Math.min(filtered.length - 1, (state.searchFocus < 0 ? pageStart - 1 : state.searchFocus) + 1); state.searchPage = Math.floor(state.searchFocus / SEARCH_PAGE_SIZE); renderInventory(); $("search")?.focus(); }
+      else if (event.key === "ArrowUp") { event.preventDefault(); state.searchFocus = Math.max(0, (state.searchFocus < 0 ? pageStart + 1 : state.searchFocus) - 1); state.searchPage = Math.floor(state.searchFocus / SEARCH_PAGE_SIZE); renderInventory(); $("search")?.focus(); }
+      else if (event.key === "Enter") { event.preventDefault(); select(filtered[state.searchFocus >= 0 ? state.searchFocus : pageStart].ref); }
     });
     $("inventory").querySelectorAll("[data-kind-filter]").forEach((button) => button.addEventListener("click", () => {
       state.activeKind = state.activeKind === button.dataset.kindFilter ? null : button.dataset.kindFilter;
@@ -1124,12 +1117,21 @@
 
   function overviewAssets() {
     const scope = overviewScope();
-    return visibleAssets().filter((item) => !scope || sameRef(item.ref, state.selected) || (item.ports || []).some((port) => scope.has(port.busId)));
+    if (!scope) return visibleAssets();
+    const items = new Set();
+    for (const id of scope) {
+      const bus = state.index.busById.get(id); if (bus) items.add(bus);
+      for (const asset of state.index.byBus.get(id) || []) items.add(asset);
+    }
+    const selected = itemFor(state.selected); if (selected) items.add(selected);
+    return [...items].filter((item) => !state.activeKind || item.ref.kind === state.activeKind);
   }
 
   function overviewBuses() {
     const scope = overviewScope();
-    return state.index.buses.filter((bus) => !scope || scope.has(bus.ref.id));
+    if (!scope) return state.index.buses;
+    for (const item of overviewAssets()) for (const port of item.ports || []) scope.add(port.busId);
+    return [...scope].map((id) => state.index.busById.get(id)).filter(Boolean);
   }
 
   function neighbourhoodForBus(busId, hops) {
@@ -1151,206 +1153,21 @@
     return { assets, buses: seenBuses };
   }
 
-  const multiWireProjection = globalThis.BMOPFProjections?.createMultiWireProjection({
-    escapeHtml,
-    entityLabelSvg,
-    findBus: (id) => state.index?.buses.find((bus) => bus.ref.id === id),
-    findRecord: (ref) => itemFor(ref)
-  });
   const deterministicLayout = globalThis.BMOPFLayouts?.createDeterministicLayout({
     getIndex: () => state.index,
     getLayout: () => state.layout
   });
-  function conductorVisual(...args) { return multiWireProjection.conductorVisual(...args); }
-  function terminalNames(...args) { return multiWireProjection.terminalNames(...args); }
-  function multiBusPanel(...args) { return multiWireProjection.multiBusPanel(...args); }
-  function multiWindingPanel(...args) { return multiWireProjection.multiWindingPanel(...args); }
-  function focusedPath(...args) { return multiWireProjection.focusedPath(...args); }
-  function branchModel(...args) { return multiWireProjection.branchModel(...args, (ref) => itemFor(ref)); }
-
+  const modelSheets = globalThis.BMOPFModelSheets.createModelSheets({
+    getIndex: () => state.index,
+    getResult: resultRecordFor,
+    getComparison: comparisonRecordFor,
+    getResultContext: () => ({ attached: Boolean(state.result), comparing: Boolean(state.resultCompare), label: state.resultLabel, comparisonLabel: state.resultCompareLabel, scenario: state.resultScenario }),
+    select: (ref) => select(ref),
+    copy: copyToClipboard
+  });
   function renderMultiHopControls() {
-    const controls = $("multi-hop-controls");
-    const selected = itemFor(state.selected);
-    if (state.view !== "multi" || !selected || selected.ref.kind !== "bus") {
-      controls.hidden = true;
-      controls.innerHTML = "";
-      return;
-    }
-    controls.hidden = false;
-    controls.innerHTML = `<span>Neighbourhood:</span>${[1, 2].map((hops) => `<button class="${state.multiHops === hops ? "active" : ""}" data-hops="${hops}" aria-pressed="${state.multiHops === hops}">${hops}-hop</button>`).join("")}`;
-    controls.querySelectorAll("[data-hops]").forEach((button) => button.addEventListener("click", () => { state.multiHops = Number(button.dataset.hops); render(); }));
-  }
-
-  function connectionDiagram(item, configuration, terminals, x, y) {
-    const config = String(configuration || "").toUpperCase();
-    const colour = colourOf(item.ref.kind);
-    const neutralIndex = terminals.findIndex((terminal) => /^(n|neutral|g|pe|ground|earth)$/i.test(String(terminal)));
-    const phaseTerminals = terminals.filter((_, index) => index !== neutralIndex).slice(0, 3);
-    const label = (terminal) => escapeHtml(String(terminal));
-    const phaseColour = (index) => ["#c2564b", "#4a8f5f", "#3f6fb9"][index % 3];
-    const device = item.ref.kind === "load"
-      ? `<rect x="-14" y="-10" width="28" height="20" rx="2" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><path d="M-7 0h14M4-5l6 5-6 5" fill="none" stroke="${colour}" stroke-width="1.5"/>`
-      : item.ref.kind === "ibr" ? `<circle cx="0" cy="0" r="14" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="0" y="4" text-anchor="middle" fill="${colour}" font-size="8">IBR</text>`
-        : `<circle cx="0" cy="0" r="14" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="0" y="4" text-anchor="middle" fill="${colour}" font-size="10">G</text>`;
-    const configLabel = config.replaceAll("_", " ");
-    let html = `<g transform="translate(${x} ${y})"><text x="0" y="-68" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(configLabel || "terminal")} connection</text>`;
-    if (config === "DELTA" && phaseTerminals.length >= 3) {
-      const points = [[-58, -16], [58, -16], [0, 42]];
-      const endpoints = [[-82, -16], [82, -16], [0, 62]];
-      const wires = points.map(([px, py], index) => {
-        const [ex, ey] = endpoints[index];
-        const textY = ey > py ? ey + 15 : ey - 7;
-        return `<line x1="${ex}" y1="${ey}" x2="${px}" y2="${py}" stroke="${phaseColour(index)}" stroke-width="2.5"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${phaseColour(index)}" stroke-width="1.5"/><circle cx="${ex}" cy="${ey}" r="2.5" fill="#fffdf9" stroke="${phaseColour(index)}" stroke-width="1.5"/><text x="${ex}" y="${textY}" text-anchor="middle" fill="#37332c" font-size="10">${label(phaseTerminals[index])}</text>`;
-      }).join("");
-      html += `<path d="M${points[0][0]} ${points[0][1]}L${points[1][0]} ${points[1][1]}L${points[2][0]} ${points[2][1]}Z" fill="none" stroke="${colour}" stroke-width="2"/>${wires}<g transform="translate(0 2)">${device}</g>`;
-    } else if (config === "WYE" && phaseTerminals.length >= 2) {
-      const points = phaseTerminals.map((terminal, index) => [-58 + index * (phaseTerminals.length === 1 ? 0 : 58), -22]);
-      const wires = points.map(([px, py], index) => {
-        const ex = px;
-        const ey = py - 20;
-        return `<line x1="${ex}" y1="${ey}" x2="${px}" y2="${py}" stroke="${phaseColour(index)}" stroke-width="2.5"/><line x1="${px}" y1="${py}" x2="0" y2="0" stroke="${phaseColour(index)}" stroke-width="2"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${phaseColour(index)}" stroke-width="1.5"/><circle cx="${ex}" cy="${ey}" r="2.5" fill="#fffdf9" stroke="${phaseColour(index)}" stroke-width="1.5"/><text x="${ex}" y="${ey - 7}" text-anchor="middle" fill="#37332c" font-size="10">${label(phaseTerminals[index])}</text>`;
-      }).join("");
-      html += `${wires}<g>${device}</g>${neutralIndex >= 0 ? `<line x1="0" y1="14" x2="0" y2="42" stroke="#5d574d" stroke-width="2" stroke-dasharray="4 3"/><circle cx="0" cy="42" r="3" fill="#fffdf9" stroke="#5d574d" stroke-width="1.5"/><text x="8" y="46" fill="#37332c" font-size="10">${label(terminals[neutralIndex])}</text>` : ""}`;
-    } else if (terminals.length >= 2) {
-      html += `<line x1="-62" y1="0" x2="-14" y2="0" stroke="${colour}" stroke-width="2"/><line x1="14" y1="0" x2="62" y2="0" stroke="${colour}" stroke-width="2"/><circle cx="-62" cy="0" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/><circle cx="62" cy="0" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/><text x="-62" y="-8" text-anchor="middle" fill="#37332c" font-size="10">${label(terminals[0])}</text><text x="62" y="-8" text-anchor="middle" fill="#37332c" font-size="10">${label(terminals[1])}</text><g>${device}</g>`;
-    } else {
-      html += `<text x="0" y="6" text-anchor="middle" fill="#70695f" font-size="11">Terminal topology unavailable</text>`;
-    }
-    return `${html}</g>`;
-  }
-
-  function transformerConfiguration(item, index) {
-    const record = item?.sourceRecord || {};
-    const winding = Array.isArray(record.windings) ? record.windings[index] : null;
-    if (winding?.configuration) return String(winding.configuration).toUpperCase();
-    const explicit = index === 0
-      ? (record.configuration_from ?? record.config_from)
-      : (record.configuration_to ?? record.config_to);
-    if (explicit) return String(explicit).toUpperCase();
-    const subtype = String(item?.subtype || "").toLowerCase();
-    return ({ wye_delta: ["WYE", "DELTA"], delta_wye: ["DELTA", "WYE"], single_phase: ["SINGLE_PHASE", "SINGLE_PHASE"], center_tap: ["SINGLE_PHASE", "CENTER_TAP"] }[subtype] || [])[index] || null;
-  }
-
-  function transformerWindingGlyph(configuration, x, y, side = "") {
-    const config = String(configuration || "").toUpperCase();
-    if (!config) return "";
-    const colour = "#4f789f";
-    const phaseColours = ["#c2564b", "#4a8f5f", "#3f6fb9"];
-    const label = config.replaceAll("_", " ");
-    const caption = side ? `${side}: ${label}` : label;
-    let shape = "";
-    if (config === "DELTA") {
-      const points = [[0, -22], [-25, 14], [25, 14]];
-      const endpoints = [[0, -38], [-41, 14], [41, 14]];
-      const phaseWires = points.map(([px, py], index) => {
-        const [ex, ey] = endpoints[index];
-        return `<line x1="${ex}" y1="${ey}" x2="${px}" y2="${py}" stroke="${phaseColours[index]}" stroke-width="2.5"/><circle cx="${ex}" cy="${ey}" r="2.3" fill="#fffdf9" stroke="${phaseColours[index]}" stroke-width="1.2"/><circle cx="${px}" cy="${py}" r="2.5" fill="#fffdf9" stroke="${phaseColours[index]}" stroke-width="1.3"/>`;
-      }).join("");
-      shape = `<path d="M-25 14L25 14L0-22Z" fill="none" stroke="${colour}" stroke-width="2"/>${phaseWires}`;
-    } else if (config === "WYE") {
-      const points = [[-25, -14], [0, -25], [25, -14]];
-      const endpoints = [[-41, -14], [0, -41], [41, -14]];
-      const phaseWires = points.map(([px, py], index) => {
-        const [ex, ey] = endpoints[index];
-        return `<line x1="${ex}" y1="${ey}" x2="${px}" y2="${py}" stroke="${phaseColours[index]}" stroke-width="2.5"/><line x1="${px}" y1="${py}" x2="0" y2="0" stroke="${phaseColours[index]}" stroke-width="2"/><circle cx="${ex}" cy="${ey}" r="2.3" fill="#fffdf9" stroke="${phaseColours[index]}" stroke-width="1.2"/><circle cx="${px}" cy="${py}" r="2.5" fill="#fffdf9" stroke="${phaseColours[index]}" stroke-width="1.3"/>`;
-      }).join("");
-      shape = `${phaseWires}<line x1="0" y1="0" x2="0" y2="23" stroke="#5d574d" stroke-width="2" stroke-dasharray="4 3"/><circle cx="0" cy="0" r="3" fill="#fffdf9" stroke="${colour}"/><circle cx="0" cy="23" r="2.5" fill="#fffdf9" stroke="#5d574d"/>`;
-    } else if (config === "SINGLE_PHASE" || config === "CENTER_TAP") {
-      shape = `<line x1="-25" y1="0" x2="-8" y2="0" stroke="${colour}" stroke-width="2"/><line x1="8" y1="0" x2="25" y2="0" stroke="${colour}" stroke-width="2"/><circle cx="-8" cy="0" r="8" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><circle cx="8" cy="0" r="8" fill="#fffdf9" stroke="${colour}" stroke-width="2"/>`;
-    } else {
-      return "";
-    }
-    return `<g transform="translate(${x} ${y})" aria-label="${escapeHtml(caption)} transformer winding"><title>${escapeHtml(caption)} transformer winding</title><text x="0" y="-52" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(caption)}</text>${shape}</g>`;
-  }
-
-  function transformerWindingInterior(configuration, body, side, terminals, busId, labelPrefix = null, options = {}) {
-    const config = String(configuration || "").toUpperCase();
-    const phaseColours = ["#c2564b", "#4a8f5f", "#3f6fb9"];
-    const neutralIndex = terminals.findIndex((terminal) => /^(n|neutral|g|pe|ground|earth)$/i.test(String(terminal)));
-    const phaseEntries = terminals.map((terminal, index) => ({ terminal, index })).filter(({ index }) => index !== neutralIndex).slice(0, 3);
-    const horizontalEdge = side === "top" || side === "bottom";
-    const edgeX = side === "left" ? body.x : body.x + body.width;
-    const edgeY = side === "top" ? body.y : body.y + body.height;
-    const terminalPoints = horizontalEdge
-      ? terminals.map((_, index) => [body.x + 28 + index * ((body.width - 56) / Math.max(terminals.length - 1, 1)), edgeY])
-      : terminals.map((_, index) => [edgeX, body.y + 28 + index * ((body.height - 56) / Math.max(terminals.length - 1, 1))]);
-    const cx = side === "left" ? body.x + 53 : side === "right" ? body.x + body.width - 53 : body.x + body.width / 2;
-    const cy = side === "top" ? body.y + 53 : side === "bottom" ? body.y + body.height - 53 : body.y + body.height / 2 + 4;
-    const dotHtml = terminalPoints.map(([px, py], index) => {
-      const visual = conductorVisual(terminals[index], terminals[index], busId, busId, index);
-      return `<circle cx="${px}" cy="${py}" r="4" fill="#fffdf9" stroke="${visual.colour}" stroke-width="2"/>`;
-    }).join("");
-    const configLabel = config.replaceAll("_", " ");
-    const sideLabel = labelPrefix ?? (side === "left" ? "from: " : side === "right" ? "to: " : "");
-    const segmentCoil = (start, end, colour) => {
-      if (!options.coil) return "";
-      const dx = end[0] - start[0]; const dy = end[1] - start[1]; const length = Math.hypot(dx, dy);
-      if (length < 8) return "";
-      const ux = dx / length; const uy = dy / length; const px = -uy; const py = ux;
-      const begin = 0.18; const finish = 0.82; const turns = 3; const steps = turns * 2; const amplitude = Math.min(4.5, length / 12);
-      const point = (fraction, offset = 0) => [start[0] + dx * fraction + px * offset, start[1] + dy * fraction + py * offset];
-      const first = point(begin); let path = `M${first[0]} ${first[1]}`;
-      for (let i = 0; i < steps; i += 1) {
-        const t0 = begin + (finish - begin) * (i / steps); const t1 = begin + (finish - begin) * ((i + 1) / steps);
-        const control = point((t0 + t1) / 2, (i % 2 === 0 ? 1 : -1) * amplitude); const next = point(t1);
-        path += `Q${control[0]} ${control[1]} ${next[0]} ${next[1]}`;
-      }
-      return `<path d="${path}" fill="none" stroke="${colour}" stroke-width="2.6" stroke-linecap="round"/>`;
-    };
-    const labelY = side === "bottom" ? body.y + body.height - 10 : body.y + 18;
-    let html = `<g aria-label="${escapeHtml(side)} ${escapeHtml(configLabel || "terminal")} winding"><text x="${cx}" y="${labelY}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">${escapeHtml(`${sideLabel}${configLabel || "terminal"}`)}</text>${dotHtml}`;
-    if (config === "DELTA" && phaseEntries.length >= 3) {
-      const points = [[cx, cy - 29], [cx - 25, cy + 17], [cx + 25, cy + 17]];
-      html += `<path d="M${points[0][0]} ${points[0][1]}L${points[1][0]} ${points[1][1]}L${points[2][0]} ${points[2][1]}Z" fill="none" stroke="#4f789f" stroke-width="2"/>`;
-      if (options.coil) [[0, 1], [1, 2], [2, 0]].forEach(([from, to], branchIndex) => { html += segmentCoil(points[from], points[to], phaseColours[branchIndex]); });
-      phaseEntries.forEach(({ index }, phaseIndex) => {
-        const [px, py] = points[phaseIndex]; const [tx, ty] = terminalPoints[index]; const colour = phaseColours[phaseIndex];
-        html += `<path d="M${tx} ${ty}L${px} ${py}" fill="none" stroke="${colour}" stroke-width="2.5"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/>`;
-      });
-    } else if (config === "WYE" && phaseEntries.length >= 2) {
-      const radius = 34;
-      const centre = [cx, cy + 2];
-      const points = [
-        [centre[0], centre[1] - radius],
-        [centre[0] + radius * Math.cos(Math.PI / 6), centre[1] + radius * Math.sin(Math.PI / 6)],
-        [centre[0] - radius * Math.cos(Math.PI / 6), centre[1] + radius * Math.sin(Math.PI / 6)]
-      ];
-      phaseEntries.forEach(({ index }, phaseIndex) => {
-        const [px, py] = points[phaseIndex]; const [tx, ty] = terminalPoints[index]; const colour = phaseColours[phaseIndex];
-        html += `<path d="M${tx} ${ty}L${px} ${py}M${px} ${py}L${centre[0]} ${centre[1]}" fill="none" stroke="${colour}" stroke-width="2.5"/><circle cx="${px}" cy="${py}" r="3" fill="#fffdf9" stroke="${colour}" stroke-width="1.5"/>`;
-        html += segmentCoil([px, py], centre, colour);
-      });
-      html += `<circle cx="${centre[0]}" cy="${centre[1]}" r="3" fill="#fffdf9" stroke="#4f789f" stroke-width="1.5"/>`;
-      if (neutralIndex >= 0) {
-        const [tx, ty] = terminalPoints[neutralIndex];
-        html += `<path d="M${tx} ${ty}L${centre[0]} ${centre[1]}" fill="none" stroke="#5d574d" stroke-width="2" stroke-dasharray="4 3"/>`;
-      }
-    } else if (terminals.length >= 2) {
-      const [left] = terminalPoints; const right = terminalPoints[terminalPoints.length - 1];
-      html += `<path d="M${left[0]} ${left[1]}L${cx - 17} ${cy}M${cx + 17} ${cy}L${right[0]} ${right[1]}" fill="none" stroke="#4f789f" stroke-width="2"/>`;
-    }
-    html += `</g>`;
-    return { html, terminalPoints };
-  }
-
-  function transformerIsolationAndCoils(body, isolationBottom = body.y + body.height - 28) {
-    const mid = body.x + body.width / 2;
-    const top = body.y + 32;
-    return `<line x1="${mid - 5}" y1="${top}" x2="${mid - 5}" y2="${isolationBottom}" stroke="#4f789f" stroke-width="2"/><line x1="${mid + 5}" y1="${top}" x2="${mid + 5}" y2="${isolationBottom}" stroke="#4f789f" stroke-width="2"/>`;
-  }
-
-  function singleDeviceConnectionDiagram(item, configuration, terminals, x, y) {
-    const config = String(configuration || "").toUpperCase();
-    const colour = colourOf(item.ref.kind);
-    const body = { x: -105, y: -74, width: 210, height: 145 };
-    const interior = transformerWindingInterior(config, body, "left", terminals, null, "");
-    const device = item.ref.kind === "load"
-      ? `<rect x="46" y="-10" width="28" height="20" rx="2" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><path d="M53 0h14M64-5l6 5-6 5" fill="none" stroke="${colour}" stroke-width="1.5"/>`
-      : item.ref.kind === "ibr" ? `<circle cx="60" cy="0" r="14" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="60" y="4" text-anchor="middle" fill="${colour}" font-size="8">IBR</text>`
-        : `<circle cx="60" cy="0" r="14" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="60" y="4" text-anchor="middle" fill="${colour}" font-size="10">G</text>`;
-    const configLabel = config.replaceAll("_", " ") || "terminal";
-    const phaseColour = "#4f789f";
-    return `<g transform="translate(${x} ${y})" aria-label="${escapeHtml(configLabel)} connection for ${escapeHtml(item.ref.kind)}"><title>${escapeHtml(configLabel)} connection for ${escapeHtml(item.ref.kind)}</title><rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="8" fill="#fffdf9" stroke="${colour}" stroke-width="2"/><text x="0" y="${body.y + 18}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">${escapeHtml(configLabel)} connection</text>${interior.html}<path d="M-25 5H43" fill="none" stroke="${phaseColour}" stroke-width="2.5"/>${device}</g>`;
+    $("multi-hop-controls").hidden = true;
+    $("multi-hop-controls").innerHTML = "";
   }
 
   function renderInspector() {
@@ -1394,7 +1211,7 @@
     const resultHtml = state.result ? (result ? `<h3 class="result-heading">Simulation / optimisation result${state.resultCompare ? " · comparison" : ""}</h3><table class="property-table result-table">${comparisonHeader}${metricRows || `<tr><td colspan="${resultColspan}" class="muted">No recognised metrics were found for this record.</td></tr>`}</table><details class="copyable-details"><summary>Raw result record ${copyTargetButton("Copy raw result record")}</summary><pre class="raw result-raw"></pre></details>${comparisonRaw}` : `<p class="muted result-missing">No result record found for this asset.</p>`) : "";
     const unitContext = { kind: item.ref.kind, source: "case" };
     const propertyRows = keys.map((key) => { const value = formatInspectorValue(record[key], key, unitContext); return `<tr><th>${escapeHtml(key)}</th><td><span class="copyable-value-text">${escapeHtml(value)}</span>${copyButton(`${key}: ${value}`, `Copy ${key} property`)}</td></tr>`; }).join("");
-    $("inspector").innerHTML = `<h3>${entityLabelHtml(item.ref.kind, item.ref.id)}</h3><p class="muted">status: ${escapeHtml(item.status)} · support: ${escapeHtml(item.support || "raw-only")}</p><p class="support-note">${escapeHtml(supportNote)}</p><p class="support-note inspector-units-note">Physical quantities are displayed in SI base units (without automatic scaling); engineering angles and geographic coordinates retain their degree convention. Unknown fields remain in their source form.</p>${relatedHtml}${portHtml}${resultHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${propertyRows}</table><details class="copyable-details"><summary>Raw record ${copyTargetButton("Copy raw component record")}</summary><pre class="raw component-raw"></pre></details>`;
+    $("inspector").innerHTML = `<h3>${entityLabelHtml(item.ref.kind, item.ref.id)}</h3><p class="muted">status: ${escapeHtml(item.status)} · support: ${escapeHtml(item.support || "raw-only")}</p><p class="support-note">${escapeHtml(supportNote)}</p><p class="support-note inspector-units-note">Physical quantities are displayed in SI base units (without automatic scaling); voltage-source angles use radians and geographic coordinates use degrees. Legacy result angle units require source evidence. Unknown fields remain in their source form.</p>${relatedHtml}${portHtml}${resultHtml}<h3 style="margin-top:14px">Properties</h3><table class="property-table">${propertyRows}</table><details class="copyable-details"><summary>Raw record ${copyTargetButton("Copy raw component record")}</summary><pre class="raw component-raw"></pre></details>`;
     $("inspector").querySelector(".component-raw").textContent = JSON.stringify(record, null, 2);
     const resultRaw = $("inspector").querySelector(".result-raw");
     if (resultRaw) resultRaw.textContent = JSON.stringify(result, null, 2);
@@ -1423,8 +1240,11 @@
     if (field === "longitude" || field === "latitude") return "°";
     if (field === "voltage_deviation" || field === "vm_deviation" || field === "v_deviation" || field.endsWith("_voltage_deviation")) return "p.u.";
     if (field === "loading" || field.endsWith("_loading")) return "p.u.";
-    if (field === "x_sc" || field === "per_unit" || field.endsWith("_per_unit")) return "p.u.";
-    if (field === "va" || field === "v_angle" || field === "angle" || field.endsWith("_angle")) return "°";
+    if (field === "per_unit" || field.endsWith("_per_unit")) return "p.u.";
+    if (field === "x_sc" && kind === "transformer") return "Ω";
+    if (field === "v_angle" && kind === "voltage_source" && context.source === "case") return "rad";
+    if (field === "va" || field === "v_angle") return null; // legacy result arrays do not declare angle units
+    if (field === "angle" || field.endsWith("_angle")) return "°";
     if (field === "vm" || field === "v_magnitude" || field === "voltage" || field.startsWith("v_nom") || field.endsWith("_voltage")) return "V";
     if (field === "i_max" || field === "i_nom" || field === "current" || field === "ampacity" || field.endsWith("_current")) return "A";
     if (field === "s_max" || field === "s_rating" || field === "s_nom" || field === "apparent_power" || field.endsWith("_apparent_power")) return "VA";
@@ -1450,7 +1270,13 @@
 
   function svgShell(content, options = {}) { const rendererContract = globalThis.BMOPFRendererContract; const camera = options.camera || state.cameras[state.view]; const shellOptions = { camera, view: state.view, escapeHtml, ...options }; return rendererContract ? rendererContract.svgShell(content, shellOptions) : `<svg${options.className ? ` class="${escapeHtml(options.className)}"` : ""}${options.size ? ` width="${Math.ceil(options.size.width)}" height="${Math.ceil(options.size.height)}" style="width:${Math.ceil(options.size.width)}px;height:${Math.ceil(options.size.height)}px;max-width:none"` : ""} viewBox="0 0 ${Math.ceil(options.size?.width || 760)} ${Math.ceil(options.size?.height || 500)}" role="img" aria-label="${escapeHtml(state.view)} view"><g id="viewport" transform="translate(${camera.x} ${camera.y}) scale(${camera.scale})">${content}</g></svg>`; }
 
+  function zoomCamera(factor, x = 380, y = 250) {
+    const camera = state.cameras[state.view], previous = camera.scale;
+    camera.scale = Math.max(.5, Math.min(state.view === "geo" ? 512 : 3, previous * factor));
+    if (state.view === "geo") { const ratio = camera.scale / previous; camera.x = x - (x-camera.x)*ratio; camera.y = y - (y-camera.y)*ratio; }
+  }
   function updateCamera() {
+    if (state.view === "geo" && geospatialRenderer.isRegional()) { geospatialRenderer.scheduleRefresh(); return; }
     const viewport = $("canvas").querySelector("#viewport");
     if (!viewport) return;
     const camera = state.cameras[state.view];
@@ -1462,21 +1288,23 @@
     if (!state.index || state.view === "diagnostics") { controls.hidden = true; controls.innerHTML = ""; return; }
     controls.hidden = false;
     const layoutControls = state.view === "single"
-      ? `<span class="layout-label">Layout:</span><label class="layout-select">Direction<select id="sld-direction" aria-label="Single-line direction"><option value="source-to-load" ${state.layout.direction === "source-to-load" ? "selected" : ""}>Source → load</option><option value="load-to-source" ${state.layout.direction === "load-to-source" ? "selected" : ""}>Load → source</option></select></label><label class="layout-select">Root<select id="sld-root" aria-label="Single-line root bus"><option value="auto" ${state.layout.root === "auto" ? "selected" : ""}>Automatic</option>${state.index.buses.map((bus) => `<option value="${escapeHtml(bus.ref.id)}" ${state.layout.root === bus.ref.id ? "selected" : ""}>${escapeHtml(bus.ref.id)}</option>`).join("")}</select></label><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
+      ? `<span class="layout-label">Layout:</span><label class="layout-select">Direction<select id="sld-direction" aria-label="Single-line direction"><option value="source-to-load" ${state.layout.direction === "source-to-load" ? "selected" : ""}>Source → load</option><option value="load-to-source" ${state.layout.direction === "load-to-source" ? "selected" : ""}>Load → source</option></select></label><label class="layout-select">Root${state.index.buses.length > 500 ? `<input id="sld-root" aria-label="Single-line root bus" placeholder="Bus ID or auto" value="${escapeHtml(state.layout.root || "auto")}" title="Enter any bus ID, or auto for automatic roots">` : `<select id="sld-root" aria-label="Single-line root bus"><option value="auto" ${state.layout.root === "auto" ? "selected" : ""}>Automatic</option>${state.index.buses.map((bus) => `<option value="${escapeHtml(bus.ref.id)}" ${state.layout.root === bus.ref.id ? "selected" : ""}>${escapeHtml(bus.ref.id)}</option>`).join("")}</select>`}</label><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
     const overviewButton = state.view === "single" ? `<button data-navigation="overview" aria-label="Show full overview" ${state.selected ? "" : "disabled"}>Overview</button>` : "";
     const detailTarget = itemFor(state.selected);
-    const detailButton = state.view === "single" && state.multiDetailCollapsed && multiDetailAvailable(detailTarget) ? `<button data-navigation="multi-detail">Show component detail</button>` : "";
+    const detailButton = ["single", "geo"].includes(state.view) && state.multiDetailCollapsed && multiDetailAvailable(detailTarget) ? `<button data-navigation="multi-detail">Show component detail</button>` : "";
     controls.innerHTML = `<span>View:</span><button data-navigation="back" aria-label="Go back" ${navigationDisabled("back") ? "disabled" : ""}>Back</button><button data-navigation="forward" aria-label="Go forward" ${navigationDisabled("forward") ? "disabled" : ""}>Forward</button>${overviewButton}${detailButton}<button data-camera="zoom-out" aria-label="Zoom out">−</button><button data-camera="zoom-in" aria-label="Zoom in">+</button><button data-camera="reset">Fit / reset</button><button data-camera="focus" ${state.selected ? "" : "disabled"}>Focus selection</button><button data-camera="export-svg">Export SVG</button><button data-camera="export-png">Export PNG</button>${layoutControls}`;
+    if (state.view === "multi") controls.querySelectorAll("[data-camera]").forEach((button) => button.remove());
     if (state.view === "single") {
       const elkButton = document.createElement("button"); elkButton.dataset.layout = "elk"; elkButton.textContent = "Apply ELK layout";
       controls.querySelector('[data-layout="left"]')?.before(elkButton);
       const stressButton = document.createElement("button"); stressButton.dataset.layout = "stress"; stressButton.textContent = "Apply stress layout"; stressButton.title = "Recompute a deterministic PivotMDS + SMACOF stress arrangement";
       controls.querySelector('[data-layout="left"]')?.before(stressButton);
     }
+    if ($("canvas").querySelector(".network-directory")) controls.querySelectorAll("[data-camera], [data-layout], .layout-select, .layout-label").forEach(node => { node.hidden = true; });
     controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
       const camera = state.cameras[state.view];
-      if (button.dataset.camera === "zoom-in") camera.scale = Math.min(3, camera.scale * 1.25);
-      else if (button.dataset.camera === "zoom-out") camera.scale = Math.max(.5, camera.scale / 1.25);
+      if (button.dataset.camera === "zoom-in") zoomCamera(1.25);
+      else if (button.dataset.camera === "zoom-out") zoomCamera(1/1.25);
       else if (button.dataset.camera === "focus") { focusSelection(); return; }
       else if (button.dataset.camera === "export-svg") { exportCurrentSvg(); return; }
       else if (button.dataset.camera === "export-png") { exportCurrentPng(); return; }
@@ -1497,7 +1325,7 @@
     const direction = $("sld-direction");
     if (direction) direction.addEventListener("change", (event) => { switchLayoutProfile(event.target.value, state.layout.root); renderView(); renderCameraControls(); });
     const root = $("sld-root");
-    if (root) root.addEventListener("change", (event) => { switchLayoutProfile(state.layout.direction, event.target.value); renderView(); renderCameraControls(); });
+    if (root) root.addEventListener("change", (event) => { const id = event.target.value || "auto"; if (id !== "auto" && !state.index.busById.has(id)) { event.target.setCustomValidity("Enter an existing bus ID or auto."); event.target.reportValidity(); return; } event.target.setCustomValidity(""); switchLayoutProfile(state.layout.direction, id); renderView(); renderCameraControls(); });
     bindLayoutControls();
   }
 
@@ -1548,47 +1376,69 @@
   }
 
   function bindCamera() {
+    if (state.view === "multi") return;
     const canvas = $("canvas");
     const svg = canvas.querySelector("svg");
     if (!svg) return;
     svg.addEventListener("wheel", (event) => {
       event.preventDefault();
       const camera = state.cameras[state.view];
-      camera.scale = Math.max(.5, Math.min(3, camera.scale * (event.deltaY < 0 ? 1.1 : .9)));
+      const point = svg.createSVGPoint(); point.x = event.clientX; point.y = event.clientY;
+      const local = point.matrixTransform(svg.getScreenCTM().inverse());
+      zoomCamera(event.deltaY < 0 ? 1.1 : .9, local.x, local.y);
       updateCamera();
     }, { passive: false });
     let drag = null;
     svg.addEventListener("pointerdown", (event) => {
-      if (event.target.closest("[data-kind]")) return;
+      if (event.target.closest("[data-kind], [data-region-cell], [data-landmark-cell]")) return;
       drag = { x: event.clientX, y: event.clientY, camera: { ...state.cameras[state.view] } };
       svg.setPointerCapture(event.pointerId);
     });
     svg.addEventListener("pointermove", (event) => {
       if (!drag) return;
       const camera = state.cameras[state.view];
-      camera.x = drag.camera.x + event.clientX - drag.x;
-      camera.y = drag.camera.y + event.clientY - drag.y;
+      camera.x = drag.camera.x + (event.clientX - drag.x) / svg.getScreenCTM().a;
+      camera.y = drag.camera.y + (event.clientY - drag.y) / svg.getScreenCTM().d;
       updateCamera();
     });
     svg.addEventListener("pointerup", () => { drag = null; });
     svg.addEventListener("pointercancel", () => { drag = null; });
   }
+  let geographicCache = null;
   function busCoordinates() {
-    const buses = state.index.buses;
-    const mapped = buses.filter((b) => b.coordinates);
-    const source = mapped.length >= 2 ? mapped : [];
-    const xs = source.map((b) => b.coordinates.longitude); const ys = source.map((b) => b.coordinates.latitude);
-    const minX = Math.min(...xs, 0); const maxX = Math.max(...xs, 1); const minY = Math.min(...ys, 0); const maxY = Math.max(...ys, 1);
-    const project = (longitude, latitude) => [55 + ((Number(longitude) - minX) / (maxX - minX || 1)) * 650, 440 - ((Number(latitude) - minY) / (maxY - minY || 1)) * 380];
-    const positions = new Map();
-    buses.forEach((bus, i) => {
-      if (source.length >= 2) positions.set(bus.ref.id, bus.coordinates ? project(bus.coordinates.longitude, bus.coordinates.latitude) : null);
-      else positions.set(bus.ref.id, [90 + (i % 4) * 210, 110 + Math.floor(i / 4) * 140]);
-    });
-    return { positions, geographic: source.length >= 2, project, unmapped: buses.filter((bus) => source.length >= 2 && !bus.coordinates) };
+    if (geographicCache?.index === state.index) return geographicCache.value;
+    const buses = state.index.buses, mapped = buses.filter(b => b.coordinates);
+    const geographic = mapped.length > 0;
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const bus of mapped) {
+      minX = Math.min(minX, bus.coordinates.longitude); maxX = Math.max(maxX, bus.coordinates.longitude);
+      minY = Math.min(minY, bus.coordinates.latitude); maxY = Math.max(maxY, bus.coordinates.latitude);
+    }
+    const centerX = geographic ? (minX + maxX) / 2 : 0, centerY = geographic ? (minY + maxY) / 2 : 0;
+    const longitudeScale = Math.max(.01, Math.cos(centerY * Math.PI / 180));
+    const scale = geographic ? Math.min(650 / Math.max((maxX - minX) * longitudeScale, .00001), 380 / Math.max(maxY - minY, .00001)) : 1;
+    const project = (longitude, latitude) => [380 + (Number(longitude) - centerX) * longitudeScale * scale, 250 - (Number(latitude) - centerY) * scale];
+    const positions = new Map(buses.map((bus, i) => [bus.ref.id, geographic ? (bus.coordinates ? project(bus.coordinates.longitude, bus.coordinates.latitude) : null) : [90 + i % 4 * 210, 110 + Math.floor(i / 4) * 140]]));
+    const value = { positions, geographic, project, unmapped: buses.filter(bus => !bus.coordinates) };
+    geographicCache = { index: state.index, value }; return value;
   }
 
-  function singlePositions() { return deterministicLayout.singlePositions(); }
+  // Lay out the visible neighbourhood, not all 24,000+ buses behind it.
+  // Include boundary endpoints so every displayed branch retains both ends.
+  let focusedLayoutCache = null;
+  const focusedLayout = globalThis.BMOPFLayouts.createDeterministicLayout({
+    getIndex: () => {
+      if (focusedLayoutCache?.index === state.index && sameRef(focusedLayoutCache.selected, state.selected) && focusedLayoutCache.kind === state.activeKind) return focusedLayoutCache.scoped;
+      const assets = overviewAssets();
+      const ids = overviewScope() || new Set();
+      for (const item of assets) for (const port of item.ports || []) ids.add(port.busId);
+      const scoped = { assets, buses: [...ids].map((id) => state.index.busById.get(id)).filter(Boolean) };
+      focusedLayoutCache = { index: state.index, selected: state.selected, kind: state.activeKind, scoped };
+      return scoped;
+    },
+    getLayout: () => state.layout
+  });
+  function singlePositions() { return overviewScope() ? focusedLayout.singlePositions() : deterministicLayout.singlePositions(); }
 
   function focusSelection() {
     const item = itemFor(state.selected); if (!item || !state.index || ["multi", "diagnostics"].includes(state.view)) return;
@@ -1634,7 +1484,10 @@
     entityLabelSvg,
     resultTooltip,
     resultVoltageVisual,
-    resultLegend
+    resultRecordFor,
+    resultPairingStatus,
+    resultLegend,
+    select
   });
   function drawGeo() { return geospatialRenderer.drawGeo(); }
 
@@ -1649,7 +1502,7 @@
     bindSvgSelection,
     singlePositions,
     singleBounds: deterministicLayout.singleBounds,
-    singleLayoutInfo: deterministicLayout.singleLayoutInfo,
+    singleLayoutInfo: () => (overviewScope() ? focusedLayout : deterministicLayout).singleLayoutInfo(),
     overviewAssets,
     overviewBuses,
     sameRef,
@@ -1668,227 +1521,50 @@
   function drawSingle() { return singleWireRenderer.drawSingle(); }
 
   function drawMulti(target = $("canvas"), { announce = target === $("canvas") } = {}) {
-    const setMultiStatus = announce ? setStatus : () => {};
-    const multiShell = (content, options = {}) => target === $("canvas") ? svgShell(content, options) : svgShell(content, { ...options, camera: { x: 0, y: 0, scale: 1 }, view: "multi" });
-    const item = itemFor(state.selected);
-    if (!item) {
-      setMultiStatus("Select a line, switch, or transformer to expand its terminal-level neighbourhood.");
-      target.innerHTML = `<div class="message">Multi-wire focus mode starts from a selected multi-terminal device.</div>`;
-      return;
-    }
-    if (item.ref.kind === "bus") {
-      const neighbourhood = neighbourhoodForBus(item.ref.id, state.multiHops);
-      const incident = neighbourhood.assets;
-      const busPanel = multiBusPanel(item, { terminals: item.terminals }, 35, 70, 220, "left");
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg("bus", item.ref.id)}<tspan class="entity-meta"> · terminal neighbourhood</tspan></text>${busPanel.html}`;
-      content += `<rect x="300" y="70" width="425" height="350" rx="8" fill="#fffdf9" stroke="#ded8cc"/><text x="512" y="102" text-anchor="middle" font-size="15">${state.multiHops}-hop assets</text>`;
-      incident.slice(0, 7).forEach((device, i) => {
-        const y = 140 + i * 38;
-        const attachedPorts = (device.ports || []).filter((port) => port.busId === item.ref.id);
-        const terminalText = attachedPorts.map((port) => `${port.role}: ${terminalNames(port).join(", ")}`).join(" · ");
-        const warning = (device.connections || []).find((connection) => connection.warning)?.warning;
-        content += `<g data-kind="${escapeHtml(device.ref.kind)}" data-id="${escapeHtml(device.ref.id)}"><circle cx="335" cy="${y - 4}" r="6" fill="${colourOf(device.ref.kind)}"/><text x="352" y="${y}" fill="#37332c" font-size="13">${entityLabelSvg(device.ref.kind, device.ref.id)}</text><text x="352" y="${y + 15}" fill="#70695f" font-size="10">${escapeHtml(terminalText || "terminal mapping unavailable")}</text>${warning ? `<text x="352" y="${y + 28}" fill="#8a4d20" font-size="10">⚠ ${escapeHtml(warning)}</text>` : ""}<title>${escapeHtml(titleOf(device))}${terminalText ? ` · ${escapeHtml(terminalText)}` : ""}</title></g>`;
-      });
-      if (incident.length > 7) content += `<text x="512" y="405" text-anchor="middle" fill="#70695f" font-size="12">+ ${incident.length - 7} more in the inspector</text>`;
-      content += `<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">Select an incident device to expand its conductor pairing</text>`;
-      setMultiStatus(`${item.terminals.length} terminals · ${incident.length} assets across ${neighbourhood.buses.size} buses · ${state.multiHops}-hop`);
-      target.innerHTML = multiShell(content);
-      bindCopyButtons(target);
-      bindSvgSelection(target);
-      return;
-    }
-    if (item.ref.kind === "transformer" && item.ports?.length > 2) {
-      const body = { x: 280, y: 100, width: 200, height: 240 };
-      const layouts = item.ports.map((_, i) => {
-        if (i === 0) return { x: 25, y: 78, width: 205, side: "left" };
-        if (i === 1) return { x: 530, y: 78, width: 205, side: "right" };
-        const count = item.ports.length - 2;
-        const width = Math.min(205, Math.max(150, 680 / Math.max(count, 1)));
-        const x = 380 - (width * count) / 2 + (i - 2) * width;
-        return { x, y: 370, width, side: "top" };
-      });
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · winding detail</tspan></text><rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="10" fill="#e8f0f8" stroke="#4f789f" stroke-width="3"/><text x="380" y="${body.y + 28}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">galvanically isolated windings</text>${transformerIsolationAndCoils(body, body.y + body.height - 105)}`;
-      item.ports.forEach((winding, i) => {
-        const layout = layouts[i];
-        const bus = state.index.buses.find((candidate) => candidate.ref.id === winding.busId) || { ref: { id: winding.busId }, groundedTerminals: [] };
-        const windingRecord = item.sourceRecord?.windings?.[i] || {};
-        const panel = multiWindingPanel(bus, winding, layout.x, layout.y, layout.width, layout.side);
-        content += panel.html;
-        const interior = i < 3 ? transformerWindingInterior(windingRecord.configuration, body, i === 0 ? "left" : i === 1 ? "right" : "bottom", winding.terminals || [], winding.busId, null, { coil: true }) : null;
-        if (interior) content += interior.html;
-        panel.anchors.forEach((anchor, terminalIndex) => {
-          const terminal = winding.terminals[terminalIndex] || "?";
-          const visual = conductorVisual(terminal, terminal, winding.busId, winding.busId, terminalIndex);
-          const target = interior?.terminalPoints?.[terminalIndex] || (layout.side === "left" ? [body.x, body.y + 28 + terminalIndex * 22]
-            : layout.side === "right" ? [body.x + body.width, body.y + 28 + terminalIndex * 22]
-              : [body.x + 38 + terminalIndex * 42, body.y + body.height]);
-          content += focusedPath([anchor, target], visual, "unknown");
-        });
-        const details = [windingRecord.configuration, windingRecord.v_nom === undefined ? null : `V ${formatValue(windingRecord.v_nom)}`].filter(Boolean).join(" · ");
-        content += `<text x="${layout.side === "left" ? layout.x + layout.width + 8 : layout.side === "right" ? layout.x - 8 : layout.x + layout.width / 2}" y="${layout.side === "top" ? layout.y + 78 : layout.y + 42}" text-anchor="${layout.side === "left" ? "start" : layout.side === "right" ? "end" : "middle"}" fill="#70695f" font-size="10">${escapeHtml(details || winding.role)}</text>`;
-      });
-      content += `<text x="380" y="535" text-anchor="middle" fill="#70695f" font-size="12">Each winding keeps its bus and terminal stack; no false direct bus-to-bus edges are drawn</text>`;
-      setMultiStatus(`${item.ports.length} winding ports · ${item.status}`);
-      target.innerHTML = multiShell(content, { size: { width: 760, height: 580 } });
-      bindCopyButtons(target);
-      bindSvgSelection(target);
-      return;
-    }
-    if (!item.connections?.length) {
-      const attachment = item.ports?.[0];
-      if (!attachment) {
-        setMultiStatus("This record has no renderable terminal connection.");
-        target.innerHTML = `<div class="message">The selected record is inspectable but has no terminal connection to draw.</div>`;
-        return;
-      }
-      const terminals = attachment.terminals.length ? attachment.terminals : ["(no terminal map)"];
-      const record = item.sourceRecord || {};
-      const configuration = record.configuration ? `connection: ${String(record.configuration).replaceAll("_", " ")}` : null;
-      const model = item.ref.kind === "load" ? `load model: ${String(record.model || "CONSTANT_POWER").replaceAll("_", " ")}${record.model ? "" : " (default)"}` : null;
-      const details = [configuration, model].filter(Boolean);
-      const diagramY = 290;
-      const footerY = 404;
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}</text><text x="380" y="125" text-anchor="middle" font-size="15">${entityLabelSvg("bus", attachment.busId)}</text>`;
-      details.forEach((detail, i) => { content += `<text x="380" y="${148 + i * 15}" text-anchor="middle" fill="#70695f" font-size="11">${escapeHtml(detail)}</text>`; });
-      content += `<text x="380" y="205" text-anchor="middle" fill="#70695f" font-size="11">terminal map: ${escapeHtml(terminals.join(" · "))}</text>`;
-      const normalizedConfiguration = String(record.configuration || "").toUpperCase();
-      content += ["DELTA", "WYE"].includes(normalizedConfiguration) && terminals.length >= 2
-        ? singleDeviceConnectionDiagram(item, normalizedConfiguration, terminals, 380, diagramY)
-        : connectionDiagram(item, record.configuration, terminals, 380, diagramY);
-      content += `<text x="380" y="${footerY}" text-anchor="middle" fill="#70695f" font-size="12">Single-bus attachment · inspect properties for device details</text>`;
-      setMultiStatus(`${terminals.length} attached terminals · ${item.status}`);
-      target.innerHTML = multiShell(content);
-      bindCopyButtons(target);
-      bindSvgSelection(target);
-      return;
-    }
-    const connection = item.connections[0];
-    const left = connection.from; const right = connection.to;
-    const leftBus = state.index.buses.find((bus) => bus.ref.id === left.busId) || { ref: { id: left.busId }, groundedTerminals: [] };
-    const rightBus = state.index.buses.find((bus) => bus.ref.id === right.busId) || { ref: { id: right.busId }, groundedTerminals: [] };
-    const branch = ["line", "dc_branch"].includes(item.ref.kind) ? branchModel(item, connection) : null;
-    const leftPanel = multiBusPanel(leftBus, left, 20, 70, 200, "left");
-    const rightPanel = multiBusPanel(rightBus, right, branch ? 700 : 520, 70, 200, "right");
-    const pairs = connection.pairs;
-    if (item.ref.kind === "switch") {
-      if (!pairs.length) {
-        setMultiStatus(`${item.status} switch · terminal map unavailable`);
-        target.innerHTML = `<div class="message">This switch has no terminal pairs to draw. Inspect its raw terminal mapping.</div>`;
-        return;
-      }
-      const switchX = 380;
-      const rowY = pairs.map((_, i) => 138 + i * 46);
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · multi-wire switch</tspan></text>${leftPanel.html}${rightPanel.html}<text x="380" y="64" text-anchor="middle" fill="#70695f" font-size="11">One switch blade per conductor pair · ${item.status === "open" ? "open" : "closed"}</text>`;
-      pairs.forEach(([a, b], i) => {
-        const yLeft = leftPanel.rowY[i] || (142 + i * 34); const yRight = rightPanel.rowY[i] || (142 + i * 34); const y = rowY[i]; const visual = conductorVisual(a, b, left.busId, right.busId, i);
-        content += focusedPath([[220, yLeft], [switchX - 16, y]], visual, item.status);
-        content += focusedPath([[switchX + 16, y], [700, yRight]], visual, item.status);
-        content += singleSymbol(item, switchX, y);
-        content += `<text x="${switchX}" y="${y - 15}" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(visual.label)} · ${escapeHtml(a)}→${escapeHtml(b)}</text>`;
-      });
-      content += `<text x="380" y="${Math.max(365, rowY[rowY.length - 1] + 58)}" text-anchor="middle" fill="#70695f" font-size="12">${item.status === "open" ? "Open switch: each conductor path is interrupted independently" : "Closed switch: each conductor path is switched independently"}</text>`;
-      setMultiStatus(`${pairs.length} conductor switches · ${item.status}`);
-      target.innerHTML = multiShell(content, { size: { width: 760, height: Math.max(500, rowY[rowY.length - 1] + 90) } });
-      bindCopyButtons(target);
-      bindSvgSelection(target);
-      return;
-    }
-    if (item.ref.kind === "transformer") {
-      const body = { x: 280, y: 88, width: 200, height: 300 };
-      const fromConfiguration = transformerConfiguration(item, 0);
-      const toConfiguration = transformerConfiguration(item, 1);
-      const leftInterior = transformerWindingInterior(fromConfiguration, body, "left", left.terminals || [], left.busId, null, { coil: true });
-      const rightInterior = transformerWindingInterior(toConfiguration, body, "right", right.terminals || [], right.busId, null, { coil: true });
-      let content = `<text x="380" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · transformer winding detail</tspan></text>${leftPanel.html}${rightPanel.html}<rect x="${body.x}" y="${body.y}" width="${body.width}" height="${body.height}" rx="10" fill="#e8f0f8" stroke="${colourOf(item.ref.kind)}" stroke-width="2.5"/><text x="380" y="${body.y + 28}" text-anchor="middle" fill="#70695f" font-size="10" font-style="italic">galvanically isolated windings</text>${transformerIsolationAndCoils(body)}${leftInterior.html}${rightInterior.html}`;
-      pairs.forEach(([a, b], i) => {
-        const yLeft = leftPanel.rowY[i] || (142 + i * 34);
-        const yRight = rightPanel.rowY[i] || (142 + i * 34);
-        const visual = conductorVisual(a, b, left.busId, right.busId, i);
-        const fromPoint = leftInterior.terminalPoints[i] || [body.x, yLeft];
-        const toPoint = rightInterior.terminalPoints[i] || [body.x + body.width, yRight];
-        content += focusedPath([[220, yLeft], fromPoint], visual, item.status);
-        content += focusedPath([toPoint, [520, yRight]], visual, item.status);
-        content += `<text x="276" y="${Math.min(405, Math.max(yLeft, yRight) - 7)}" text-anchor="end" fill="#70695f" font-size="10" data-role="conductor-label">${escapeHtml(visual.label)} · ${escapeHtml(visual.kind)}</text>`;
-      });
-      const mappingNote = connection.warning ? `<text x="380" y="430" text-anchor="middle" fill="#8a4d20" font-size="12">${escapeHtml(connection.warning)} Inspect raw maps before relying on this pairing.</text>` : "";
-      content += `${mappingNote}<text x="380" y="445" text-anchor="middle" fill="#70695f" font-size="12">Terminal dots sit on the transformer enclosure; coloured conductors show phase continuity</text><text x="380" y="462" text-anchor="middle" fill="#70695f" font-size="11">Ordered conductor pairing from source terminal maps</text>`;
-      setMultiStatus(`${pairs.length} conductor pairs · ${item.status}${connection.warning ? " · terminal-map warning" : ""}`);
-      target.innerHTML = multiShell(content, { size: { width: 760, height: 510 } });
-      bindCopyButtons(target);
-      bindSvgSelection(target);
-      return;
-    }
-    const bodyY = 142 + Math.max(pairs.length - 1, 0) * 17;
-    const canvasWidth = branch ? 940 : 760;
-    let content = `<text x="${branch ? 470 : 380}" y="32" text-anchor="middle" font-size="16" fill="#25231f">${entityLabelSvg(item.ref.kind, item.ref.id)}<tspan class="entity-meta"> · terminal detail</tspan></text>${leftPanel.html}${rightPanel.html}`;
-    if (branch) {
-      const boxX = 260; const boxY = 92; const boxWidth = 400; const columnStep = Math.min(82, 320 / Math.max(pairs.length - 1, 1));
-      const boxHeight = Math.max(190, 78 + pairs.length * 28);
-      const labels = pairs.map(([from]) => String(from));
-      const formatImpedance = (value) => value === null || value === undefined ? "—" : formatValue(value);
-      const formatComplex = (entry) => entry.r === null && entry.x === null ? "—" : `${formatImpedance(entry.r)}${entry.x === null ? "" : ` + j${formatImpedance(entry.x)}`}`;
-      const header = labels.map((label, i) => `<text x="${boxX + 55 + i * columnStep}" y="${boxY + 47}" text-anchor="middle" fill="#70695f" font-size="9">${escapeHtml(label)}</text>`).join("");
-      const matrixRows = branch.series.map((row, i) => `<text x="${boxX + 18}" y="${boxY + 68 + i * 28}" fill="#37332c" font-size="9">${escapeHtml(labels[i] || String(i + 1))}</text>${row.map((entry, j) => `<text x="${boxX + 55 + j * columnStep}" y="${boxY + 68 + i * 28}" text-anchor="middle" fill="#37332c" font-size="9">${escapeHtml(formatComplex(entry))}</text>`).join("")}`).join("");
-      const formatAdmittance = (entry) => entry.g === null && entry.b === null ? "—" : `${entry.g === null ? "—" : formatImpedance(entry.g)}${entry.b === null ? "" : ` + j${formatImpedance(entry.b)}`} S`;
-      const matrixText = (name, matrix, formatter) => `${name}\nterminal\t${labels.join("\t")}\n${matrix.map((row, i) => `${labels[i] || String(i + 1)}\t${row.map(formatter).join("\t")}`).join("\n")}`;
-      const branchCopyText = [`${titleOf(item)}\t${branch.source}`, matrixText("Series impedance Zs [Ω]", branch.series, formatComplex), branch.shuntPresent ? matrixText("Shunt admittance Yfrom [S]", branch.shunt.from, formatAdmittance) : "Pure series branch · shunt admittance omitted", branch.shuntPresent ? matrixText("Shunt admittance Yto [S]", branch.shunt.to, formatAdmittance) : ""].filter(Boolean).join("\n\n");
-      const matrixBox = (side, x, y, width) => {
-        const matrix = branch.shunt[side] || [];
-        const step = Math.min(42, (width - 48) / Math.max(pairs.length - 1, 1));
-        const head = labels.map((label, i) => `<text x="${x + 30 + i * step}" y="${y + 31}" text-anchor="middle" fill="#70695f" font-size="8">${escapeHtml(label)}</text>`).join("");
-        const rows = matrix.map((row, i) => `<text x="${x + 10}" y="${y + 49 + i * 20}" fill="#37332c" font-size="8">${escapeHtml(labels[i] || String(i + 1))}</text>${row.map((entry, j) => `<text x="${x + 30 + j * step}" y="${y + 49 + i * 20}" text-anchor="middle" fill="#37332c" font-size="8">${escapeHtml(formatAdmittance(entry))}</text>`).join("")}`).join("");
-        return `<rect x="${x}" y="${y}" width="${width}" height="${48 + pairs.length * 20}" rx="7" fill="#fffdf9" stroke="#ded8cc"/><text x="${x + width / 2}" y="${y + 16}" text-anchor="middle" fill="#37332c" font-size="10" font-weight="700">Y${side} [S]</text>${head}${rows}<path d="M${x + width / 2} ${y + 48 + pairs.length * 20}v12M${x + width / 2 - 9} ${y + 60 + pairs.length * 20}h18M${x + width / 2 - 6} ${y + 66 + pairs.length * 20}h12M${x + width / 2 - 3} ${y + 72 + pairs.length * 20}h6" fill="none" stroke="#70695f" stroke-width="1.3"/>`;
-      };
-      const shuntY = boxY + boxHeight + 18;
-      const shuntHeight = 48 + pairs.length * 20 + 76;
-      const branchHeight = branch.shuntPresent ? shuntY + shuntHeight + 42 : boxY + boxHeight + 58;
-      content += `<g data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}"><rect x="${boxX}" y="${boxY}" width="${boxWidth}" height="${boxHeight}" rx="10" fill="#f4f1ea" stroke="${colourOf(item.ref.kind)}" stroke-width="2"/><text x="${boxX + boxWidth / 2}" y="${boxY + 20}" text-anchor="middle" fill="#37332c" font-size="12" font-weight="700">Π branch model</text><text x="${boxX + boxWidth / 2}" y="${boxY + 34}" text-anchor="middle" fill="#70695f" font-size="9">Series Zs [Ω] · ${escapeHtml(branch.source)}</text>${copySvgButton(boxX + boxWidth - 24, boxY + 7, branchCopyText, "Copy branch matrices")}${header}${matrixRows}${branch.shuntPresent ? "" : `<text x="${boxX + boxWidth / 2}" y="${boxY + boxHeight - 14}" text-anchor="middle" fill="#70695f" font-size="10">Pure series branch · shunt admittance omitted</text>`}</g>`;
-      if (branch.shuntPresent) content += `<g>${matrixBox("from", boxX, shuntY, 190)}${matrixBox("to", boxX + 210, shuntY, 190)}</g>`;
-      pairs.forEach(([a, b], i) => {
-        const yLeft = leftPanel.rowY[i] || (142 + i * 34); const yRight = rightPanel.rowY[i] || (142 + i * 34); const visual = conductorVisual(a, b, left.busId, right.busId, i);
-        content += focusedPath([[220, yLeft], [boxX, yLeft]], visual, item.status);
-        content += focusedPath([[boxX + boxWidth, yRight], [700, yRight]], visual, item.status);
-      });
-      content += `<text x="470" y="${branch.shuntPresent ? branchHeight - 16 : branchHeight - 16}" text-anchor="middle" fill="#70695f" font-size="10">R and X are absolute series impedance entries in Ω; shunt G/B entries are absolute admittance values in S.</text>`;
-      setMultiStatus(`${pairs.length} conductor pairs · ${item.status} · ${branch.shuntPresent ? "Π series + shunt model" : "pure series model"}`);
-      target.innerHTML = multiShell(content, { size: { width: canvasWidth, height: Math.max(510, branchHeight) } });
-      bindCopyButtons(target);
-      bindSvgSelection(target);
-      return;
-    }
-    content += `<rect x="285" y="${Math.max(105, bodyY - 48)}" width="190" height="96" rx="10" fill="#f4f1ea" stroke="${colourOf(item.ref.kind)}" stroke-width="2"/><text x="380" y="${Math.max(122, bodyY - 20)}" text-anchor="middle" fill="#70695f" font-size="10">${escapeHtml(item.ref.kind.replaceAll("_", " "))}</text>`;
-    pairs.forEach(([a, b], i) => {
-      const yLeft = leftPanel.rowY[i] || (142 + i * 34); const yRight = rightPanel.rowY[i] || (142 + i * 34); const visual = conductorVisual(a, b, left.busId, right.busId, i);
-      if (item.status === "open") {
-        content += focusedPath([[240, yLeft], [350, yLeft]], visual, item.status);
-        content += focusedPath([[410, yRight], [520, yRight]], visual, item.status);
-        content += `<path d="M350 ${yLeft}L380 ${bodyY - 12}M380 ${bodyY + 12}L410 ${yRight}" fill="none" stroke="${visual.colour}" stroke-width="3" stroke-dasharray="8 6"/>`;
-      } else {
-        content += focusedPath([[240, yLeft], [380, bodyY], [520, yRight]], visual, item.status);
-      }
-      const labelX = item.ref.kind === "transformer" ? 276 : 380;
-      const labelAnchor = item.ref.kind === "transformer" ? "end" : "middle";
-      content += `<text x="${labelX}" y="${Math.min(405, Math.max(yLeft, yRight) - 7)}" text-anchor="${labelAnchor}" fill="#70695f" font-size="10"${item.ref.kind === "transformer" ? " data-role=\"conductor-label\"" : ""}>${escapeHtml(visual.label)} · ${escapeHtml(visual.kind)}</text>`;
-    });
-    if (item.ref.kind === "transformer") {
-      const fromConfiguration = transformerConfiguration(item, 0);
-      const toConfiguration = transformerConfiguration(item, 1);
-      const hasWindingGlyph = Boolean(fromConfiguration || toConfiguration);
-      content += transformerWindingGlyph(fromConfiguration, 330, bodyY, "from");
-      content += transformerWindingGlyph(toConfiguration, 430, bodyY, "to");
-      if (!hasWindingGlyph) content += singleSymbol(item, 380, bodyY);
-    } else {
-      content += singleSymbol(item, 380, bodyY);
-    }
-    const mappingNote = connection.warning ? `<text x="380" y="438" text-anchor="middle" fill="#8a4d20" font-size="12">${escapeHtml(connection.warning)} Inspect raw maps before relying on this pairing.</text>` : "";
-    content += `${mappingNote}<text x="380" y="455" text-anchor="middle" fill="#70695f" font-size="12">${item.status === "open" ? "Open switch: conductor paths are intentionally interrupted" : "Ordered conductor pairing from source terminal maps"}</text>`;
-    setMultiStatus(`${pairs.length} conductor pairs · ${item.status}${connection.warning ? " · terminal-map warning" : ""}`);
-    target.innerHTML = multiShell(content);
-    bindCopyButtons(target);
-    bindSvgSelection(target);
+    modelSheets.render(target, state.selected, target === $("canvas"));
+    if (announce) setStatus("Electrical model sheets · connections, parameters, operating values and unresolved assumptions");
   }
 
-  function multiDetailAvailable(item) { return Boolean(item && (item.ref.kind === "bus" || item.ports?.length)); }
+  function multiDetailAvailable(item) { return Boolean(item); }
+
+  function startTerminalTrace(bus, terminal) {
+    state.terminalTrace = globalThis.BMOPFElectrical.traceTerminal(state.index, bus, terminal, { maxVisits: state.traceLimit, maxSteps: state.traceLimit*10 });
+    state.tracePage = 0; renderMultiDetail(); geospatialRenderer.refresh();
+  }
+  function tracePanelHtml() {
+    const trace=state.terminalTrace, h=escapeHtml;
+    if (!trace) return '<section class="terminal-trace"><h3>Terminal trace</h3><p>Choose a terminal above to follow its declared conductor mappings.</p></section>';
+    const pages=Math.max(1,Math.ceil(trace.rows.length/50)); state.tracePage=Math.min(state.tracePage,pages-1);
+    const endpoint = p => `${h(p.busId)} / ${h(p.terminal)}`;
+    return `<section class="terminal-trace"><h3>Terminal trace · ${endpoint(trace.origin)}</h3><p>${trace.terminals.length} bus terminals reached · ${trace.rows.length} evidence entries. Structural connectivity only; this does not establish energisation. Ground and transformer winding boundaries stop the trace.</p><button data-trace-clear>Clear trace</button>${trace.truncated ? `<p class="trace-stop">Incomplete: traversal budget reached.</p><button data-trace-more ${state.traceLimit>=64000 ? "disabled" : ""}>Extend trace budget</button>` : ""}<ol start="${state.tracePage*50+1}">${trace.rows.slice(state.tracePage*50,(state.tracePage+1)*50).map(row=>`<li class="trace-${row.type}"><strong>${h(row.type)}</strong> ${row.from ? endpoint(row.from) : ""}${row.to ? ` → ${endpoint(row.to)}` : ""}<p>${h(row.message)}</p>${row.ref ? `<button data-trace-ref="${h(JSON.stringify(row.ref))}">${h(row.ref.kind)} ${h(row.ref.id)}</button>` : ""}<small>${h(row.pointer)}</small>${row.windings ? `<p>Related winding ports — inspect separately; no direct continuity:</p>${row.windings.map(w=>`<p>${h(w.role)} · ${h(w.busId)} · ${h(w.configuration)} · ${h(w.terminals.join(", "))}</p>`).join("")}` : ""}</li>`).join("")}</ol><button data-trace-prev ${state.tracePage ? "" : "disabled"}>Previous trace entries</button> ${state.tracePage+1}/${pages} <button data-trace-next ${state.tracePage+1<pages ? "" : "disabled"}>Next trace entries</button></section>`;
+  }
+  function bindTraceControls(target) {
+    target.querySelector("[data-trace-clear]")?.addEventListener("click",()=>{state.terminalTrace=null;renderMultiDetail();geospatialRenderer.refresh();});
+    target.querySelector("[data-trace-more]")?.addEventListener("click",()=>{state.traceLimit*=2;startTerminalTrace(state.terminalTrace.origin.busId,state.terminalTrace.origin.terminal);});
+    for(const [selector,delta] of [["[data-trace-prev]",-1],["[data-trace-next]",1]]) target.querySelector(selector)?.addEventListener("click",()=>{state.tracePage+=delta;renderMultiDetail();});
+    target.querySelectorAll("[data-trace-ref]").forEach(button=>button.onclick=()=>select(JSON.parse(button.dataset.traceRef)));
+  }
+
+  function renderMapDetail(target, item) {
+    const E = globalThis.BMOPFElectrical, model = E.interpret(item, state.index), h = escapeHtml;
+    const value = v => h(v === undefined ? "not supplied" : typeof v === "object" ? JSON.stringify(v) : String(v));
+    const table = rows => `<table class="map-detail-table"><tbody>${rows.map(([label,v,unit,path])=>`<tr><th>${h(label)}</th><td>${value(v)} ${h(unit || "")} ${path ? `<small>${h(path)}</small>` : ""}</td></tr>`).join("")}</tbody></table>`;
+    const rows = fields => fields.map(f=>[(f.label || f.keys.join(" / ")) + (f.reference ? ` · ${f.reference}` : ""), f.value, f.unit, f.path]);
+    const section = (title, content) => `<section><h3>${title}</h3>${content}</section>`;
+    const ports = item.ref.kind === "bus" ? [{ role: "bus", busId: item.ref.id, terminals: item.terminals }] : item.ports;
+    const connections = ports.map(port=>`<div><strong>${h(port.role)}</strong> <button class="sheet-link" data-map-bus="${h(port.busId)}">${h(port.busId)}</button><p>Trace terminal: ${port.terminals.map(terminal=>`<button data-trace-start="${h(JSON.stringify([port.busId,terminal]))}">${h(terminal)}</button>`).join(" ") || "not supplied"}</p><p>Ideal ground: ${h(state.index.busById.get(port.busId)?.groundedTerminals.join(" · ") || "not declared")}</p></div>`).join("");
+    const ratingFields = model.fields.filter(f=>/^(v_nom|v_magnitude|p_nom|q_nom|[is]_(max|rating)|tap|length)/.test(f.keys[0]));
+    const inherited = model.line?.ratings.filter(r=>r.value !== undefined && !ratingFields.some(f=>f.path === r.path)).map(r=>[r.key,r.value,r.unit,r.path]) || [];
+    const result = E.resultFields(item, resultRecordFor(item));
+    const unknown = model.fields.filter(f=>f.category === "unrepresented");
+    const scenario = state.resultScenario || (state.result && globalThis.BMOPFModel.resultScenarios(state.result).length > 1 ? "Choose a scenario" : "single network");
+    const pairing = state.result ? resultPairingStatus() : null;
+    target.innerHTML = `<article class="map-detail"><p>Service: <strong>${h(item.status)}</strong> · Frequency: ${value(model.frequency)} ${model.frequency === undefined ? "" : "Hz"}</p>${section("Connections & grounding", connections || "<p>No connection ports supplied.</p>")}${section("Ratings & nominal values", ratingFields.length || inherited.length ? table([...rows(ratingFields),...inherited]) : "<p>Not supplied for this element.</p>")}${section("Operating values", `<p>${state.result ? `${h(state.resultLabel)} · ${h(scenario)}` : "No results attached."}</p>${pairing ? `<p class="muted">Pairing: ${h(pairing.label)} · ${h(pairing.message)}</p>` : ""}${result.length ? table(rows(result.slice(0,12))) : state.result ? "<p>No values for this element in the selected scenario.</p>" : ""}${result.length > 12 ? `<p>${result.length-12} more result fields in the full electrical sheet.</p>` : ""}`)}${section("Unresolved model information", model.problems.length ? `<ul>${model.problems.map(p=>`<li>${h(p)}</li>`).join("")}</ul>` : "<p>No issues found by the available model checks.</p>")}${unknown.length ? `<p><strong>${unknown.length} uninterpreted source fields</strong></p>${table(rows(unknown.slice(0,8)))}${unknown.length>8 ? `<p>${unknown.length-8} more in the full electrical sheet.</p>` : ""}` : ""}<p class="muted">${model.fields.length} source fields retained. Open the full view for matrices, all results and source evidence.</p></article>`;
+    target.insertAdjacentHTML(state.terminalTrace ? "afterbegin" : "beforeend", tracePanelHtml());
+    bindTraceControls(target);
+    target.querySelectorAll("[data-trace-start]").forEach(button=>button.onclick=()=>{ const [bus,terminal]=JSON.parse(button.dataset.traceStart); state.traceLimit=2000; startTerminalTrace(bus,terminal); });
+    target.querySelectorAll("[data-map-bus]").forEach(button=>button.onclick=()=>select({kind:"bus",id:button.dataset.mapBus}));
+  }
 
   function renderMultiDetail() {
     const stage = $("single-view-layout");
@@ -1897,14 +1573,16 @@
     const target = $("multi-detail-canvas");
     if (!stage || !pane || !resizer || !target) return;
     const item = itemFor(state.selected);
-    const visible = state.view === "single" && !state.multiDetailCollapsed && multiDetailAvailable(item);
+    const visible = ["single", "geo"].includes(state.view) && !state.multiDetailCollapsed && multiDetailAvailable(item);
     stage.classList.toggle("has-detail", visible);
+    stage.classList.toggle("map-detail-active", visible && state.view === "geo");
     pane.hidden = !visible;
     resizer.hidden = !visible;
     if (!visible) { target.innerHTML = ""; return; }
     $("multi-detail-selection").innerHTML = entityLabelHtml(item.ref.kind, item.ref.id);
     setMultiDetailWidth(state.multiDetailWidth);
-    drawMulti(target, { announce: false });
+    if (state.view === "geo") renderMapDetail(target, item);
+    else drawMulti(target, { announce: false });
   }
 
   function bindMultiDetailActions() {
@@ -2029,12 +1707,25 @@
     });
   }
 
+  let networkPage = 0, networkQuery = "";
+  function renderNetworkDirectory() {
+    const matches = state.index.components.filter((network) => !networkQuery || network.busIds.some((id) => id.toLowerCase().includes(networkQuery.toLowerCase())));
+    const pages = Math.max(1, Math.ceil(matches.length / 25));
+    networkPage = Math.min(networkPage, pages - 1);
+    const rows = matches.slice(networkPage * 25, (networkPage + 1) * 25);
+    $("canvas").innerHTML = `<section class="network-directory"><h2>Explore connected networks</h2><p>${state.index.buses.length.toLocaleString()} buses across ${state.index.componentCount.toLocaleString()} networks. Choose a network to inspect its source neighbourhood, then follow its connections. Structural connectivity includes open and out-of-service branches.</p><label>Find a network by any bus ID <input id="network-search" type="search" value="${escapeHtml(networkQuery)}"></label><p role="status">${matches.length.toLocaleString()} matching networks · showing ${matches.length ? networkPage * 25 + 1 : 0}–${Math.min((networkPage + 1) * 25, matches.length)}</p><div class="network-grid">${rows.map(network => `<article><h3>${escapeHtml(network.rootBus)}</h3><p><strong>${network.busIds.length.toLocaleString()}</strong> buses · ${network.assetCount.toLocaleString()} devices · ${network.sourceCount.toLocaleString()} sources</p><button data-network-root="${escapeHtml(network.rootBus)}">Inspect neighbourhood</button></article>`).join("")}</div><p><button id="network-previous" ${networkPage === 0 ? "disabled" : ""}>Previous networks</button> Page ${networkPage + 1} / ${pages} <button id="network-next" ${networkPage + 1 === pages ? "disabled" : ""}>Next networks</button></p></section>`;
+    $("network-search").addEventListener("input", event => { networkQuery = event.target.value; networkPage = 0; renderNetworkDirectory(); $("network-search").focus(); });
+    $("network-previous").addEventListener("click", () => { networkPage--; renderNetworkDirectory(); });
+    $("network-next").addEventListener("click", () => { networkPage++; renderNetworkDirectory(); });
+    $("canvas").querySelectorAll("[data-network-root]").forEach(button => button.addEventListener("click", () => select({ kind: "bus", id: button.dataset.networkRoot })));
+  }
+
   function renderView() {
     if (!state.index) { $("canvas").innerHTML = `<div class="message">Open a BMOPF JSON case to see its views.</div>`; return; }
     const budget = overviewBudget();
-    if (budget.over && state.largeCaseDecision !== "full" && ["geo", "single"].includes(state.view) && !state.selected) {
+    if (budget.over && state.largeCaseDecision !== "full" && state.view === "single" && !state.selected) {
       setStatus(`Focused overview mode: ${budget.message} Select a bus or device from the inventory to render nearby topology.`);
-      $("canvas").innerHTML = `<div class="message"><strong>This case is larger than the overview budget.</strong><p>${escapeHtml(budget.message)}</p><p>Select an asset in the inventory to render its focused one-hop context. The full index and Diagnostics remain available.</p></div>`;
+      renderNetworkDirectory();
       document.querySelectorAll(".view-tab").forEach((button) => { const active = button.dataset.view === state.view; button.classList.toggle("active", active); button.setAttribute("aria-selected", String(active)); button.setAttribute("tabindex", active ? "0" : "-1"); });
       return;
     }
@@ -2060,76 +1751,46 @@
     return entry;
   }
 
-  function readFile(file) {
-    if (file.size > MAX_FILE_BYTES) {
-      showLoadError(`The selected file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`, file.name);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      let parsed;
-      try { parsed = JSON.parse(reader.result); }
-      catch (error) {
-        showLoadError(`This file is not valid JSON. Check the file syntax and try again.`, file.name);
-        return;
-      }
-      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
-        showLoadError(`This case contains more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`, file.name);
-        return;
-      }
-      loadDocument(parsed, file.name);
-      if ($("example-select")) $("example-select").value = "";
-    };
-    reader.onerror = () => showLoadError("The browser could not read this file. Check its permissions and try again.", file.name);
-    reader.readAsText(file);
+  let pendingImport = null;
+  function cancelImport() {
+    pendingImport?.abort();
+    pendingImport = null;
+    $("import-progress")?.remove();
   }
-
-  const RESULT_ROOT_MARKERS = new Set(["termination_status", "objective", "objective_value", "solver", "solution_info", "solution_profile", "profile", "diagnostics", "validation", "residuals", "bound_violations", "near_active_bounds", "case_fingerprint", "case_fingerprint_algorithm", "case_id"]);
-  const RESULT_RECORD_MARKERS = new Set(["loading", "vm", "v_magnitude", "voltage_magnitude", "voltage_deviation", "p_from", "q_from", "pg", "qg", "dual", "shadow_price", "cost", "residual"]);
-
-  function looksLikeResultDocument(document, label = "") {
-    if (!document || typeof document !== "object" || Array.isArray(document)) return false;
-    if (globalThis.BMOPFModel.resultCase(document) || document.result || document.results) return true;
-    const root = globalThis.BMOPFModel.resultRoot(document);
-    if (Object.keys(root).some((key) => RESULT_ROOT_MARKERS.has(key))) return true;
-    for (const table of Object.values(root)) {
-      if (!table || typeof table !== "object" || Array.isArray(table)) continue;
-      for (const record of Object.values(table)) {
-        if (record && typeof record === "object" && !Array.isArray(record) && Object.keys(record).some((key) => RESULT_RECORD_MARKERS.has(key))) return true;
+  async function importFile(file, mode) {
+    cancelImport();
+    const controller = new AbortController();
+    pendingImport = controller;
+    const progress = document.createElement("div");
+    progress.id = "import-progress";
+    progress.className = "message";
+    progress.innerHTML = '<span role="status" aria-live="polite"></span> <button type="button">Cancel import</button>';
+    $("drop-zone").after(progress);
+    progress.querySelector("button").addEventListener("click", () => { cancelImport(); setStatus("Import cancelled. The current case is unchanged."); });
+    const report = (phase) => { if (pendingImport === controller) progress.querySelector("span").textContent = `${file.name} · ${phase}…`; };
+    report("Starting import");
+    try {
+      const prepared = await globalThis.BMOPFImporter.read(file, { mode, signal: controller.signal, onProgress: report });
+      if (pendingImport !== controller) return;
+      cancelImport();
+      if (mode === "comparison") loadComparisonResultDocument(prepared.raw, file.name);
+      else if (prepared.isResult) loadResultDocument(prepared.raw, file.name, { preserveCase: mode === "auto" && Boolean(state.index), preparedIndex: prepared.index });
+      else {
+        loadDocument(prepared.raw, file.name, prepared.index);
+        if ($("example-select")) $("example-select").value = "";
       }
+      // Local performance diagnostics, containing timings only, never case data.
+      globalThis.__BMOPF_IMPORT_METRICS__ = { execution: prepared.execution, indexMs: prepared.indexMs };
+    } catch (error) {
+      if (error.name === "AbortError" || pendingImport !== controller) return;
+      cancelImport();
+      if (mode === "comparison") showComparisonError(error.message, file.name);
+      else if (mode === "result" || (mode === "auto" && state.index)) showResultError(error.message, file.name);
+      else { setStatus(`${file.name} was not loaded: ${error.message}`); progress.textContent = error.message; $("drop-zone").after(progress); }
     }
-    return /(?:result|solution|scenario|output)/i.test(String(label));
   }
-
-  function readDroppedFile(file) {
-    if (file.size > MAX_FILE_BYTES) {
-      const message = `The dropped file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`;
-      if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      let parsed;
-      try { parsed = JSON.parse(reader.result); }
-      catch (error) {
-        const message = "The dropped file is not valid JSON. Check the file syntax and try again.";
-        if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
-        return;
-      }
-      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
-        const message = `The dropped file contains more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`;
-        if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
-        return;
-      }
-      if (looksLikeResultDocument(parsed, file.name)) loadResultDocument(parsed, file.name, { preserveCase: Boolean(state.index) });
-      else loadDocument(parsed, file.name);
-    };
-    reader.onerror = () => {
-      const message = "The browser could not read the dropped file. Check its permissions and try again.";
-      if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
-    };
-    reader.readAsText(file);
-  }
+  const readFile = (file) => importFile(file, "case");
+  const readDroppedFile = (file) => importFile(file, "auto");
 
   function showResultError(message, label) {
     state.resultError = message;
@@ -2140,7 +1801,7 @@
   function loadResultDocument(resultDocument, label, options = {}) {
     try {
       const embeddedCase = globalThis.BMOPFModel.resultCase(resultDocument);
-      if (embeddedCase && (!state.index || !options.preserveCase)) loadDocument(embeddedCase, `${label || "Results"} · embedded case`);
+      if (embeddedCase && (!state.index || !options.preserveCase)) loadDocument(embeddedCase, `${label || "Results"} · embedded case`, options.preparedIndex);
       globalThis.BMOPFModel.resultRoot(resultDocument);
       state.result = resultDocument;
       state.resultLabel = label || "Results JSON";
@@ -2160,25 +1821,7 @@
     }
   }
 
-  function readResultFile(file) {
-    if (file.size > MAX_FILE_BYTES) {
-      showResultError(`The selected results file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`, file.name);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      let parsed;
-      try { parsed = JSON.parse(reader.result); }
-      catch (error) { showResultError("This file is not valid JSON. Check the file syntax and try again.", file.name); return; }
-      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
-        showResultError(`These results contain more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`, file.name);
-        return;
-      }
-      loadResultDocument(parsed, file.name);
-    };
-    reader.onerror = () => showResultError("The browser could not read this file. Check its permissions and try again.", file.name);
-    reader.readAsText(file);
-  }
+  const readResultFile = (file) => importFile(file, "result");
 
   function showComparisonError(message, label) {
     state.resultCompareError = message;
@@ -2199,25 +1842,7 @@
     }
   }
 
-  function readComparisonResultFile(file) {
-    if (file.size > MAX_FILE_BYTES) {
-      showComparisonError(`The comparison results file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`, file.name);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      let parsed;
-      try { parsed = JSON.parse(reader.result); }
-      catch (error) { showComparisonError("This comparison file is not valid JSON. Check the file syntax and try again.", file.name); return; }
-      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
-        showComparisonError(`These comparison results contain more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`, file.name);
-        return;
-      }
-      loadComparisonResultDocument(parsed, file.name);
-    };
-    reader.onerror = () => showComparisonError("The browser could not read this comparison file. Check its permissions and try again.", file.name);
-    reader.readAsText(file);
-  }
+  const readComparisonResultFile = (file) => importFile(file, "comparison");
 
   document.addEventListener("DOMContentLoaded", () => {
     initialiseSidebarResize();

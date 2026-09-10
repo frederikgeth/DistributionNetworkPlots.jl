@@ -648,8 +648,9 @@
     }
 
     function lockedPositions(layout) {
+      const busIds = new Set((getIndex()?.buses || []).map(bus => bus.ref.id));
       return new Map(Object.entries(layout.locked || {})
-        .filter(([, point]) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite))
+        .filter(([id, point]) => busIds.has(id) && Array.isArray(point) && point.length === 2 && point.every(Number.isFinite))
         .map(([id, point]) => [id, [point[0], point[1]]]));
     }
 

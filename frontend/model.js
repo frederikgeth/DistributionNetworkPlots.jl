@@ -1,4 +1,4 @@
-(function () {
+(function installModel() {
   "use strict";
 
   const ASSET_KINDS = new Set([
@@ -42,7 +42,7 @@
     if (!isObject(record)) return null;
     const longitude = record.longitude ?? record.lon;
     const latitude = record.latitude ?? record.lat;
-    return Number.isFinite(Number(longitude)) && Number.isFinite(Number(latitude))
+    return longitude !== null && latitude !== null && longitude !== "" && latitude !== "" && typeof longitude !== "boolean" && typeof latitude !== "boolean" && Number.isFinite(Number(longitude)) && Number.isFinite(Number(latitude)) && Math.abs(Number(longitude)) <= 180 && Math.abs(Number(latitude)) <= 90
       ? { longitude: Number(longitude), latitude: Number(latitude), space: "geographic" }
       : null;
   }
@@ -91,7 +91,7 @@
       return {
         from,
         to,
-        pairs: from.terminals.map((terminal, i) => [terminal, to.terminals[i] ?? "?"]),
+        pairs: Array.from({ length: Math.max(from.terminals.length, to.terminals.length) }, (_, i) => [from.terminals[i] ?? "?", to.terminals[i] ?? "?"]),
         warning: mismatch ? `Terminal-map length mismatch (${from.terminals.length} → ${to.terminals.length}).` : null
       };
     });
@@ -99,8 +99,8 @@
 
   function statusOf(kind, record) {
     if (kind === "switch" && record.open_switch === true) return "open";
-    if (record.status === 0 || record.in_service === false) return "out_of_service";
-    if (record.status === 1 || record.in_service === true) return "in_service";
+    if (record.status === 0 || record.status === "out_of_service" || record.in_service === false) return "out_of_service";
+    if (record.status === 1 || record.status === "in_service" || record.in_service === true) return "in_service";
     return "unknown";
   }
 
@@ -129,10 +129,15 @@
     const entities = [];
     const byRef = new Map();
     const byBus = new Map();
+    const busById = new Map();
+    const byKind = new Map();
     const warnings = [];
 
     const addEntity = (item, isAsset) => {
       entities.push(item);
+      if (!byKind.has(item.ref.kind)) byKind.set(item.ref.kind, new Map());
+      // Match the historic first-record lookup for duplicate transformer IDs.
+      if (!byKind.get(item.ref.kind).has(item.ref.id)) byKind.get(item.ref.kind).set(item.ref.id, item);
       byRef.set(`${item.ref.kind}:${item.ref.id}:${item.ref.pointer}`, item);
       if (isAsset) assets.push(item);
       for (const p of item.ports) {
@@ -155,6 +160,7 @@
         support: "full"
       };
       buses.push(bus);
+      busById.set(bus.ref.id, bus);
       addEntity(bus, true);
     }
 
@@ -167,21 +173,45 @@
         addEntity(e, ASSET_KINDS.has(kind));
         for (const connection of e.connections) if (connection.warning) warnings.push(`${kind}/${item.id}: ${connection.warning}`);
         for (const p of e.ports) {
-          if (!buses.some((b) => b.ref.id === p.busId)) {
+          if (!busById.has(p.busId)) {
             warnings.push(`${kind}/${item.id} references missing bus ${p.busId}`);
           }
         }
       }
     }
 
+    // Union bus endpoints once; separate source islands must remain explicit.
+    const parent = new Map(buses.map((b) => [b.ref.id, b.ref.id]));
+    const root = (id) => { let p = id; while (parent.get(p) !== p) p = parent.get(p); while (id !== p) { const next = parent.get(id); parent.set(id, p); id = next; } return p; };
+    for (const item of assets) {
+      const ids = item.ports.map((p) => p.busId).filter((id) => parent.has(id));
+      for (const id of ids.slice(1)) parent.set(root(id), root(ids[0]));
+    }
+    const componentMap = new Map();
+    for (const bus of buses) {
+      const id = root(bus.ref.id);
+      if (!componentMap.has(id)) componentMap.set(id, { id, rootBus: bus.ref.id, busIds: [], assetCount: 0, sourceCount: 0 });
+      componentMap.get(id).busIds.push(bus.ref.id);
+    }
+    for (const asset of assets) {
+      const busId = asset.ports.find((p) => parent.has(p.busId))?.busId;
+      if (busId === undefined) continue;
+      const component = componentMap.get(root(busId));
+      component.assetCount++;
+      if (asset.ref.kind === "voltage_source") { if (!component.sourceCount) component.rootBus = busId; component.sourceCount++; }
+    }
+    const components = [...componentMap.values()].sort((a, b) => b.busIds.length - a.busIds.length || a.id.localeCompare(b.id));
+    const componentCount = components.length;
+    if (componentCount > 1) warnings.push(`${componentCount.toLocaleString()} separate connected networks in the supplied topology (including open or out-of-service branches).`);
     const counts = {};
     for (const item of assets) counts[item.ref.kind] = (counts[item.ref.kind] || 0) + 1;
     const coordinateCount = buses.filter((b) => b.coordinates).length;
     if (coordinateCount === 0) warnings.push("No geographic bus coordinates were found.");
     else if (coordinateCount < buses.length) warnings.push(`Coordinates found for ${coordinateCount}/${buses.length} buses.`);
-    if (!document.$schema) warnings.push("No BMOPF schema identifier was provided; semantic support is best effort.");
-    else if (!String(document.$schema).toLowerCase().includes("bmopf")) {
-      warnings.push(`Schema identifier is not recognised as BMOPF: ${String(document.$schema)}`);
+    const schema = document.$schema || document.meta?.$schema;
+    if (!schema) warnings.push("No BMOPF schema identifier was provided; semantic support is best effort.");
+    else if (!String(schema).toLowerCase().includes("bmopf")) {
+      warnings.push(`Schema identifier is not recognised as BMOPF: ${String(schema)}`);
     }
     const supportCounts = {};
     for (const item of entities) supportCounts[item.support] = (supportCounts[item.support] || 0) + 1;
@@ -194,12 +224,29 @@
       entities,
       byRef,
       byBus,
+      busById,
+      byKind,
       counts,
       warnings,
       supportCounts,
       coordinateCount,
-      schema: document.$schema || null
+      componentCount,
+      components,
+      schema: schema || null
     };
+  }
+
+  function layoutGraphSignature(index) {
+    if (!index) return "sld-elk-graph-v1:none";
+    const buses = index.buses.map((bus) => bus.ref.id).sort();
+    const edges = [];
+    index.assets.forEach((item) => (item.connections || []).forEach((connection) => edges.push({ kind: item.ref.kind, id: item.ref.id, from: connection.from.busId, to: connection.to.busId })));
+    const keyed = edges.map(edge => ({ edge, key: JSON.stringify(edge) }));
+    keyed.sort((a, b) => a.key.localeCompare(b.key));
+    const input = JSON.stringify({ buses, edges: keyed.map(entry => entry.edge) });
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i += 1) { hash ^= input.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+    return `sld-elk-graph-v1:${(hash >>> 0).toString(16).padStart(8, "0")}`;
   }
 
   function resultRoot(document) {
@@ -263,5 +310,23 @@
     });
   }
 
-  globalThis.BMOPFModel = { buildCaseIndex, resultRoot, resultCase, resultRecord, resultScenarios, resultDiagnostics };
+  const RESULT_ROOT_MARKERS = new Set(["termination_status", "objective", "objective_value", "solver", "solution_info", "solution_profile", "profile", "diagnostics", "validation", "residuals", "bound_violations", "near_active_bounds", "case_fingerprint", "case_fingerprint_algorithm", "case_id"]);
+  const RESULT_RECORD_MARKERS = new Set(["loading", "vm", "v_magnitude", "voltage_magnitude", "voltage_deviation", "p_from", "q_from", "pg", "qg", "dual", "shadow_price", "cost", "residual"]);
+
+  function looksLikeResultDocument(document, label = "") {
+    if (!document || typeof document !== "object" || Array.isArray(document)) return false;
+    if (globalThis.BMOPFModel.resultCase(document) || document.result || document.results) return true;
+    const root = globalThis.BMOPFModel.resultRoot(document);
+    if (Object.keys(root).some((key) => RESULT_ROOT_MARKERS.has(key))) return true;
+    for (const table of Object.values(root)) {
+      if (!table || typeof table !== "object" || Array.isArray(table)) continue;
+      for (const record of Object.values(table)) {
+        if (record && typeof record === "object" && !Array.isArray(record) && Object.keys(record).some((key) => RESULT_RECORD_MARKERS.has(key))) return true;
+      }
+    }
+    return /(?:result|solution|scenario|output)/i.test(String(label));
+  }
+
+
+  globalThis.BMOPFModel = { workerSource: () => `(${installModel.toString()})();`, looksLikeResultDocument, layoutGraphSignature, buildCaseIndex, resultRoot, resultCase, resultRecord, resultScenarios, resultDiagnostics };
 })();

@@ -23,7 +23,8 @@ assert.match(index, /assets\/styles\.css/);
 assert.doesNotMatch(index, /src="(?:examples|model|renderer-contract|app)\.js"/);
 assert.match(bundle, /BMOPFModel/);
 assert.match(bundle, /BMOPFRenderers/);
-assert.match(bundle, /BMOPFProjections/);
+assert.match(bundle, /BMOPFElectrical/);
+assert.match(bundle, /BMOPFModelSheets/);
 assert.match(bundle, /BMOPFLayouts/);
 assert.match(bundle, /Geospatial/);
 assert.match(bundle, /Single-line diagram/);
@@ -39,6 +40,13 @@ const denseY = denseBuses.slice(1).map((bus) => densePositions.get(bus.ref.id)[1
 assert.ok(denseY.every((value, index) => index === 0 || value - denseY[index - 1] >= 64));
 assert.ok(denseLayout.singleBounds(densePositions).height > 500);
 
+// Positions saved outside a focused neighbourhood must not enlarge its canvas.
+const scopedLayout = sandbox.globalThis.BMOPFLayouts.createDeterministicLayout({
+  getIndex: () => ({ buses: [denseBuses[0]], assets: [] }),
+  getLayout: () => ({ engine: "force", locked: { source_bus: [70, 86], elsewhere: [100000, 100000] } })
+});
+assert.deepEqual([...scopedLayout.singlePositions().keys()], ["source_bus"]);
+assert.ok(scopedLayout.singleBounds(scopedLayout.singlePositions()).width < 1000);
 // A radial network is drawn as a tidy tree: every bus is placed on its topology
 // rank and each parent is centred over the children it feeds.
 const radialBuses = ["source_bus", "b1", "b2", "b3", "b4", "b5", "b6"].map((id) => ({ ref: { id } }));

@@ -70,7 +70,7 @@ Selection, hover, search, filters, and focus requests live in shared application
 
 ### 3.5 Progressive detail
 
-The overview remains legible by collapsing detail. Terminal-level structure is expanded on selection, zoom, or explicit request. Multi-wire focus mode is a first-class view, not merely a temporary implementation shortcut.
+The overview remains legible by collapsing detail. Terminal-level structure is shown on an electrical model sheet on selection or explicit request. Model sheets retain readable text independently of network zoom.
 
 ### 3.6 Static by default
 
@@ -312,37 +312,39 @@ Single-wire also exposes page-session display toggles for semantic decluttering:
 
 The on-screen Single-wire legend is an HTML overlay anchored to the view rather than diagram coordinates, so it remains readable during pan and zoom. The SVG renderer keeps a presentation-hidden embedded legend for standalone export and print, preserving self-contained report output.
 
-### 7.3 Multi-wire projection
+### 7.3 Electrical model sheets
 
-The multi-wire projection expands ports into terminal-level connections. In the browser UI it is available both as a standalone focused view and as a resizable component-detail pane alongside Single-wire. Single-wire remains the primary network context; the pane reuses the same renderer and follows the canonical selected `AssetRef`. Selecting a related bus or device in the pane updates the Single-wire selection, while Collapse and Open full view provide explicit control over the detail mode. The pane uses its own neutral camera so network zoom/pan does not distort component detail, and it stacks below the SLD on narrow screens.
-For single-bus nodal devices, the focused card also surfaces the declared
-connection configuration and, for loads, the declared load model (defaulting
-visibly to `CONSTANT_POWER` when the optional field is absent). Two-terminal
-transformer conductor labels are kept in the gutter beside the body so phase
-annotations do not sit on top of the transformer symbol or wiring.
-The card includes a compact connection glyph: star topology for WYE, a
-triangle for DELTA, and a two-terminal branch for single-phase or unspecified
-connections. Single-bus cards are deliberately topology-first: the exact
-terminal map is shown as a compact line and remains available in the inspector,
-while the repeated horizontal terminal wiring used by branch views is omitted.
+Electrical detail replaces the multi-wire projection. The legacy `multi` route
+is retained for deep-link compatibility. `electrical-model.js` is a pure,
+read-only interpretation layer; `renderers/model-sheets.js` composes HTML
+parameter tables and SVG connection graphs. The same sheets appear in the
+resizable Single-wire detail pane and in the full model atlas, without a camera
+that scales text.
 
-Projection rules:
+Connections, parameters, results, differences and unresolved assumptions coexist
+on a sheet. Terminal identity, grounding, winding membership and model coupling
+are distinct. Every supplied field has a visible destination; fields without an
+interpretation appear under Unrepresented model fields. Raw metadata may expand.
 
-- Conductor pairing follows ordered terminal maps from the source.
-- Phase, neutral, and ground are represented distinctly using colour plus labels or line patterns.
-- Grounding belongs to bus terminals, not an invented electrical bus.
-- Transformer winding ports remain explicit; multi-winding devices are not reduced to arbitrary pairwise branches.
-- Unsupported connection semantics produce diagnostics rather than plausible-looking guesses.
+Linecode matrices retain per-metre provenance; section totals require a valid
+length. Inline matrices remain absolute. Conflicting impedance sources, invalid
+matrix indices and malformed terminal maps are not silently resolved. Both
+shunt sections retain explicit missing/zero/incomplete states.
 
-The focused renderer supports a selected asset or bus and a configurable one- or two-hop neighbourhood. Bus terminal stacks remain explicit; conductor paths preserve ordered phase permutations, neutral/ground distinctions, and open-switch interruptions. A switch is rendered as one independently selectable blade per conductor pair, arranged in parallel between the two terminal stacks. Two-winding transformers use a device body between their winding-side terminal stacks. Multi-winding transformers use a body with one explicit terminal stack per winding, including winding metadata and selectable connected buses; they are never reduced to pairwise branches. Full-network overview uses collapsed bundles and semantic zoom; expanded conductors are rendered only where useful.
+Loads expose configuration-dependent element graphs and declared voltage laws.
+Transformers keep separate winding graphs and voltage bases; no pairwise
+conductor continuity is implied. Bus sheets list all terminal incidences.
+Source capability circles show only the supplied apparent-power limits, with
+other bounds and controls still visible. Terminal-keyed result quantities use
+BMOPFTools conventions, while unresolved flat arrays retain source indexing.
 
-Selected line and DC-branch records use the specification's nominal Π-model
-when impedance fields are available. The focused view presents the full
-series `R_series_k_j + jX_series_k_j` matrix in absolute Ω, converting
-linecode Ω/m values using the branch length. From- and to-side shunt
-`G/B` matrices are rendered as half-sections in S only when at least one
-nonzero entry is present; a pure-series branch shows an explicit omission note
-instead of drawing invented shunt elements.
+Pinned sheets form an ordered atlas. Model comparisons include source records,
+referenced linecodes, endpoint terminal/grounding context and frequency. Result
+comparisons remain separate. Standalone HTML exports retain the model sheet;
+individual SVG exports inline computed drawing styles.
+
+See [ADR 0005](docs/adr/0005-electrical-model-sheets.md) for contracts, limitations,
+and validation.
 
 ## 8. Interaction and navigation
 
@@ -505,7 +507,7 @@ If the browser core later becomes useful outside Julia, it may move to a publish
 The current static entrypoint is intentionally transitional: `frontend/app.js`
 still orchestrates state and projections, while `frontend/renderer-contract.js`
 and `frontend/renderers/symbols.js` are the first extracted contract-backed
-modules. `frontend/projections/multi-wire.js` and
+modules. `frontend/electrical-model.js` and `frontend/renderers/model-sheets.js` and
 `frontend/layout/deterministic.js` now extract the terminal projection and
 deterministic positioning adapters as well. Overview composition now lives in
 `frontend/renderers/geospatial.js` and `frontend/renderers/single-wire.js`.
@@ -539,7 +541,7 @@ requests ELK; embedded Julia reports retain their in-document worker path.
 - Parsing, projection, and layout are measured separately.
 - Expensive parsing or layout runs outside the browser UI thread where possible.
 - Layout results are cached by deterministic fingerprints.
-- Multi-wire rendering is neighbourhood- and zoom-aware.
+- Electrical detail renders selected/pinned model sheets independently of the network camera.
 - A simple initial renderer is preferred until measured data demonstrates the need for WebGL acceleration.
 
 The browser prototype publishes a conservative initial budget of 500 buses or
@@ -635,7 +637,7 @@ principles, are recorded in [ADR 0004](docs/adr/0004-renderer-and-layout-contrac
 | MapLibre geospatial camera | Proposed | Open browser mapping stack with local GeoJSON support |
 | deck.gl overlay | Deferred until measured | Avoid unnecessary complexity for the first useful slice |
 | Hash-based deep links | Accepted | Works on static hosts without route rewrites |
-| Multi-wire focus mode first | Accepted | Delivers faithful drill-down before attempting unreadable full expansion |
+| Electrical model sheets and pinned atlas | Accepted | Keeps model data readable with focused network context |
 | No server-side case processing | Accepted | Privacy, portability, and simple deployment |
 
 ## 15. Open architectural questions

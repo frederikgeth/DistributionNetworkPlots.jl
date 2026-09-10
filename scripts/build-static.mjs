@@ -9,9 +9,11 @@ const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const moduleOrder = [
   "examples.js",
   "model.js",
+  "importer.js",
   "renderer-contract.js",
   "renderers/symbols.js",
-  "projections/multi-wire.js",
+  "electrical-model.js",
+  "renderers/model-sheets.js",
   "layout/deterministic.js",
   "renderers/geospatial.js",
   "renderers/single-wire.js",

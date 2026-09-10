@@ -59,9 +59,11 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
     template = read(joinpath(FRONTEND_DIR, "index.html"), String)
     examples = read(joinpath(FRONTEND_DIR, "examples.js"), String)
     model = read(joinpath(FRONTEND_DIR, "model.js"), String)
+    importer = read(joinpath(FRONTEND_DIR, "importer.js"), String)
     renderer_contract = read(joinpath(FRONTEND_DIR, "renderer-contract.js"), String)
     symbols_renderer = read(joinpath(FRONTEND_DIR, "renderers", "symbols.js"), String)
-    multi_wire_projection = read(joinpath(FRONTEND_DIR, "projections", "multi-wire.js"), String)
+    electrical_model = read(joinpath(FRONTEND_DIR, "electrical-model.js"), String)
+    model_sheets = read(joinpath(FRONTEND_DIR, "renderers", "model-sheets.js"), String)
     deterministic_layout = read(joinpath(FRONTEND_DIR, "layout", "deterministic.js"), String)
     geospatial_renderer = read(joinpath(FRONTEND_DIR, "renderers", "geospatial.js"), String)
     single_wire_renderer = read(joinpath(FRONTEND_DIR, "renderers", "single-wire.js"), String)
@@ -79,9 +81,11 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
         "<link rel=\"stylesheet\" href=\"styles.css\">" => "<style>$(css)</style>",
         "<script src=\"examples.js\"></script>" => "<script>$(examples)</script>",
         "<script src=\"model.js\"></script>" => "<script>$(model)</script>",
+        "<script src=\"importer.js\"></script>" => "<script>$(importer)</script>",
         "<script src=\"renderer-contract.js\"></script>" => "<script>$(renderer_contract)</script>",
         "<script src=\"renderers/symbols.js\"></script>" => "<script>$(symbols_renderer)</script>",
-        "<script src=\"projections/multi-wire.js\"></script>" => "<script>$(multi_wire_projection)</script>",
+        "<script src=\"electrical-model.js\"></script>" => "<script>$(electrical_model)</script>",
+        "<script src=\"renderers/model-sheets.js\"></script>" => "<script>$(model_sheets)</script>",
         "<script src=\"layout/deterministic.js\"></script>" => "<script>$(deterministic_layout)</script>",
         "<script src=\"renderers/geospatial.js\"></script>" => "<script>$(geospatial_renderer)</script>",
         "<script src=\"renderers/single-wire.js\"></script>" => "<script>$(single_wire_renderer)</script>",
