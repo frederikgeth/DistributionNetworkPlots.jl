@@ -341,3 +341,5 @@ pre.raw { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 9px; bor
 .operating-scale { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .operating-ramp { width: 180px; height: 14px; background: linear-gradient(to right,#dceaf1,#a5c9dc,#68a1c4,#dba95e,#ca6747); }
 #region-operating-evidence article { padding: 10px 0; border-bottom: 1px solid #ddd8cf; font-size: 12px; overflow-wrap: anywhere; }
+#region-issue-summary { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 0; }
+#region-issues article { border-bottom: 1px solid #ddd8cf; padding: 8px 0; overflow-wrap: anywhere; font-size: 12px; }

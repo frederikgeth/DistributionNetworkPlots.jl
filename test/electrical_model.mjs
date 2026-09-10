@@ -213,3 +213,17 @@ test("terminal voltage selection and complex reference subtraction preserve iden
  assert.equal(metric({reference:"n"},flat).value,null);
  assert.equal(metric({reference:"n"},{...flat,voltage_reference:"global ground"}).value,relative.value);
 });
+
+test("engineering issues separate supported violations from incomplete and ambiguous assessments", () => {
+ const index=oneLine({i_max:[100]}),a=get(index,"bus","a");
+ a.sourceRecord.v_min=[220];a.sourceRecord.v_max=[240];
+ const records={a:{x:{vm:200}},b:{y:{vm:230}},l:{x:{cm_fr:150,cm_to:0},loading:0}};
+ const issues=()=>E.engineeringIssues(index,item=>records[item.ref.id]);
+ const violations=issues().filter(i=>i.category==="violation");
+ assert.equal(violations.length,2);assert.equal(violations[0].unit,"A");
+ assert.equal(violations[0].limit,100);assert.equal(violations[1].terminal,"x");
+ assert.equal(E.engineeringIssues(index,item=>records[item.ref.id],{pairing:"mismatch"}).filter(i=>i.category==="violation").length,0);
+ records.a={vm:[200]};assert.ok(issues().some(i=>i.category==="incomplete" && /reference/.test(i.message)));
+ a.sourceRecord.v_min=[null];assert.ok(issues().some(i=>i.category==="ambiguity"));
+ records.l={loading:1.5};assert.equal(issues().filter(i=>i.category==="violation").length,0);
+});
