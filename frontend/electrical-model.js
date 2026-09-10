@@ -283,7 +283,7 @@
   }
 
   // Map values retain their evidence and denominator. Zero is data; null is not.
-  function operatingMetric(item, record, layer, index) {
+  function operatingMetric(item, record, layer, index, options = {}) {
     const samples = [], unavailable = reason => ({ value: null, samples, available: 0, total: 1, reason });
     if (!record) return unavailable("No result record in the selected scenario");
     if (layer === "loading") {
@@ -313,15 +313,30 @@
     const terminals = item.terminals || [];
     if (!terminals.length || new Set(terminals).size !== terminals.length) return unavailable("Terminal identities unavailable or ambiguous");
     if (record.voltage_unit && record.voltage_unit !== "V") return unavailable("Voltage unit conflicts with BMOPF volts");
-    const flat = Array.isArray(record.vm), map = record.terminal_map || terminals;
-    if (flat && (!Array.isArray(map) || map.length !== record.vm.length || new Set(map.map(String)).size !== map.length)) return unavailable("Voltage array cannot be aligned to terminals");
+    const reference = options.reference ?? null, selected = options.terminal ?? null;
+    if (selected !== null && !terminals.includes(selected)) return unavailable(`Terminal ${selected} is not declared on this bus`);
+    if (reference !== null && !terminals.includes(reference)) return unavailable(`Reference terminal ${reference} is not declared on this bus`);
+    const flat = [record.vm, record.vr, record.vi].some(Array.isArray), map = record.terminal_map || terminals;
+    const keys = reference === null ? ["vm"] : ["vr","vi"];
+    if (flat && (!Array.isArray(map) || new Set(map.map(String)).size !== map.length || keys.some(key=>!Array.isArray(record[key]) || record[key].length !== map.length))) return unavailable("Voltage array cannot be aligned to terminals");
+    if (reference !== null && flat && !(typeof record.voltage_reference === "string" && record.voltage_reference.trim())) return unavailable("Complex voltage reference not declared; terminal subtraction unavailable");
     const offsets = new Map(flat ? map.map((terminal,i)=>[String(terminal),i]) : []);
-    terminals.forEach(terminal => {
-      const i = flat ? offsets.get(terminal) : -1;
-      const value = flat ? record.vm[i] : record[terminal]?.vm;
-      if (number(value) && value >= 0) samples.push({ value, path: flat ? `vm/${i}` : `${terminal}/vm`, basis: `Terminal ${terminal}; ${record.voltage_reference || (flat ? "reference not declared" : "BMOPFTools phase-to-ground")}` });
+    const read = (terminal,key) => flat ? record[key]?.[offsets.get(terminal)] : record[terminal]?.[key];
+    const path = (terminal,key) => flat ? `${key}/${offsets.get(terminal)}` : `${terminal}/${key}`;
+    const complex = terminal => {
+      const real=read(terminal,"vr"), imaginary=read(terminal,"vi");
+      return number(real) && number(imaginary) ? [real,imaginary] : null;
+    };
+    const base = reference === null ? null : complex(reference);
+    if (reference !== null && !base) return unavailable(`Complex voltage missing for reference terminal ${reference}`);
+    const chosen = selected === null ? terminals.filter(t=>t!==reference) : [selected];
+    if (!chosen.length || selected !== null && selected === reference) return unavailable("Choose a terminal different from the reference");
+    chosen.forEach(terminal => {
+      const phasor = reference === null ? null : complex(terminal);
+      const value = reference === null ? read(terminal,"vm") : phasor ? Math.hypot(phasor[0]-base[0],phasor[1]-base[1]) : null;
+      if (number(value) && value >= 0) samples.push({ value, terminal, path: reference === null ? path(terminal,"vm") : `${path(terminal,"vr")}, ${path(terminal,"vi")} − ${path(reference,"vr")}, ${path(reference,"vi")}`, basis: `Terminal ${terminal}; ${reference !== null ? `relative to selected terminal ${reference}; magnitude of complex difference` : record.voltage_reference || (flat ? "reference not declared" : "BMOPFTools phase-to-ground")}` });
     });
-    return { value: samples.length ? samples.reduce((max,s)=>Math.max(max,s.value),-Infinity) : null, samples, available: samples.length, total: terminals.length, reason: "Missing or invalid terminal voltage magnitudes" };
+    return { value: samples.length ? samples.reduce((max,s)=>Math.max(max,s.value),-Infinity) : null, minimum: samples.length ? samples.reduce((min,s)=>Math.min(min,s.value),Infinity) : null, reference: base ? { terminal: reference, value: Math.hypot(...base), basis: record.voltage_reference || "BMOPFTools phase-to-ground" } : null, samples, available: samples.length, total: chosen.length, reason: "Missing or invalid terminal voltage magnitudes / complex components" };
   }
 
   globalThis.BMOPFElectrical = Object.freeze({ VERSION, operatingMetric, traceTerminal, interpret, topology, loadModel, loadResponse, lineModel, manifest, flatten, unit, number, diffRecords, componentValue, resultFields, voltagePhasors });

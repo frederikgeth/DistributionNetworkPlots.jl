@@ -192,3 +192,24 @@ test("line loading uses both ends and exact positive conductor ratings", () => {
   }
   line.sourceRecord.i_max=[100,200];assert.equal(metric({x:{cm_fr:1,cm_to:1}}).value,null);
 });
+
+test("terminal voltage selection and complex reference subtraction preserve identity and neutral displacement", () => {
+ const index=build({bus:{b:{terminal_names:["p","q","n"]}}}),bus=get(index,"bus","b");
+ const record={p:{vm:230,vr:230,vi:0},q:{vm:220,vr:0,vi:220},n:{vm:5,vr:3,vi:4}};
+ const metric=(options={},r=record)=>E.operatingMetric(bus,r,"voltage",index,options);
+ assert.equal(metric().minimum,5);assert.equal(metric().value,230);
+ assert.equal(metric({terminal:"n"}).value,5);
+ assert.equal(metric({terminal:"absent"}).value,null);
+ const relative=metric({reference:"n"});
+ assert.equal(relative.total,2);assert.equal(relative.reference.value,5);
+ assert.equal(relative.value,Math.hypot(227,-4));
+ assert.equal(relative.minimum,Math.hypot(-3,216));
+ assert.equal(metric({terminal:"n",reference:"n"}).value,null);
+ assert.equal(metric({reference:"missing"}).value,null);
+ assert.equal(metric({reference:"n"},{...record,n:{vm:5}}).value,null);
+ const partial=metric({reference:"n"},{...record,q:{vm:220}});
+ assert.equal(partial.available,1);assert.equal(partial.total,2);
+ const flat={vr:[230,0,3],vi:[0,220,4]};
+ assert.equal(metric({reference:"n"},flat).value,null);
+ assert.equal(metric({reference:"n"},{...flat,voltage_reference:"global ground"}).value,relative.value);
+});
