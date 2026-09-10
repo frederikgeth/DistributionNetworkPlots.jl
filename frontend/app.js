@@ -11,8 +11,6 @@
   const SIDEBAR_WIDTH_MIN = 280;
   const SIDEBAR_WIDTH_MAX = 640;
   const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, searchPage: 0, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusBars: false, showBusLabels: true, showDeviceLabels: false, showArrows: false, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
-  const MAX_FILE_BYTES = 64 * 1024 * 1024;
-  const MAX_JSON_ELEMENTS = 2000000;
   const SEARCH_PAGE_SIZE = 100;
   const $ = (id) => document.getElementById(id);
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -294,19 +292,6 @@
     window.addEventListener("resize", () => setMultiDetailWidth(state.multiDetailWidth));
   }
 
-  function countJsonElements(value, limit) {
-    let count = 0;
-    const pending = [value];
-    while (pending.length) {
-      const current = pending.pop();
-      count += 1;
-      if (count > limit) return count;
-      if (Array.isArray(current)) current.forEach((entry) => pending.push(entry));
-      else if (current && typeof current === "object") Object.values(current).forEach((entry) => pending.push(entry));
-    }
-    return count;
-  }
-
   function showLoadError(message, label) {
     state.index = null;
     state.selected = null;
@@ -396,10 +381,12 @@
     return state.index.byKind.get(ref.kind)?.get(ref.id) || null;
   }
 
-  function loadDocument(caseDocument, label) {
+  function loadDocument(caseDocument, label, preparedIndex = null) {
+    cancelImport();
+    networkPage = 0; networkQuery = "";
     const requestedSelection = state.selected;
     try {
-      state.index = globalThis.BMOPFModel.buildCaseIndex(caseDocument);
+      state.index = preparedIndex || globalThis.BMOPFModel.buildCaseIndex(caseDocument);
       modelSheets.reset();
       state.layout = loadLayout();
       state.selected = requestedSelection && itemFor(requestedSelection) ? requestedSelection : null;
@@ -427,14 +414,7 @@
 
   function layoutGraphSignature() {
     if (!state.index) return "sld-elk-graph-v1:none";
-    const buses = state.index.buses.map((bus) => bus.ref.id).sort();
-    const edges = [];
-    state.index.assets.forEach((item) => (item.connections || []).forEach((connection) => edges.push({ kind: item.ref.kind, id: item.ref.id, from: connection.from.busId, to: connection.to.busId })));
-    edges.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
-    const input = JSON.stringify({ buses, edges });
-    let hash = 2166136261;
-    for (let i = 0; i < input.length; i += 1) { hash ^= input.charCodeAt(i); hash = Math.imul(hash, 16777619); }
-    return `sld-elk-graph-v1:${(hash >>> 0).toString(16).padStart(8, "0")}`;
+    return state.index.graphSignature ||= globalThis.BMOPFModel.layoutGraphSignature(state.index);
   }
 
   function normaliseLayoutProfile(profile) {
@@ -557,22 +537,24 @@
     if (!state.index || state.view !== "single") return;
     if (elkBusy) return;
     elkBusy = true;
+    const layoutIndex = state.index, activeLayout = state.layout, selection = state.selected;
     setStatus("Loading ELK layered layout…");
     try {
       const direction = state.layout.direction === "load-to-source" ? "LEFT" : "RIGHT";
-      const graph = { id: "bmopf-root", layoutOptions: { "elk.algorithm": "layered", "elk.direction": direction, "elk.edgeRouting": "ORTHOGONAL", "elk.spacing.nodeNode": "64", "elk.layered.spacing.nodeNodeBetweenLayers": "150" }, children: state.index.buses.map((bus) => ({ id: `bus:${bus.ref.id}`, width: 84, height: 24, ports: [{ id: `port:${bus.ref.id}`, width: 4, height: 4, layoutOptions: { "elk.port.side": state.layout.direction === "load-to-source" ? "EAST" : "WEST" } }] })), edges: [] };
-      const busIds = new Set(state.index.buses.map((bus) => bus.ref.id));
+      const graph = { id: "bmopf-root", layoutOptions: { "elk.algorithm": "layered", "elk.direction": direction, "elk.edgeRouting": "ORTHOGONAL", "elk.spacing.nodeNode": "64", "elk.layered.spacing.nodeNodeBetweenLayers": "150" }, children: overviewBuses().map((bus) => ({ id: `bus:${bus.ref.id}`, width: 84, height: 24, ports: [{ id: `port:${bus.ref.id}`, width: 4, height: 4, layoutOptions: { "elk.port.side": state.layout.direction === "load-to-source" ? "EAST" : "WEST" } }] })), edges: [] };
+      const busIds = new Set(overviewBuses().map((bus) => bus.ref.id));
       if (state.layout.root && state.layout.root !== "auto" && busIds.has(state.layout.root)) {
         graph.layoutOptions["org.eclipse.elk.processingOrder.rootSelection"] = "FIXED";
         graph.layoutOptions["org.eclipse.elk.processingOrder.preferredRoot"] = `bus:${state.layout.root}`;
       }
-      state.index.assets.forEach((item) => {
+      overviewAssets().forEach((item) => {
         (item.connections || []).forEach((connection) => {
           const from = connection.from.busId; const to = connection.to.busId;
           if (busIds.has(from) && busIds.has(to)) graph.edges.push({ id: `edge:${item.ref.kind}:${item.ref.id}:${from}:${to}`, sources: [`port:${from}`], targets: [`port:${to}`] });
         });
       });
       const result = await layoutWithElk(graph);
+      if (state.index !== layoutIndex || state.layout !== activeLayout || state.selected !== selection) return;
       const children = result.children || [];
       const xs = children.map((node) => Number(node.x) || 0); const ys = children.map((node) => Number(node.y) || 0);
       const minX = Math.min(...xs, 0); const maxX = Math.max(...xs, 1); const minY = Math.min(...ys, 0); const maxY = Math.max(...ys, 1);
@@ -608,8 +590,8 @@
 
   function applyForceLayout() {
     if (!state.index || state.view !== "single") return;
-    const positions = deterministicLayout.singleForcePositions();
-    const nextLocked = {};
+    const positions = (overviewScope() ? focusedLayout : deterministicLayout).singleForcePositions();
+    const nextLocked = overviewScope() ? { ...state.layout.locked } : {};
     positions.forEach((point, id) => { if (Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) nextLocked[id] = [...point]; });
     state.layout.locked = nextLocked;
     state.layout.routes = {};
@@ -625,7 +607,7 @@
   function renderDisplayOptions() {
     const pane = $("display-options");
     if (!pane) return;
-    const visible = Boolean(state.index && state.view === "single");
+    const visible = Boolean(state.index && state.view === "single" && !$("canvas").querySelector(".network-directory"));
     pane.hidden = !visible;
     if (!visible) return;
     pane.querySelectorAll("[data-display-option]").forEach((input) => {
@@ -1021,7 +1003,7 @@
   function renderFloatingLegend() {
     const panel = $("floating-legend");
     if (!panel) return;
-    const visible = Boolean(state.index && state.view === "single");
+    const visible = Boolean(state.index && state.view === "single" && !$("canvas").querySelector(".network-directory"));
     panel.hidden = !visible;
     if (!visible) return;
     const content = panel.querySelector(".floating-legend-content");
@@ -1305,6 +1287,7 @@
       const forceButton = document.createElement("button"); forceButton.dataset.layout = "force"; forceButton.textContent = "Apply force layout"; forceButton.title = "Recompute a deterministic force-directed arrangement";
       controls.querySelector('[data-layout="left"]')?.before(forceButton);
     }
+    if ($("canvas").querySelector(".network-directory")) controls.querySelectorAll("[data-camera], [data-layout], .layout-select, .layout-label").forEach(node => { node.hidden = true; });
     controls.querySelectorAll("[data-camera]").forEach((button) => button.addEventListener("click", () => {
       const camera = state.cameras[state.view];
       if (button.dataset.camera === "zoom-in") camera.scale = Math.min(3, camera.scale * 1.25);
@@ -1660,12 +1643,25 @@
     });
   }
 
+  let networkPage = 0, networkQuery = "";
+  function renderNetworkDirectory() {
+    const matches = state.index.components.filter((network) => !networkQuery || network.busIds.some((id) => id.toLowerCase().includes(networkQuery.toLowerCase())));
+    const pages = Math.max(1, Math.ceil(matches.length / 25));
+    networkPage = Math.min(networkPage, pages - 1);
+    const rows = matches.slice(networkPage * 25, (networkPage + 1) * 25);
+    $("canvas").innerHTML = `<section class="network-directory"><h2>Explore connected networks</h2><p>${state.index.buses.length.toLocaleString()} buses across ${state.index.componentCount.toLocaleString()} networks. Choose a network to inspect its source neighbourhood, then follow its connections. Structural connectivity includes open and out-of-service branches.</p><label>Find a network by any bus ID <input id="network-search" type="search" value="${escapeHtml(networkQuery)}"></label><p role="status">${matches.length.toLocaleString()} matching networks · showing ${matches.length ? networkPage * 25 + 1 : 0}–${Math.min((networkPage + 1) * 25, matches.length)}</p><div class="network-grid">${rows.map(network => `<article><h3>${escapeHtml(network.rootBus)}</h3><p><strong>${network.busIds.length.toLocaleString()}</strong> buses · ${network.assetCount.toLocaleString()} devices · ${network.sourceCount.toLocaleString()} sources</p><button data-network-root="${escapeHtml(network.rootBus)}">Inspect neighbourhood</button></article>`).join("")}</div><p><button id="network-previous" ${networkPage === 0 ? "disabled" : ""}>Previous networks</button> Page ${networkPage + 1} / ${pages} <button id="network-next" ${networkPage + 1 === pages ? "disabled" : ""}>Next networks</button></p></section>`;
+    $("network-search").addEventListener("input", event => { networkQuery = event.target.value; networkPage = 0; renderNetworkDirectory(); $("network-search").focus(); });
+    $("network-previous").addEventListener("click", () => { networkPage--; renderNetworkDirectory(); });
+    $("network-next").addEventListener("click", () => { networkPage++; renderNetworkDirectory(); });
+    $("canvas").querySelectorAll("[data-network-root]").forEach(button => button.addEventListener("click", () => select({ kind: "bus", id: button.dataset.networkRoot })));
+  }
+
   function renderView() {
     if (!state.index) { $("canvas").innerHTML = `<div class="message">Open a BMOPF JSON case to see its views.</div>`; return; }
     const budget = overviewBudget();
     if (budget.over && state.largeCaseDecision !== "full" && ["geo", "single"].includes(state.view) && !state.selected) {
       setStatus(`Focused overview mode: ${budget.message} Select a bus or device from the inventory to render nearby topology.`);
-      $("canvas").innerHTML = `<div class="message"><strong>This case is larger than the overview budget.</strong><p>${escapeHtml(budget.message)}</p><p>Select an asset in the inventory to render its focused one-hop context. The full index and Diagnostics remain available.</p></div>`;
+      renderNetworkDirectory();
       document.querySelectorAll(".view-tab").forEach((button) => { const active = button.dataset.view === state.view; button.classList.toggle("active", active); button.setAttribute("aria-selected", String(active)); button.setAttribute("tabindex", active ? "0" : "-1"); });
       return;
     }
@@ -1691,76 +1687,46 @@
     return entry;
   }
 
-  function readFile(file) {
-    if (file.size > MAX_FILE_BYTES) {
-      showLoadError(`The selected file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 64 MiB are not supported in the browser prototype.`, file.name);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      let parsed;
-      try { parsed = JSON.parse(reader.result); }
-      catch (error) {
-        showLoadError(`This file is not valid JSON. Check the file syntax and try again.`, file.name);
-        return;
-      }
-      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
-        showLoadError(`This case contains more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`, file.name);
-        return;
-      }
-      loadDocument(parsed, file.name);
-      if ($("example-select")) $("example-select").value = "";
-    };
-    reader.onerror = () => showLoadError("The browser could not read this file. Check its permissions and try again.", file.name);
-    reader.readAsText(file);
+  let pendingImport = null;
+  function cancelImport() {
+    pendingImport?.abort();
+    pendingImport = null;
+    $("import-progress")?.remove();
   }
-
-  const RESULT_ROOT_MARKERS = new Set(["termination_status", "objective", "objective_value", "solver", "solution_info", "solution_profile", "profile", "diagnostics", "validation", "residuals", "bound_violations", "near_active_bounds", "case_fingerprint", "case_fingerprint_algorithm", "case_id"]);
-  const RESULT_RECORD_MARKERS = new Set(["loading", "vm", "v_magnitude", "voltage_magnitude", "voltage_deviation", "p_from", "q_from", "pg", "qg", "dual", "shadow_price", "cost", "residual"]);
-
-  function looksLikeResultDocument(document, label = "") {
-    if (!document || typeof document !== "object" || Array.isArray(document)) return false;
-    if (globalThis.BMOPFModel.resultCase(document) || document.result || document.results) return true;
-    const root = globalThis.BMOPFModel.resultRoot(document);
-    if (Object.keys(root).some((key) => RESULT_ROOT_MARKERS.has(key))) return true;
-    for (const table of Object.values(root)) {
-      if (!table || typeof table !== "object" || Array.isArray(table)) continue;
-      for (const record of Object.values(table)) {
-        if (record && typeof record === "object" && !Array.isArray(record) && Object.keys(record).some((key) => RESULT_RECORD_MARKERS.has(key))) return true;
+  async function importFile(file, mode) {
+    cancelImport();
+    const controller = new AbortController();
+    pendingImport = controller;
+    const progress = document.createElement("div");
+    progress.id = "import-progress";
+    progress.className = "message";
+    progress.innerHTML = '<span role="status" aria-live="polite"></span> <button type="button">Cancel import</button>';
+    $("drop-zone").after(progress);
+    progress.querySelector("button").addEventListener("click", () => { cancelImport(); setStatus("Import cancelled. The current case is unchanged."); });
+    const report = (phase) => { if (pendingImport === controller) progress.querySelector("span").textContent = `${file.name} · ${phase}…`; };
+    report("Starting import");
+    try {
+      const prepared = await globalThis.BMOPFImporter.read(file, { mode, signal: controller.signal, onProgress: report });
+      if (pendingImport !== controller) return;
+      cancelImport();
+      if (mode === "comparison") loadComparisonResultDocument(prepared.raw, file.name);
+      else if (prepared.isResult) loadResultDocument(prepared.raw, file.name, { preserveCase: mode === "auto" && Boolean(state.index), preparedIndex: prepared.index });
+      else {
+        loadDocument(prepared.raw, file.name, prepared.index);
+        if ($("example-select")) $("example-select").value = "";
       }
+      // Local performance diagnostics, containing timings only, never case data.
+      globalThis.__BMOPF_IMPORT_METRICS__ = { execution: prepared.execution, indexMs: prepared.indexMs };
+    } catch (error) {
+      if (error.name === "AbortError" || pendingImport !== controller) return;
+      cancelImport();
+      if (mode === "comparison") showComparisonError(error.message, file.name);
+      else if (mode === "result" || (mode === "auto" && state.index)) showResultError(error.message, file.name);
+      else { setStatus(`${file.name} was not loaded: ${error.message}`); progress.textContent = error.message; $("drop-zone").after(progress); }
     }
-    return /(?:result|solution|scenario|output)/i.test(String(label));
   }
-
-  function readDroppedFile(file) {
-    if (file.size > MAX_FILE_BYTES) {
-      const message = `The dropped file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 64 MiB are not supported in the browser prototype.`;
-      if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      let parsed;
-      try { parsed = JSON.parse(reader.result); }
-      catch (error) {
-        const message = "The dropped file is not valid JSON. Check the file syntax and try again.";
-        if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
-        return;
-      }
-      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
-        const message = `The dropped file contains more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`;
-        if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
-        return;
-      }
-      if (looksLikeResultDocument(parsed, file.name)) loadResultDocument(parsed, file.name, { preserveCase: Boolean(state.index) });
-      else loadDocument(parsed, file.name);
-    };
-    reader.onerror = () => {
-      const message = "The browser could not read the dropped file. Check its permissions and try again.";
-      if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
-    };
-    reader.readAsText(file);
-  }
+  const readFile = (file) => importFile(file, "case");
+  const readDroppedFile = (file) => importFile(file, "auto");
 
   function showResultError(message, label) {
     state.resultError = message;
@@ -1771,7 +1737,7 @@
   function loadResultDocument(resultDocument, label, options = {}) {
     try {
       const embeddedCase = globalThis.BMOPFModel.resultCase(resultDocument);
-      if (embeddedCase && (!state.index || !options.preserveCase)) loadDocument(embeddedCase, `${label || "Results"} · embedded case`);
+      if (embeddedCase && (!state.index || !options.preserveCase)) loadDocument(embeddedCase, `${label || "Results"} · embedded case`, options.preparedIndex);
       globalThis.BMOPFModel.resultRoot(resultDocument);
       state.result = resultDocument;
       state.resultLabel = label || "Results JSON";
@@ -1791,25 +1757,7 @@
     }
   }
 
-  function readResultFile(file) {
-    if (file.size > MAX_FILE_BYTES) {
-      showResultError(`The selected results file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 64 MiB are not supported in the browser prototype.`, file.name);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      let parsed;
-      try { parsed = JSON.parse(reader.result); }
-      catch (error) { showResultError("This file is not valid JSON. Check the file syntax and try again.", file.name); return; }
-      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
-        showResultError(`These results contain more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`, file.name);
-        return;
-      }
-      loadResultDocument(parsed, file.name);
-    };
-    reader.onerror = () => showResultError("The browser could not read this file. Check its permissions and try again.", file.name);
-    reader.readAsText(file);
-  }
+  const readResultFile = (file) => importFile(file, "result");
 
   function showComparisonError(message, label) {
     state.resultCompareError = message;
@@ -1830,25 +1778,7 @@
     }
   }
 
-  function readComparisonResultFile(file) {
-    if (file.size > MAX_FILE_BYTES) {
-      showComparisonError(`The comparison results file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 64 MiB are not supported in the browser prototype.`, file.name);
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      let parsed;
-      try { parsed = JSON.parse(reader.result); }
-      catch (error) { showComparisonError("This comparison file is not valid JSON. Check the file syntax and try again.", file.name); return; }
-      if (countJsonElements(parsed, MAX_JSON_ELEMENTS) > MAX_JSON_ELEMENTS) {
-        showComparisonError(`These comparison results contain more than ${MAX_JSON_ELEMENTS.toLocaleString()} JSON values, which exceeds the browser prototype limit.`, file.name);
-        return;
-      }
-      loadComparisonResultDocument(parsed, file.name);
-    };
-    reader.onerror = () => showComparisonError("The browser could not read this comparison file. Check its permissions and try again.", file.name);
-    reader.readAsText(file);
-  }
+  const readComparisonResultFile = (file) => importFile(file, "comparison");
 
   document.addEventListener("DOMContentLoaded", () => {
     initialiseSidebarResize();

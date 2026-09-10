@@ -180,11 +180,12 @@
 
     function singlePositions() {
       const layout = getLayout() || {};
-      const forcePositions = new Map(Object.entries(layout.locked || {}).filter(([, point]) => Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)).map(([id, point]) => [id, [...point]]));
+      const busIds = new Set((getIndex()?.buses || []).map(bus => bus.ref.id));
+      const forcePositions = new Map(Object.entries(layout.locked || {}).filter(([id, point]) => busIds.has(id) && Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)).map(([id, point]) => [id, [...point]]));
       const expectedBuses = getIndex()?.buses?.length || 0;
       const positions = layout.engine === "force" && forcePositions.size === expectedBuses ? forcePositions : layeredPositions();
       for (const [id, point] of Object.entries(layout.locked || {})) {
-        if (Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) positions.set(id, [point[0], point[1]]);
+        if (busIds.has(id) && Array.isArray(point) && point.length === 2 && point.every(Number.isFinite)) positions.set(id, [point[0], point[1]]);
       }
       return positions;
     }

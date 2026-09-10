@@ -59,6 +59,7 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
     template = read(joinpath(FRONTEND_DIR, "index.html"), String)
     examples = read(joinpath(FRONTEND_DIR, "examples.js"), String)
     model = read(joinpath(FRONTEND_DIR, "model.js"), String)
+    importer = read(joinpath(FRONTEND_DIR, "importer.js"), String)
     renderer_contract = read(joinpath(FRONTEND_DIR, "renderer-contract.js"), String)
     symbols_renderer = read(joinpath(FRONTEND_DIR, "renderers", "symbols.js"), String)
     electrical_model = read(joinpath(FRONTEND_DIR, "electrical-model.js"), String)
@@ -80,6 +81,7 @@ function render_case(case::AbstractDict, output::AbstractString; title::Abstract
         "<link rel=\"stylesheet\" href=\"styles.css\">" => "<style>$(css)</style>",
         "<script src=\"examples.js\"></script>" => "<script>$(examples)</script>",
         "<script src=\"model.js\"></script>" => "<script>$(model)</script>",
+        "<script src=\"importer.js\"></script>" => "<script>$(importer)</script>",
         "<script src=\"renderer-contract.js\"></script>" => "<script>$(renderer_contract)</script>",
         "<script src=\"renderers/symbols.js\"></script>" => "<script>$(symbols_renderer)</script>",
         "<script src=\"electrical-model.js\"></script>" => "<script>$(electrical_model)</script>",

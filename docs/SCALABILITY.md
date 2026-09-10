@@ -1,4 +1,8 @@
-# Large-case investigation (2026-09-10)
+# Large-case scalability (2026-09-10)
+
+The current implementation includes worker imports and a paginated network directory.
+The first sections record the initial investigation; the final section describes
+the subsequent worker implementation and its measurements.
 
 The Springfield MV/LV review file was tested locally; it is not included in this repository.
 It is 31,298,058 bytes (29.85 MiB), with 692,476 JSON values, depth 5,
@@ -70,3 +74,48 @@ Full-network SVG, force layout, high-degree neighbourhoods, large result/diagnos
 tables and many pinned sheets remain scaling limits. Raising import limits is not
 a claim that those unbounded views are now fast. No GPU engine or worker was added
 in this change.
+
+## Worker imports and network directory (subsequent branch work)
+
+`frontend/importer.js` now handles case, dropped file, result, result comparison,
+and model comparison imports. Parsing, value/depth checks, indexing, component
+summaries and graph-signature preparation execute in a local Blob worker. The
+worker source comes from the same model implementation used by the app; there
+is no fetched worker script or second independent indexing implementation.
+
+Raw tables, components and index entries transfer in acknowledged batches of at
+most 500 entries. Sending the entire indexed graph in one structured-clone message
+still caused a 256 ms receiving-thread pause; batching removed that pause for the
+Springfield case. This bounds entry count per message, not bytes in an individual
+entry. Extremely large individual arrays/strings can still cause a transfer pause.
+The main thread reconstructs the maps and restores source-record identity.
+
+Imports show progress and a cancel button. Starting another main import cancels
+the previous one; switching cases also cancels it. Cancelled, failed or stale
+imports do not replace the current case. Worker-unavailable environments have an
+explicit main-thread fallback; asynchronous worker/CSP failures report an error.
+Workers and Blob URLs are cleaned up on success, failure and cancellation.
+
+A subsequent local Chromium probe recorded 564 ms total import, 154 ms worker
+index/signature preparation, 43 ms broad search and 46 ms detail selection. No
+main-thread tasks above 50 ms were observed in that run. Total import time is
+longer than the earlier synchronous run, while responsiveness improves. These
+are observations, not timing assertions in CI or guarantees for all hardware.
+
+Large cases now open a directory of connected networks, with 25 cards per page,
+bus/device/source counts, and search by any member bus ID. Every component remains
+reachable. Selecting a card opens its source neighbourhood (or a member bus if no
+source is supplied); it does not silently draw a whole component or infer a bridge.
+Layout controls and the floating legend are hidden while showing the directory.
+Force and ELK layout act on the focused neighbourhood when one is selected.
+Saved positions outside that scope no longer inflate its canvas bounds. Whole-case
+layout signatures are cached and prepared in the import worker.
+
+Validation includes worker/raw/index identity, malformed and deeply nested JSON,
+wide arrays, cancellation, overlapping imports, fallback, model/result imports,
+component pagination/search, focused force layout, source and built static apps
+opened via `file://`, and a generated Julia report opened from disk. Initial data
+already embedded in a Julia report still uses synchronous startup indexing; file
+imports inside that report use the worker. Full-region GPU rendering, viewport
+culling, large diagnostics/results tables and unbounded pinned sheets remain
+future work. No GPU renderer was added.

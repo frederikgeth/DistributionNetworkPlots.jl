@@ -39,3 +39,11 @@ const densePositions = denseLayout.singlePositions();
 const denseY = denseBuses.slice(1).map((bus) => densePositions.get(bus.ref.id)[1]).sort((a, b) => a - b);
 assert.ok(denseY.every((value, index) => index === 0 || value - denseY[index - 1] >= 64));
 assert.ok(denseLayout.singleBounds(densePositions).height > 500);
+
+// Positions saved outside a focused neighbourhood must not enlarge its canvas.
+const scopedLayout = sandbox.globalThis.BMOPFLayouts.createDeterministicLayout({
+  getIndex: () => ({ buses: [denseBuses[0]], assets: [] }),
+  getLayout: () => ({ engine: "force", locked: { source_bus: [70, 86], elsewhere: [100000, 100000] } })
+});
+assert.deepEqual([...scopedLayout.singlePositions().keys()], ["source_bus"]);
+assert.ok(scopedLayout.singleBounds(scopedLayout.singlePositions()).width < 1000);

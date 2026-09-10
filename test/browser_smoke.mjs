@@ -211,6 +211,7 @@ try {
     assert.ok(await page.locator("#multi-detail-canvas").evaluate((node) => node.scrollWidth <= node.clientWidth + 1));
     await page.getByRole("tab", { name: "Electrical detail" }).click();
     await page.locator("#file-input").setInputFiles(resolve(fixtureRoot, "micro_bmopf.json"));
+    await page.locator("#import-progress").waitFor({ state: "detached" });
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");
     const overviewTable = page.locator('table[data-resizable-table="class-overview"]');
@@ -246,7 +247,7 @@ try {
       document.querySelector("#drop-zone").dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer: transfer }));
     }, { text, name });
     await dropJson(resultFixture, "micro_bmopf_result.json");
-    await page.waitForTimeout(100);
+    await page.locator("#import-progress").waitFor({ state: "detached" });
     // A case opened from a plain JSON file carries no fingerprint of its own, so
     // the app can report the identity a result claims but cannot verify it. The
     // cryptographic matched/mismatch paths need a case that declares its own
@@ -256,7 +257,7 @@ try {
     assert.match(await page.locator("#view-status").textContent(), /Results attached to the current case/);
     assert.match(await page.locator("#view-status").textContent(), /identity could not be verified/);
     await dropJson(mismatchedResult, "mismatch_result.json");
-    await page.waitForTimeout(100);
+    await page.locator("#import-progress").waitFor({ state: "detached" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");
     assert.match(await page.locator("#result-summary").innerText(), /case identity not-the-open-case/);
     await page.getByRole("tab", { name: "Single-wire" }).click();
@@ -341,6 +342,7 @@ try {
     assert.match(multiWindingText, /referred to winding 1 coil-voltage base/);
     assert.match(multiWindingText, /needs 4 distinct terminals/);
     await page.locator("#file-input").setInputFiles({ name: "large-browser-smoke-case.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(largeCase)) });
+    await page.locator("#import-progress").waitFor({ state: "detached" });
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     await page.getByRole("tab", { name: "Single-wire" }).click();
     await page.locator("#large-case-dialog").waitFor({ state: "visible" });

@@ -297,3 +297,9 @@ pre.raw { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 9px; bor
   .canvas { border: 0; }
   .canvas svg { height: auto; max-height: none; }
 }
+
+.network-directory { padding: 24px; max-width: 1200px; }
+.network-directory input { width: min(100%, 440px); margin: 8px 0; }
+.network-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+.network-grid article { padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.network-grid h3 { overflow-wrap: anywhere; font-size: 13px; font-family: ui-monospace, monospace; }

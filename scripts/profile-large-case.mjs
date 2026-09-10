@@ -37,6 +37,7 @@ try {
   await page.waitForFunction(name => document.querySelector('#case-summary h2')?.textContent === name, raw.name, { timeout: 30000 });
   const loadMs = performance.now() - start;
   await page.locator('#large-case-focused').click();
+  await page.screenshot({ path: '/tmp/bmopf-network-directory.png', fullPage: false });
   const searchStart = performance.now();
   await page.locator('#search').fill('bus');
   await page.locator('#search-next').waitFor();
@@ -57,7 +58,7 @@ try {
   await page.locator('#search').press('Enter');
   await page.waitForFunction(id => document.querySelector('#canvas .model-sheet')?.textContent.includes(id), line);
   await page.screenshot({ path: '/tmp/bmopf-large-case.png', fullPage: false });
-  const profile = await page.evaluate(() => ({ ...window.profile, domNodes: document.querySelectorAll('*').length, svgNodes: document.querySelectorAll('svg *').length }));
+  const profile = await page.evaluate(() => ({ ...window.profile, ...window.__BMOPF_IMPORT_METRICS__, domNodes: document.querySelectorAll('*').length, svgNodes: document.querySelectorAll('svg *').length }));
   assert.deepEqual(errors, []);
   console.log(JSON.stringify({ bytes: bytes.length, loadMs, searchMs, selectionMs, ...profile, errors }, null, 2));
 } finally { await browser?.close(); await new Promise(r => server.close(r)); }

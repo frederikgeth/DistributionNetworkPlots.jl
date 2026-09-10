@@ -1,4 +1,4 @@
-(function () {
+(function installModel() {
   "use strict";
 
   const ASSET_KINDS = new Set([
@@ -187,7 +187,21 @@
       const ids = item.ports.map((p) => p.busId).filter((id) => parent.has(id));
       for (const id of ids.slice(1)) parent.set(root(id), root(ids[0]));
     }
-    const componentCount = new Set(buses.map((b) => root(b.ref.id))).size;
+    const componentMap = new Map();
+    for (const bus of buses) {
+      const id = root(bus.ref.id);
+      if (!componentMap.has(id)) componentMap.set(id, { id, rootBus: bus.ref.id, busIds: [], assetCount: 0, sourceCount: 0 });
+      componentMap.get(id).busIds.push(bus.ref.id);
+    }
+    for (const asset of assets) {
+      const busId = asset.ports.find((p) => parent.has(p.busId))?.busId;
+      if (busId === undefined) continue;
+      const component = componentMap.get(root(busId));
+      component.assetCount++;
+      if (asset.ref.kind === "voltage_source") { if (!component.sourceCount) component.rootBus = busId; component.sourceCount++; }
+    }
+    const components = [...componentMap.values()].sort((a, b) => b.busIds.length - a.busIds.length || a.id.localeCompare(b.id));
+    const componentCount = components.length;
     if (componentCount > 1) warnings.push(`${componentCount.toLocaleString()} separate connected networks in the supplied topology (including open or out-of-service branches).`);
     const counts = {};
     for (const item of assets) counts[item.ref.kind] = (counts[item.ref.kind] || 0) + 1;
@@ -217,8 +231,22 @@
       supportCounts,
       coordinateCount,
       componentCount,
+      components,
       schema: schema || null
     };
+  }
+
+  function layoutGraphSignature(index) {
+    if (!index) return "sld-elk-graph-v1:none";
+    const buses = index.buses.map((bus) => bus.ref.id).sort();
+    const edges = [];
+    index.assets.forEach((item) => (item.connections || []).forEach((connection) => edges.push({ kind: item.ref.kind, id: item.ref.id, from: connection.from.busId, to: connection.to.busId })));
+    const keyed = edges.map(edge => ({ edge, key: JSON.stringify(edge) }));
+    keyed.sort((a, b) => a.key.localeCompare(b.key));
+    const input = JSON.stringify({ buses, edges: keyed.map(entry => entry.edge) });
+    let hash = 2166136261;
+    for (let i = 0; i < input.length; i += 1) { hash ^= input.charCodeAt(i); hash = Math.imul(hash, 16777619); }
+    return `sld-elk-graph-v1:${(hash >>> 0).toString(16).padStart(8, "0")}`;
   }
 
   function resultRoot(document) {
@@ -282,5 +310,23 @@
     });
   }
 
-  globalThis.BMOPFModel = { buildCaseIndex, resultRoot, resultCase, resultRecord, resultScenarios, resultDiagnostics };
+  const RESULT_ROOT_MARKERS = new Set(["termination_status", "objective", "objective_value", "solver", "solution_info", "solution_profile", "profile", "diagnostics", "validation", "residuals", "bound_violations", "near_active_bounds", "case_fingerprint", "case_fingerprint_algorithm", "case_id"]);
+  const RESULT_RECORD_MARKERS = new Set(["loading", "vm", "v_magnitude", "voltage_magnitude", "voltage_deviation", "p_from", "q_from", "pg", "qg", "dual", "shadow_price", "cost", "residual"]);
+
+  function looksLikeResultDocument(document, label = "") {
+    if (!document || typeof document !== "object" || Array.isArray(document)) return false;
+    if (globalThis.BMOPFModel.resultCase(document) || document.result || document.results) return true;
+    const root = globalThis.BMOPFModel.resultRoot(document);
+    if (Object.keys(root).some((key) => RESULT_ROOT_MARKERS.has(key))) return true;
+    for (const table of Object.values(root)) {
+      if (!table || typeof table !== "object" || Array.isArray(table)) continue;
+      for (const record of Object.values(table)) {
+        if (record && typeof record === "object" && !Array.isArray(record) && Object.keys(record).some((key) => RESULT_RECORD_MARKERS.has(key))) return true;
+      }
+    }
+    return /(?:result|solution|scenario|output)/i.test(String(label));
+  }
+
+
+  globalThis.BMOPFModel = { workerSource: () => `(${installModel.toString()})();`, looksLikeResultDocument, layoutGraphSignature, buildCaseIndex, resultRoot, resultCase, resultRecord, resultScenarios, resultDiagnostics };
 })();

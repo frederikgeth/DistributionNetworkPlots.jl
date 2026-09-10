@@ -5,7 +5,7 @@
   "scripts": {
     "build": "node scripts/build-static.mjs",
     "test:build": "node --test test/build_smoke.mjs test/electrical_model.mjs",
-    "test:browser": "node --test test/browser_smoke.mjs test/model_sheets_browser.mjs"
+    "test:browser": "node --test test/browser_smoke.mjs test/model_sheets_browser.mjs test/importer_browser.mjs"
   },
   "devDependencies": {
     "playwright": "1.52.0"

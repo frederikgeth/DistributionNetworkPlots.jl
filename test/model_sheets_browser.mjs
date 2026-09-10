@@ -81,6 +81,7 @@ try {
   delete raw.line.line_main.length;
   raw.line.line_main.terminal_map_to = ["1", "3", "2", "n", "extra"];
   await page.locator("#file-input").setInputFiles({ name: "incomplete.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(raw)) });
+    await page.locator("#import-progress").waitFor({ state: "detached" });
   await select("line", "line_main");
   assert.equal(await page.locator("#canvas .model-sheet").count(), 1);
   assert.match(await first().innerText(), /Segment totals unavailable/);
@@ -92,6 +93,7 @@ try {
   // directions and identity-preserving comparisons across object insertion order.
   const result = { meta: { case_id: raw.name }, bus: { source: { "1": { vr: 230, vi: 0, vm: 230, va: 0 }, "n": { vr: 2, vi: 1, vm: Math.sqrt(5), va: Math.atan2(1, 2) } } } };
   await page.locator("#result-input").setInputFiles({ name: "terminal-results.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(result)) });
+    await page.locator("#import-progress").waitFor({ state: "detached" });
   await select("bus", "source");
   assert.match(await first().innerText(), /Voltage phasors/);
   assert.match(await first().innerText(), /terminal–ground/);
@@ -100,6 +102,7 @@ try {
   const comparisonResult = structuredClone(result);
   comparisonResult.bus.source = { n: { vr: 1, vi: 0, vm: 1, va: 0 }, "1": { vr: 229, vi: 0, vm: 229, va: 0 } };
   await page.locator("#comparison-input").setInputFiles({ name: "prior-results.json", mimeType: "application/json", buffer: Buffer.from(JSON.stringify(comparisonResult)) });
+    await page.locator("#import-progress").waitFor({ state: "detached" });
   assert.match(await first().innerText(), /prior-results.json/);
   assert.match(await first().innerText(), /Δ current − comparison/);
 

@@ -23,7 +23,7 @@
   }
 
   function createModelSheets(d) {
-    let pins = [], comparisonIndex = null, comparisonName = "";
+    let pins = [], comparisonIndex = null, comparisonName = "", comparisonImport = null;
     const local = new Map();
     let instance = 0;
     const find = (ref, index = d.getIndex()) => ref ? index?.byKind.get(ref.kind)?.get(ref.id) : null;
@@ -282,18 +282,13 @@
         try {
           const file = event.target.files[0];
           if (!file) return;
-          if (file.size > 64 * 1024 * 1024) throw new Error("Comparison case exceeds 64 MiB.");
-          const raw = JSON.parse(await file.text());
-          if (activeIndex !== d.getIndex() || !event.target.isConnected) return;
-          const pending = [[raw, 0]];
-          let count = 0;
-          while (pending.length) {
-            const [value, depth] = pending.pop();
-            if (++count > 2000000 || depth > 100) throw new Error("Comparison case exceeds the 2,000,000-value or 100-level nesting limit.");
-            if (value && typeof value === "object") Object.values(value).forEach((v) => pending.push([v, depth + 1]));
-          }
-          comparisonIndex = globalThis.BMOPFModel.buildCaseIndex(raw); comparisonName = file.name; refresh();
-        } catch (error) { if (activeIndex !== d.getIndex() || !event.target.isConnected) return; comparisonIndex = previousIndex; comparisonName = previousName; feedback.textContent = `Model comparison unavailable: ${error.message}`; }
+          comparisonImport?.abort();
+          const controller = new AbortController(); comparisonImport = controller;
+          const prepared = await globalThis.BMOPFImporter.read(file, { mode: "case", signal: controller.signal, onProgress: phase => { if (feedback.isConnected) feedback.textContent = `${phase}…`; } });
+          if (activeIndex !== d.getIndex() || !event.target.isConnected || comparisonImport !== controller) return;
+          comparisonImport = null;
+          comparisonIndex = prepared.index; comparisonName = file.name; refresh();
+        } catch (error) { if (error.name === "AbortError") return; if (activeIndex !== d.getIndex() || !event.target.isConnected) return; comparisonIndex = previousIndex; comparisonName = previousName; feedback.textContent = `Model comparison unavailable: ${error.message}`; }
       });
       target.querySelectorAll(".model-sheet").forEach((article) => {
         const item = find(JSON.parse(article.dataset.sheetRef)), model = E.interpret(item, d.getIndex()), s = stateFor(item);
@@ -334,7 +329,7 @@
       });
     }
 
-    return { render, reset() { pins = []; local.clear(); comparisonIndex = null; comparisonName = ""; } };
+    return { render, reset() { comparisonImport?.abort(); comparisonImport = null; pins = []; local.clear(); comparisonIndex = null; comparisonName = ""; } };
   }
   globalThis.BMOPFModelSheets = Object.freeze({ VERSION: "model-sheets-v1", createModelSheets });
 })();
