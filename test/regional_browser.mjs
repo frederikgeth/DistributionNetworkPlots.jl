@@ -53,5 +53,26 @@ try {
  await page.locator('#multi-detail-open').click();await page.locator('#canvas .model-sheet').waitFor();
  await page.goBack();await page.locator('.map-detail').waitFor();
  await page.setViewportSize({width:390,height:844});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1));
+ await page.setViewportSize({width:1440,height:1000});
+ const tracing={name:'trace-review',bus:{a:{terminal_names:['x'],longitude:-2.60,latitude:53.48},b:{terminal_names:['y'],longitude:-2.61,latitude:53.49},c:{terminal_names:['z'],perfectly_grounded_terminals:['z'],longitude:-2.62,latitude:53.48}},line:{ab:{bus_from:'a',bus_to:'b',terminal_map_from:['x'],terminal_map_to:['y']}},switch:{sw:{bus_from:'b',bus_to:'c',terminal_map_from:['y'],terminal_map_to:['z'],open_switch:true}}};
+ await page.locator('#file-input').setInputFiles({name:'trace.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(tracing))});await page.locator('#import-progress').waitFor({state:'detached'});
+ await page.locator('#search').fill('a');await page.locator('#search').press('Enter');
+ await page.locator('[data-trace-start]').first().click();
+ assert.match(await page.locator('.terminal-trace').innerText(),/Terminal renamed x → y/);
+ assert.match(await page.locator('.terminal-trace').innerText(),/Open switch/);
+ assert.match(await page.locator('.terminal-trace').innerText(),/2 bus terminals reached/);
+ await page.waitForFunction(()=>document.querySelector('#region-map [stroke="#7739a6"]'));
+ await page.locator('[data-trace-ref]').filter({hasText:'line ab'}).click();
+ assert.match(await page.locator('#multi-detail-selection').innerText(),/ab/);
+ assert.match(await page.locator('.terminal-trace').innerText(),/Terminal trace · a/);
+ await page.locator('#multi-detail-open').click();await page.locator('#canvas .model-sheet').waitFor();await page.goBack();await page.locator('.terminal-trace').waitFor();
+ await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/tmp/terminal-trace.png'});
+ await page.locator('[data-trace-clear]').click();assert.equal(await page.locator('[data-trace-ref]').count(),0);
+ assert.equal(await page.locator('#region-map [stroke="#7739a6"]').count(),0);
+ const chain={name:'long-trace',bus:Object.fromEntries(Array.from({length:65},(_,i)=>['u'+i,{terminal_names:['p'],longitude:-2.6+i*.0001,latitude:53.48}])),line:Object.fromEntries(Array.from({length:64},(_,i)=>['l'+i,{bus_from:'u'+i,bus_to:'u'+(i+1),terminal_map_from:['p'],terminal_map_to:['p']}]))};
+ await page.locator('#file-input').setInputFiles({name:'chain.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(chain))});await page.locator('#import-progress').waitFor({state:'detached'});
+ assert.equal(await page.locator('[data-trace-clear]').count(),0);
+ await page.locator('#search').fill('u0');await page.locator('#search').press('Enter');await page.locator('[data-trace-start]').first().click();
+ assert.equal(await page.locator('.terminal-trace li').count(),50);await page.locator('[data-trace-next]').click();assert.equal(await page.locator('.terminal-trace ol').getAttribute('start'),'51');
  assert.deepEqual(errors,[]);
 } finally { await browser.close(); }

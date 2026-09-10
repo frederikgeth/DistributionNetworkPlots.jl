@@ -198,3 +198,36 @@ operating values, unknown fields, panel/full-sheet/back navigation, collapsing,
 legend sizing and a 390-pixel mobile viewport. Springfield and all 25 ENWL cases
 were rechecked with landmarks enabled, without browser errors; Springfield's initial
 map used 269 SVG descendants. No private case files were added to the repository.
+
+## Terminal-level connection traces
+
+Choose a terminal in the compact Geospatial detail panel to start a trace. The
+engine follows explicit, bijective line/switch terminal-map entries in either
+direction, records terminal renaming and all reachable branches, and terminates
+loops. It never joins buses merely because their terminal labels match. It does
+not cross between the terminals of an attached load, source or other device.
+
+Open/out-of-service devices, invalid switch-open states, ideal-ground terminals,
+missing or duplicated bus terminals, unequal/duplicate maps and unsupported branch
+models stop continuation. Transformer boundaries list related winding ports and
+configurations without asserting conductor continuity through magnetic coupling.
+Undeclared/unrecognised service states are labelled structural mappings only.
+This is not a power-flow direction, protection reach or energisation analysis.
+
+Purple map equipment/group outlines indicate that they contain traced terminals;
+they do not depict individual conductors. Exact bus/terminal identities, stops,
+source JSON pointers and selectable asset links appear in the adjacent trace list.
+The trace survives selecting another asset or visiting its full electrical sheet,
+and clears when the case changes or the user selects Clear trace.
+
+Lists render 50 evidence entries per page. Traversal initially inspects at most
+2,000 bus terminals / 20,000 incident assets, marks incomplete traces explicitly,
+and allows doubling the budget up to 64,000 terminals. The budget is an operational
+limit, not an inferred endpoint. Increasing it recomputes from the origin.
+
+Regression tests cover renaming, cycles, branching boundaries, grounding, open
+switches, transformer windings, ambiguous maps, device isolation, budget exhaustion,
+map highlighting, evidence navigation, full-sheet/back, clearing and pagination.
+A first-terminal trace from every Springfield component root completed within the
+default budget: 2,174 traces, largest 650 terminals, about 93 ms total in a local
+Node probe (not a cross-device performance guarantee).

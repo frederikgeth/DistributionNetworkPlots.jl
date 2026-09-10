@@ -10,7 +10,7 @@
   const SIDEBAR_WIDTH_DEFAULT = 360;
   const SIDEBAR_WIDTH_MIN = 280;
   const SIDEBAR_WIDTH_MAX = 640;
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, searchPage: 0, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusBars: false, showBusLabels: true, showDeviceLabels: false, showArrows: false, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const state = { index: null, selected: null, terminalTrace: null, tracePage: 0, traceLimit: 2000, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, searchPage: 0, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusBars: false, showBusLabels: true, showDeviceLabels: false, showArrows: false, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
   const SEARCH_PAGE_SIZE = 100;
   const $ = (id) => document.getElementById(id);
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -384,6 +384,7 @@
   function loadDocument(caseDocument, label, preparedIndex = null) {
     cancelImport();
     networkPage = 0; networkQuery = "";
+    state.terminalTrace = null; state.tracePage = 0; state.traceLimit = 2000;
     const requestedSelection = state.selected;
     try {
       state.index = preparedIndex || globalThis.BMOPFModel.buildCaseIndex(caseDocument);
@@ -1518,6 +1519,24 @@
 
   function multiDetailAvailable(item) { return Boolean(item); }
 
+  function startTerminalTrace(bus, terminal) {
+    state.terminalTrace = globalThis.BMOPFElectrical.traceTerminal(state.index, bus, terminal, { maxVisits: state.traceLimit, maxSteps: state.traceLimit*10 });
+    state.tracePage = 0; renderMultiDetail(); geospatialRenderer.refresh();
+  }
+  function tracePanelHtml() {
+    const trace=state.terminalTrace, h=escapeHtml;
+    if (!trace) return '<section class="terminal-trace"><h3>Terminal trace</h3><p>Choose a terminal above to follow its declared conductor mappings.</p></section>';
+    const pages=Math.max(1,Math.ceil(trace.rows.length/50)); state.tracePage=Math.min(state.tracePage,pages-1);
+    const endpoint = p => `${h(p.busId)} / ${h(p.terminal)}`;
+    return `<section class="terminal-trace"><h3>Terminal trace · ${endpoint(trace.origin)}</h3><p>${trace.terminals.length} bus terminals reached · ${trace.rows.length} evidence entries. Structural connectivity only; this does not establish energisation. Ground and transformer winding boundaries stop the trace.</p><button data-trace-clear>Clear trace</button>${trace.truncated ? `<p class="trace-stop">Incomplete: traversal budget reached.</p><button data-trace-more ${state.traceLimit>=64000 ? "disabled" : ""}>Extend trace budget</button>` : ""}<ol start="${state.tracePage*50+1}">${trace.rows.slice(state.tracePage*50,(state.tracePage+1)*50).map(row=>`<li class="trace-${row.type}"><strong>${h(row.type)}</strong> ${row.from ? endpoint(row.from) : ""}${row.to ? ` → ${endpoint(row.to)}` : ""}<p>${h(row.message)}</p>${row.ref ? `<button data-trace-ref="${h(JSON.stringify(row.ref))}">${h(row.ref.kind)} ${h(row.ref.id)}</button>` : ""}<small>${h(row.pointer)}</small>${row.windings ? `<p>Related winding ports — inspect separately; no direct continuity:</p>${row.windings.map(w=>`<p>${h(w.role)} · ${h(w.busId)} · ${h(w.configuration)} · ${h(w.terminals.join(", "))}</p>`).join("")}` : ""}</li>`).join("")}</ol><button data-trace-prev ${state.tracePage ? "" : "disabled"}>Previous trace entries</button> ${state.tracePage+1}/${pages} <button data-trace-next ${state.tracePage+1<pages ? "" : "disabled"}>Next trace entries</button></section>`;
+  }
+  function bindTraceControls(target) {
+    target.querySelector("[data-trace-clear]")?.addEventListener("click",()=>{state.terminalTrace=null;renderMultiDetail();geospatialRenderer.refresh();});
+    target.querySelector("[data-trace-more]")?.addEventListener("click",()=>{state.traceLimit*=2;startTerminalTrace(state.terminalTrace.origin.busId,state.terminalTrace.origin.terminal);});
+    for(const [selector,delta] of [["[data-trace-prev]",-1],["[data-trace-next]",1]]) target.querySelector(selector)?.addEventListener("click",()=>{state.tracePage+=delta;renderMultiDetail();});
+    target.querySelectorAll("[data-trace-ref]").forEach(button=>button.onclick=()=>select(JSON.parse(button.dataset.traceRef)));
+  }
+
   function renderMapDetail(target, item) {
     const E = globalThis.BMOPFElectrical, model = E.interpret(item, state.index), h = escapeHtml;
     const value = v => h(v === undefined ? "not supplied" : typeof v === "object" ? JSON.stringify(v) : String(v));
@@ -1525,7 +1544,7 @@
     const rows = fields => fields.map(f=>[(f.label || f.keys.join(" / ")) + (f.reference ? ` · ${f.reference}` : ""), f.value, f.unit, f.path]);
     const section = (title, content) => `<section><h3>${title}</h3>${content}</section>`;
     const ports = item.ref.kind === "bus" ? [{ role: "bus", busId: item.ref.id, terminals: item.terminals }] : item.ports;
-    const connections = ports.map(port=>`<div><strong>${h(port.role)}</strong> <button class="sheet-link" data-map-bus="${h(port.busId)}">${h(port.busId)}</button><p>Terminals: ${h(port.terminals.join(" · ") || "not supplied")}</p><p>Ideal ground: ${h(state.index.busById.get(port.busId)?.groundedTerminals.join(" · ") || "not declared")}</p></div>`).join("");
+    const connections = ports.map(port=>`<div><strong>${h(port.role)}</strong> <button class="sheet-link" data-map-bus="${h(port.busId)}">${h(port.busId)}</button><p>Trace terminal: ${port.terminals.map(terminal=>`<button data-trace-start="${h(JSON.stringify([port.busId,terminal]))}">${h(terminal)}</button>`).join(" ") || "not supplied"}</p><p>Ideal ground: ${h(state.index.busById.get(port.busId)?.groundedTerminals.join(" · ") || "not declared")}</p></div>`).join("");
     const ratingFields = model.fields.filter(f=>/^(v_nom|v_magnitude|p_nom|q_nom|[is]_(max|rating)|tap|length)/.test(f.keys[0]));
     const inherited = model.line?.ratings.filter(r=>r.value !== undefined && !ratingFields.some(f=>f.path === r.path)).map(r=>[r.key,r.value,r.unit,r.path]) || [];
     const result = E.resultFields(item, resultRecordFor(item));
@@ -1533,6 +1552,9 @@
     const scenario = state.resultScenario || (state.result && globalThis.BMOPFModel.resultScenarios(state.result).length > 1 ? "Choose a scenario" : "single network");
     const pairing = state.result ? resultPairingStatus() : null;
     target.innerHTML = `<article class="map-detail"><p>Service: <strong>${h(item.status)}</strong> · Frequency: ${value(model.frequency)} ${model.frequency === undefined ? "" : "Hz"}</p>${section("Connections & grounding", connections || "<p>No connection ports supplied.</p>")}${section("Ratings & nominal values", ratingFields.length || inherited.length ? table([...rows(ratingFields),...inherited]) : "<p>Not supplied for this element.</p>")}${section("Operating values", `<p>${state.result ? `${h(state.resultLabel)} · ${h(scenario)}` : "No results attached."}</p>${pairing ? `<p class="muted">Pairing: ${h(pairing.label)} · ${h(pairing.message)}</p>` : ""}${result.length ? table(rows(result.slice(0,12))) : state.result ? "<p>No values for this element in the selected scenario.</p>" : ""}${result.length > 12 ? `<p>${result.length-12} more result fields in the full electrical sheet.</p>` : ""}`)}${section("Unresolved model information", model.problems.length ? `<ul>${model.problems.map(p=>`<li>${h(p)}</li>`).join("")}</ul>` : "<p>No issues found by the available model checks.</p>")}${unknown.length ? `<p><strong>${unknown.length} uninterpreted source fields</strong></p>${table(rows(unknown.slice(0,8)))}${unknown.length>8 ? `<p>${unknown.length-8} more in the full electrical sheet.</p>` : ""}` : ""}<p class="muted">${model.fields.length} source fields retained. Open the full view for matrices, all results and source evidence.</p></article>`;
+    target.insertAdjacentHTML(state.terminalTrace ? "afterbegin" : "beforeend", tracePanelHtml());
+    bindTraceControls(target);
+    target.querySelectorAll("[data-trace-start]").forEach(button=>button.onclick=()=>{ const [bus,terminal]=JSON.parse(button.dataset.traceStart); state.traceLimit=2000; startTerminalTrace(bus,terminal); });
     target.querySelectorAll("[data-map-bus]").forEach(button=>button.onclick=()=>select({kind:"bus",id:button.dataset.mapBus}));
   }
 
@@ -1545,6 +1567,7 @@
     const item = itemFor(state.selected);
     const visible = ["single", "geo"].includes(state.view) && !state.multiDetailCollapsed && multiDetailAvailable(item);
     stage.classList.toggle("has-detail", visible);
+    stage.classList.toggle("map-detail-active", visible && state.view === "geo");
     pane.hidden = !visible;
     resizer.hidden = !visible;
     if (!visible) { target.innerHTML = ""; return; }

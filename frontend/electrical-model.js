@@ -231,5 +231,56 @@
     return item.terminals.filter((t) => number(record[t]?.vr) && number(record[t]?.vi)).map((terminal) => ({ terminal, real: record[terminal].vr, imaginary: record[terminal].vi, reference: "terminal–ground" }));
   }
 
-  globalThis.BMOPFElectrical = Object.freeze({ VERSION, interpret, topology, loadModel, loadResponse, lineModel, manifest, flatten, unit, number, diffRecords, componentValue, resultFields, voltagePhasors });
+  // Trace declared conductor mappings only. This is not an energisation test.
+  function traceTerminal(index, busId, terminal, { maxVisits = 2000, maxSteps = 20000 } = {}) {
+    const key = (bus, term) => JSON.stringify([bus, term]);
+    const valid = (bus, term) => index.busById.get(bus)?.terminals.filter(t => t === term).length === 1;
+    const rows = [], terminals = [], busIds = new Set(), assetPointers = new Set(), seen = new Set(), edges = new Set();
+    const queue = [{ busId, terminal }]; let cursor = 0, steps = 0, truncated = false;
+    if (!valid(busId, terminal)) return { rows: [{ type: "stop", message: "Starting bus/terminal is missing or duplicated.", pointer: "/bus" }], terminals, busIds, assetPointers, truncated: false, origin: { busId, terminal } };
+    seen.add(key(busId, terminal));
+    while (cursor < queue.length) {
+      if (cursor >= maxVisits || steps >= maxSteps) { truncated = true; break; }
+      const node = queue[cursor++], bus = index.busById.get(node.busId);
+      terminals.push(node); busIds.add(node.busId);
+      if (bus.groundedTerminals.includes(node.terminal)) {
+        rows.push({ type: "ground", ref: bus.ref, pointer: bus.ref.pointer + "/perfectly_grounded_terminals", from: node, message: "Declared ideal ground. Trace stops here; ground does not join separate buses." }); continue;
+      }
+      let connected = false;
+      for (const item of new Set(index.byBus.get(node.busId) || [])) {
+        if (++steps > maxSteps) { truncated = true; break; }
+        const matching = item.ports.filter(p => p.busId === node.busId && p.terminals.includes(node.terminal));
+        if (!matching.length) continue; connected = true;
+        const row = { ref: item.ref, pointer: item.ref.pointer, from: node };
+        if (item.ref.kind === "switch" && item.sourceRecord.open_switch !== undefined && typeof item.sourceRecord.open_switch !== "boolean") { rows.push({ ...row, type: "stop", message: "Invalid switch open state; continuity is unresolved." }); continue; }
+        if (item.status === "open" || item.status === "out_of_service") {
+          rows.push({ ...row, type: "stop", message: `${item.status === "open" ? "Open switch" : "Out of service"}. No continuation through this device.` }); continue;
+        }
+        if (item.ref.kind === "transformer") {
+          rows.push({ ...row, type: "winding", message: "Transformer winding boundary: magnetic coupling does not establish conductor continuity.", windings: item.ports.map((p,i) => ({ role: p.role, busId: p.busId, terminals: p.terminals, configuration: item.sourceRecord.windings?.[i]?.configuration ?? item.sourceRecord[i === 0 ? "configuration_from" : "configuration_to"] ?? "not declared" })) }); continue;
+        }
+        if (item.ports.length === 1 && !["line", "switch", "dc_branch"].includes(item.ref.kind)) { rows.push({ ...row, type: "device", message: "Connected device. No internal terminal-to-terminal continuity is inferred." }); continue; }
+        if (!["line", "switch"].includes(item.ref.kind) || item.ports.length !== 2) {
+          rows.push({ ...row, type: "stop", message: "Missing or unsupported connection model; continuation is unresolved." }); continue;
+        }
+        const [a,b] = item.ports;
+        if (!a.terminals.length || a.terminals.length !== b.terminals.length || [a,b].some(p => new Set(p.terminals).size !== p.terminals.length || p.terminals.some(t => !valid(p.busId,t)))) {
+          rows.push({ ...row, type: "stop", message: "Missing bus/terminal, duplicate terminal or unequal terminal maps. Continuation is ambiguous." }); continue;
+        }
+        for (const port of matching) {
+          const other = port === a ? b : a, offset = port.terminals.indexOf(node.terminal), edge = `${item.ref.pointer}:${offset}`;
+          if (edges.has(edge)) continue; edges.add(edge);
+          const to = { busId: other.busId, terminal: other.terminals[offset] };
+          rows.push({ ...row, type: "connection", to, pointer: `${item.ref.pointer}/terminal_map_${port === a ? "from" : "to"}/${offset}`, message: `${node.terminal === to.terminal ? "Terminal label retained" : `Terminal renamed ${node.terminal} → ${to.terminal}`}.${item.status === "unknown" ? " Service state undeclared or unrecognised; structural mapping only." : ""}` });
+          assetPointers.add(item.ref.pointer);
+          if (!seen.has(key(to.busId,to.terminal))) { seen.add(key(to.busId,to.terminal)); queue.push(to); }
+        }
+      }
+      if (!connected) rows.push({ type: "end", ref: bus.ref, pointer: bus.ref.pointer, from: node, message: "No attached port declares this terminal." });
+      if (truncated) break;
+    }
+    return { rows, terminals, busIds, assetPointers, truncated, origin: { busId, terminal } };
+  }
+
+  globalThis.BMOPFElectrical = Object.freeze({ VERSION, traceTerminal, interpret, topology, loadModel, loadResponse, lineModel, manifest, flatten, unit, number, diffRecords, componentValue, resultFields, voltagePhasors });
 })();

@@ -115,9 +115,10 @@
         const xs=points.map(p=>p[0]), ys=points.map(p=>p[1]);
         if (Math.max(...xs)<0 || Math.min(...xs)>760 || Math.max(...ys)<0 || Math.min(...ys)>500) continue;
         edgeCount++; if (drawnEdges>=600) continue; drawnEdges++;
+        const traced = state.terminalTrace?.assetPointers.has(item.ref.pointer);
         const selected = dependencies.sameRef(item.ref,state.selected), status=dependencies.resultStatus(item);
         const transformer=item.ref.kind === "transformer";
-        content += `<polyline points="${points.map(p=>p.join(",")).join(" ")}" fill="none" stroke="${selected ? "#b34712" : transformer ? "#a25316" : "#64877b"}" stroke-width="${selected ? 4 : transformer ? 3 : 1.5}" ${status === "open" || status === "out_of_service" ? 'stroke-dasharray="5 4"' : ""} data-kind="${h(item.ref.kind)}" data-id="${h(item.ref.id)}"><title>${h(dependencies.titleOf(item))} · ${h(status)} · ${route.length >= 2 ? "supplied route" : "straight endpoint connection"}</title></polyline>`;
+        content += `<polyline points="${points.map(p=>p.join(",")).join(" ")}" fill="none" stroke="${traced ? "#7739a6" : selected ? "#b34712" : transformer ? "#a25316" : "#64877b"}" stroke-width="${traced ? 4 : selected ? 4 : transformer ? 3 : 1.5}" ${status === "open" || status === "out_of_service" ? 'stroke-dasharray="5 4"' : ""} data-kind="${h(item.ref.kind)}" data-id="${h(item.ref.id)}"><title>${h(dependencies.titleOf(item))} · ${h(status)} · ${route.length >= 2 ? "supplied route" : "straight endpoint connection"}</title></polyline>`;
       }
       // Group close/coincident points even in detail mode so none covers another.
       cells = [...bins.values()];
@@ -125,13 +126,14 @@
         const entries=cells[i];
         if (detailed && entries.length <= 8 && new Set(entries.map(e=>`${e.x.toFixed(1)}:${e.y.toFixed(1)}`)).size === entries.length) {
           for (const {bus,x,y} of entries) {
-            const selected=dependencies.sameRef(bus.ref,state.selected);
-            content += `<g role="button" tabindex="0" data-kind="bus" data-id="${h(bus.ref.id)}" aria-label="Inspect bus ${h(bus.ref.id)}"><circle cx="${x}" cy="${y}" r="${selected ? 8 : 4}" fill="${selected ? "#dbeafd" : "#fffdf9"}" stroke="${selected ? "#b34712" : "#2f6fb3"}" stroke-width="2"/><title>${h(bus.ref.id)} · network ${memberships.get(bus.ref.id)+1}</title></g>`;
+            const selected=dependencies.sameRef(bus.ref,state.selected), traced=state.terminalTrace?.busIds.has(bus.ref.id);
+            content += `<g role="button" tabindex="0" data-kind="bus" data-id="${h(bus.ref.id)}" aria-label="Inspect bus ${h(bus.ref.id)}"><circle cx="${x}" cy="${y}" r="${selected ? 8 : 4}" fill="${selected ? "#dbeafd" : "#fffdf9"}" stroke="${traced ? "#7739a6" : selected ? "#b34712" : "#2f6fb3"}" stroke-width="2"/><title>${h(bus.ref.id)} · network ${memberships.get(bus.ref.id)+1}</title></g>`;
           }
         } else {
           const x=Math.floor(entries[0].x/50)*50+25, y=Math.floor(entries[0].y/50)*50+25;
           const networks=new Set(entries.map(e=>memberships.get(e.bus.ref.id))).size;
-          content += `<g role="button" tabindex="0" data-region-cell="${i}" aria-label="${entries.length} buses in ${networks} networks. Expand group"><circle cx="${x}" cy="${y}" r="20" fill="#fffdf9" stroke="${networks>1 ? "#b26c2a" : "#2f6fb3"}" stroke-width="2" ${networks>1 ? 'stroke-dasharray="3 2"' : ""}/><text x="${x}" y="${y+4}" text-anchor="middle" font-size="11" fill="#25231f">${entries.length}</text><title>${entries.length} buses · ${networks} separate networks. Geographic grouping does not join networks.</title></g>`;
+          const traced = entries.some(e=>state.terminalTrace?.busIds.has(e.bus.ref.id));
+          content += `<g role="button" tabindex="0" data-region-cell="${i}" aria-label="${entries.length} buses in ${networks} networks. Expand group"><circle cx="${x}" cy="${y}" r="20" fill="#fffdf9" stroke="${traced ? "#7739a6" : networks>1 ? "#b26c2a" : "#2f6fb3"}" stroke-width="2" ${networks>1 ? 'stroke-dasharray="3 2"' : ""}/><text x="${x}" y="${y+4}" text-anchor="middle" font-size="11" fill="#25231f">${entries.length}</text><title>${entries.length} buses · ${networks} separate networks. Geographic grouping does not join networks.</title></g>`;
         }
       }
       const landmarkBins=new Map(); visibleLandmarks=[];
@@ -160,7 +162,7 @@
       legend.querySelectorAll("[data-landmark-type]").forEach(button=>button.onclick=()=>{landmarkRows=visibleLandmarks.filter(e=>e.type===button.dataset.landmarkType);landmarkPage=0;renderLandmarkList();});
       document.querySelector("#region-map #viewport").innerHTML = content;
       const grouped = cells.filter(entries => !(detailed && entries.length <= 8 && new Set(entries.map(e=>`${e.x.toFixed(1)}:${e.y.toFixed(1)}`)).size === entries.length)).reduce((n,e)=>n+e.length,0);
-      document.getElementById("region-evidence").textContent = `${visible.length.toLocaleString()} buses in viewport · ${grouped.toLocaleString()} grouped · ${(state.index.buses.length-unmapped.length-visible.length).toLocaleString()} outside viewport · ${unmapped.length.toLocaleString()} without coordinates. ${detailed ? `${drawnEdges}/${edgeCount} intersecting connections drawn.` : "Connections appear at closer zoom."} Zoom ${camera.scale.toFixed(1)}×.`;
+      document.getElementById("region-evidence").textContent = `${visible.length.toLocaleString()} buses in viewport · ${grouped.toLocaleString()} grouped · ${(state.index.buses.length-unmapped.length-visible.length).toLocaleString()} outside viewport · ${unmapped.length.toLocaleString()} without coordinates. ${detailed ? `${drawnEdges}/${edgeCount} intersecting connections drawn.` : "Connections appear at closer zoom."} Zoom ${camera.scale.toFixed(1)}×.${state.terminalTrace ? " Purple equipment/groups contain traced terminals. The map highlights equipment, not individual conductors; read the trace for terminal identities and stops." : ""}`;
       dependencies.bindSvgSelection();
       document.querySelectorAll("[data-landmark-cell]").forEach(node=>{
         const activate=()=>{landmarkRows=landmarkGroups[Number(node.dataset.landmarkCell)];landmarkPage=0;renderLandmarkList();};

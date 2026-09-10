@@ -327,3 +327,10 @@ pre.raw { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 9px; bor
 #region-map [data-landmark-cell] { cursor: pointer; }
 #region-landmark-legend svg { display: inline-block; width: 20px; height: 20px; min-width: 20px; min-height: 0; flex: 0 0 20px; }
 @media (max-width: 640px) { .topbar { flex-wrap: wrap; } .topbar .file-actions { justify-content: flex-start; width: 100%; min-width: 0; } }
+.terminal-trace { padding: 12px; font-size: 12px; overflow-wrap: anywhere; border-top: 2px solid #7739a6; }
+.terminal-trace li { padding: 8px 0; border-bottom: 1px solid var(--line); }
+.terminal-trace small { display: block; color: var(--muted); }
+.terminal-trace button, [data-trace-start] { padding: 4px 6px; margin: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; cursor: pointer; }
+.trace-stop, .trace-ground, .trace-winding { color: #844c16; }
+.trace-connection { border-left: 3px solid #7739a6; padding-left: 6px !important; }
+.map-detail-active .multi-detail-canvas { max-height: 75vh; min-height: 360px; overflow: auto; }

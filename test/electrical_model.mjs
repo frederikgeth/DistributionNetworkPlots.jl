@@ -142,3 +142,26 @@ test("large indexes preserve lookup identity, metadata and disconnected topology
   assert.equal(E.interpret(index.busById.get("b0"), index).frequency, 50);
   assert.ok(!index.warnings.some(w => w.includes("missing bus") || w.includes("No BMOPF schema")));
 });
+
+test("terminal tracing preserves renaming and stops at open, grounded and winding boundaries", () => {
+  const index=build({bus:{a:{terminal_names:['x']},b:{terminal_names:['y']},c:{terminal_names:['z'],perfectly_grounded_terminals:['z']},d:{terminal_names:['q']}},line:{ab:{bus_from:'a',bus_to:'b',terminal_map_from:['x'],terminal_map_to:['y']},bc:{bus_from:'b',bus_to:'c',terminal_map_from:['y'],terminal_map_to:['z']}},switch:{open:{bus_from:'b',bus_to:'d',terminal_map_from:['y'],terminal_map_to:['q'],open_switch:true}},transformer:{t:{bus_from:'b',bus_to:'d',terminal_map_from:['y'],terminal_map_to:['q']}},load:{ld:{bus:'b',terminal_map:['y']}}});
+  const trace=E.traceTerminal(index,'a','x');
+  assert.deepEqual([...trace.busIds],['a','b','c']);
+  assert.ok(trace.rows.some(r=>r.to?.terminal==='y' && r.message.includes('renamed')));
+  assert.ok(trace.rows.some(r=>r.type==='ground'));
+  assert.ok(trace.rows.some(r=>r.type==='stop' && r.ref.id==='open'));
+  assert.ok(trace.rows.some(r=>r.type==='winding' && r.windings.length===2));
+  assert.ok(trace.rows.some(r=>r.type==='device'));
+  assert.equal(trace.truncated,false);
+  assert.equal(E.traceTerminal(index,'a','x',{maxVisits:1}).truncated,true);
+  assert.equal(E.traceTerminal(index,'missing','x').rows[0].type,'stop');
+});
+
+test("trace rejects ambiguous maps and terminates loops without crossing load terminals", () => {
+  const index=build({bus:{a:{terminal_names:['1','n']},b:{terminal_names:['2','n']}},line:{ab:{bus_from:'a',bus_to:'b',terminal_map_from:['1','n'],terminal_map_to:['2','n']},ba:{bus_from:'b',bus_to:'a',terminal_map_from:['2','n'],terminal_map_to:['1','n']},bad:{bus_from:'a',bus_to:'b',terminal_map_from:['1','n'],terminal_map_to:['2']}},load:{load:{bus:'b',terminal_map:['2','n']}}});
+  const trace=E.traceTerminal(index,'a','1');
+  assert.equal(trace.terminals.length,2);
+  assert.equal(trace.rows.filter(r=>r.type==='connection').length,2);
+  assert.ok(trace.rows.some(r=>r.ref.id==='bad' && r.type==='stop'));
+  assert.ok(!trace.terminals.some(t=>t.terminal==='n'));
+});
