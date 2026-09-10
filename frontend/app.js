@@ -10,9 +10,10 @@
   const SIDEBAR_WIDTH_DEFAULT = 360;
   const SIDEBAR_WIDTH_MIN = 280;
   const SIDEBAR_WIDTH_MAX = 640;
-  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusBars: false, showBusLabels: true, showDeviceLabels: false, showArrows: false, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
-  const MAX_FILE_BYTES = 25 * 1024 * 1024;
-  const MAX_JSON_ELEMENTS = 100000;
+  const state = { index: null, selected: null, result: null, resultLabel: "", resultError: "", resultCompare: null, resultCompareLabel: "", resultCompareError: "", resultScenario: null, diagnosticsQuery: "", diagnosticsSeverity: "all", view: "single", query: "", activeKind: null, multiHops: 1, searchFocus: -1, searchPage: 0, navigation: { entries: [], cursor: -1, nextId: 0 }, largeCaseDecision: "full", largeCaseBypass: false, sidebarWidth: SIDEBAR_WIDTH_DEFAULT, multiDetailWidth: 380, multiDetailCollapsed: false, singleDisplay: { showBusBars: false, showBusLabels: true, showDeviceLabels: false, showArrows: false, labelsSelectedOnly: false }, layout: { version: LAYOUT_CACHE_VERSION, key: null, locked: {}, positions: {}, routes: {}, direction: "source-to-load", engine: "deterministic", profiles: {} }, cameras: { geo: { scale: 1, x: 0, y: 0 }, single: { scale: 1, x: 0, y: 0 }, multi: { scale: 1, x: 0, y: 0 } } };
+  const MAX_FILE_BYTES = 64 * 1024 * 1024;
+  const MAX_JSON_ELEMENTS = 2000000;
+  const SEARCH_PAGE_SIZE = 100;
   const $ = (id) => document.getElementById(id);
   const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const titleOf = (item) => `${item.ref.kind.replaceAll("_", " ")} ${item.ref.id}`;
@@ -300,8 +301,8 @@
       const current = pending.pop();
       count += 1;
       if (count > limit) return count;
-      if (Array.isArray(current)) pending.push(...current);
-      else if (current && typeof current === "object") pending.push(...Object.values(current));
+      if (Array.isArray(current)) current.forEach((entry) => pending.push(entry));
+      else if (current && typeof current === "object") Object.values(current).forEach((entry) => pending.push(entry));
     }
     return count;
   }
@@ -392,7 +393,7 @@
 
   function itemFor(ref) {
     if (!state.index || !ref) return null;
-    return state.index.entities.find((item) => item.ref.kind === ref.kind && item.ref.id === ref.id) || null;
+    return state.index.byKind.get(ref.kind)?.get(ref.id) || null;
   }
 
   function loadDocument(caseDocument, label) {
@@ -735,7 +736,8 @@
     const stats = [
       [index.buses.length, "buses"],
       [index.assets.length - index.buses.length, "devices"],
-      [index.coordinateCount, "mapped buses"]
+      [index.coordinateCount, "mapped buses"],
+      [index.componentCount, "connected networks"]
     ];
     const warningHtml = index.warnings.length
       ? `<ul class="warnings">${index.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>` : "";
@@ -1080,19 +1082,25 @@
       return { item, score };
     }).filter((entry) => entry.score < 99).sort((a, b) => a.score - b.score || a.item.ref.id.localeCompare(b.item.ref.id)).map((entry) => entry.item) : null;
     const filtered = ranked;
+    const pageCount = filtered ? Math.ceil(filtered.length / SEARCH_PAGE_SIZE) : 0;
+    state.searchPage = Math.max(0, Math.min(state.searchPage, pageCount - 1));
+    const pageStart = state.searchPage * SEARCH_PAGE_SIZE;
+    const pageRows = filtered?.slice(pageStart, pageStart + SEARCH_PAGE_SIZE);
     const body = filtered
-      ? filtered.map((item, i) => `<button class="inventory-row ${sameRef(item.ref, state.selected) ? "selected" : ""} ${state.searchFocus === i ? "focused" : ""}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}" role="option" aria-selected="${sameRef(item.ref, state.selected)}" aria-posinset="${i + 1}" aria-setsize="${filtered.length}"><span>${entityLabelHtml(item.ref.kind, item.ref.id)}</span><span class="count">›</span></button>`).join("")
+      ? pageRows.map((item, offset) => { const i = pageStart + offset; return `<button class="inventory-row ${sameRef(item.ref, state.selected) ? "selected" : ""} ${state.searchFocus === i ? "focused" : ""}" data-kind="${escapeHtml(item.ref.kind)}" data-id="${escapeHtml(item.ref.id)}" role="option" aria-selected="${sameRef(item.ref, state.selected)}" aria-posinset="${i + 1}" aria-setsize="${filtered.length}"><span>${entityLabelHtml(item.ref.kind, item.ref.id)}</span><span class="count">›</span></button>`; }).join("")
       : rows.map(([kind, count]) => `<button class="inventory-row ${state.activeKind === kind ? "selected" : ""}" data-kind-filter="${escapeHtml(kind)}"><span class="kind">${escapeHtml(kind.replaceAll("_", " "))}</span><span class="count">${count}</span></button>`).join("");
-    const resultNote = filtered ? `<p class="search-meta" role="status">${filtered.length} ranked match${filtered.length === 1 ? "" : "es"} · Enter opens the first result</p>` : "";
+    const resultNote = filtered ? `<p class="search-meta" role="status">${filtered.length} ranked match${filtered.length === 1 ? "" : "es"} · Showing ${filtered.length ? pageStart + 1 : 0}–${Math.min(pageStart + SEARCH_PAGE_SIZE, filtered.length)} · Enter opens the focused result</p>${pageCount > 1 ? `<div class="search-pages"><button id="search-previous" ${state.searchPage === 0 ? "disabled" : ""}>Previous matches</button><span> Page ${state.searchPage + 1} / ${pageCount} </span><button id="search-next" ${state.searchPage + 1 >= pageCount ? "disabled" : ""}>Next matches</button></div>` : ""}` : "";
     $("inventory").innerHTML = `<div class="panel-heading"><h2>Inventory</h2><input id="search" type="search" placeholder="Search assets, buses, or result fields" value="${escapeHtml(state.query)}" aria-label="Search assets, buses, or result fields" aria-controls="inventory-list" aria-autocomplete="list"></div>${resultNote}<div class="inventory-header" role="row"><span>asset / class</span><span class="inventory-column-resizer" role="separator" aria-orientation="vertical" aria-label="Resize inventory name column" tabindex="0" title="Drag to resize this column; use Arrow keys for precise sizing"></span><span>count</span></div><div id="inventory-list" class="inventory-list" role="listbox">${body || `<p class="muted" style="padding:12px 14px">No matching assets.</p>`}</div>`;
+    $("search-previous")?.addEventListener("click", () => { state.searchPage--; state.searchFocus = -1; renderInventory(); });
+    $("search-next")?.addEventListener("click", () => { state.searchPage++; state.searchFocus = -1; renderInventory(); });
     bindResizableInventory();
     const search = $("search");
-    search.addEventListener("input", (event) => { state.query = event.target.value; state.searchFocus = -1; renderInventory(); $("search")?.focus(); });
+    search.addEventListener("input", (event) => { state.query = event.target.value; state.searchFocus = -1; state.searchPage = 0; renderInventory(); $("search")?.focus(); });
     search.addEventListener("keydown", (event) => {
       if (!filtered?.length) return;
-      if (event.key === "ArrowDown") { event.preventDefault(); state.searchFocus = Math.min(filtered.length - 1, state.searchFocus + 1); renderInventory(); $("search")?.focus(); }
-      else if (event.key === "ArrowUp") { event.preventDefault(); state.searchFocus = Math.max(0, state.searchFocus - 1); renderInventory(); $("search")?.focus(); }
-      else if (event.key === "Enter") { event.preventDefault(); select(filtered[state.searchFocus >= 0 ? state.searchFocus : 0].ref); }
+      if (event.key === "ArrowDown") { event.preventDefault(); state.searchFocus = Math.min(filtered.length - 1, (state.searchFocus < 0 ? pageStart - 1 : state.searchFocus) + 1); state.searchPage = Math.floor(state.searchFocus / SEARCH_PAGE_SIZE); renderInventory(); $("search")?.focus(); }
+      else if (event.key === "ArrowUp") { event.preventDefault(); state.searchFocus = Math.max(0, (state.searchFocus < 0 ? pageStart + 1 : state.searchFocus) - 1); state.searchPage = Math.floor(state.searchFocus / SEARCH_PAGE_SIZE); renderInventory(); $("search")?.focus(); }
+      else if (event.key === "Enter") { event.preventDefault(); select(filtered[state.searchFocus >= 0 ? state.searchFocus : pageStart].ref); }
     });
     $("inventory").querySelectorAll("[data-kind-filter]").forEach((button) => button.addEventListener("click", () => {
       state.activeKind = state.activeKind === button.dataset.kindFilter ? null : button.dataset.kindFilter;
@@ -1120,12 +1128,21 @@
 
   function overviewAssets() {
     const scope = overviewScope();
-    return visibleAssets().filter((item) => !scope || sameRef(item.ref, state.selected) || (item.ports || []).some((port) => scope.has(port.busId)));
+    if (!scope) return visibleAssets();
+    const items = new Set();
+    for (const id of scope) {
+      const bus = state.index.busById.get(id); if (bus) items.add(bus);
+      for (const asset of state.index.byBus.get(id) || []) items.add(asset);
+    }
+    const selected = itemFor(state.selected); if (selected) items.add(selected);
+    return [...items].filter((item) => !state.activeKind || item.ref.kind === state.activeKind);
   }
 
   function overviewBuses() {
     const scope = overviewScope();
-    return state.index.buses.filter((bus) => !scope || scope.has(bus.ref.id));
+    if (!scope) return state.index.buses;
+    for (const item of overviewAssets()) for (const port of item.ports || []) scope.add(port.busId);
+    return [...scope].map((id) => state.index.busById.get(id)).filter(Boolean);
   }
 
   function neighbourhoodForBus(busId, hops) {
@@ -1276,7 +1293,7 @@
     if (!state.index || state.view === "diagnostics") { controls.hidden = true; controls.innerHTML = ""; return; }
     controls.hidden = false;
     const layoutControls = state.view === "single"
-      ? `<span class="layout-label">Layout:</span><label class="layout-select">Direction<select id="sld-direction" aria-label="Single-line direction"><option value="source-to-load" ${state.layout.direction === "source-to-load" ? "selected" : ""}>Source → load</option><option value="load-to-source" ${state.layout.direction === "load-to-source" ? "selected" : ""}>Load → source</option></select></label><label class="layout-select">Root<select id="sld-root" aria-label="Single-line root bus"><option value="auto" ${state.layout.root === "auto" ? "selected" : ""}>Automatic</option>${state.index.buses.map((bus) => `<option value="${escapeHtml(bus.ref.id)}" ${state.layout.root === bus.ref.id ? "selected" : ""}>${escapeHtml(bus.ref.id)}</option>`).join("")}</select></label><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
+      ? `<span class="layout-label">Layout:</span><label class="layout-select">Direction<select id="sld-direction" aria-label="Single-line direction"><option value="source-to-load" ${state.layout.direction === "source-to-load" ? "selected" : ""}>Source → load</option><option value="load-to-source" ${state.layout.direction === "load-to-source" ? "selected" : ""}>Load → source</option></select></label><label class="layout-select">Root${state.index.buses.length > 500 ? `<input id="sld-root" aria-label="Single-line root bus" placeholder="Bus ID or auto" value="${escapeHtml(state.layout.root || "auto")}" title="Enter any bus ID, or auto for automatic roots">` : `<select id="sld-root" aria-label="Single-line root bus"><option value="auto" ${state.layout.root === "auto" ? "selected" : ""}>Automatic</option>${state.index.buses.map((bus) => `<option value="${escapeHtml(bus.ref.id)}" ${state.layout.root === bus.ref.id ? "selected" : ""}>${escapeHtml(bus.ref.id)}</option>`).join("")}</select>`}</label><button data-layout="left" aria-label="Move selected bus left" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>←</button><button data-layout="right" aria-label="Move selected bus right" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>→</button><button data-layout="up" aria-label="Move selected bus up" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↑</button><button data-layout="down" aria-label="Move selected bus down" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>↓</button><button data-layout="lock" ${state.selected && itemFor(state.selected)?.ref.kind === "bus" ? "" : "disabled"}>Lock bus</button><button data-layout="unlock" ${state.selected && layoutLocked(state.selected?.id) ? "" : "disabled"}>Unlock bus</button><button data-layout="reset">Reset layout</button>` : "";
     const overviewButton = state.view === "single" ? `<button data-navigation="overview" aria-label="Show full overview" ${state.selected ? "" : "disabled"}>Overview</button>` : "";
     const detailTarget = itemFor(state.selected);
     const detailButton = state.view === "single" && state.multiDetailCollapsed && multiDetailAvailable(detailTarget) ? `<button data-navigation="multi-detail">Show component detail</button>` : "";
@@ -1312,7 +1329,7 @@
     const direction = $("sld-direction");
     if (direction) direction.addEventListener("change", (event) => { switchLayoutProfile(event.target.value, state.layout.root); renderView(); renderCameraControls(); });
     const root = $("sld-root");
-    if (root) root.addEventListener("change", (event) => { switchLayoutProfile(state.layout.direction, event.target.value); renderView(); renderCameraControls(); });
+    if (root) root.addEventListener("change", (event) => { const id = event.target.value || "auto"; if (id !== "auto" && !state.index.busById.has(id)) { event.target.setCustomValidity("Enter an existing bus ID or auto."); event.target.reportValidity(); return; } event.target.setCustomValidity(""); switchLayoutProfile(state.layout.direction, id); renderView(); renderCameraControls(); });
     bindLayoutControls();
   }
 
@@ -1404,7 +1421,22 @@
     return { positions, geographic: source.length >= 2, project, unmapped: buses.filter((bus) => source.length >= 2 && !bus.coordinates) };
   }
 
-  function singlePositions() { return deterministicLayout.singlePositions(); }
+  // Lay out the visible neighbourhood, not all 24,000+ buses behind it.
+  // Include boundary endpoints so every displayed branch retains both ends.
+  let focusedLayoutCache = null;
+  const focusedLayout = globalThis.BMOPFLayouts.createDeterministicLayout({
+    getIndex: () => {
+      if (focusedLayoutCache?.index === state.index && sameRef(focusedLayoutCache.selected, state.selected) && focusedLayoutCache.kind === state.activeKind) return focusedLayoutCache.scoped;
+      const assets = overviewAssets();
+      const ids = overviewScope() || new Set();
+      for (const item of assets) for (const port of item.ports || []) ids.add(port.busId);
+      const scoped = { assets, buses: [...ids].map((id) => state.index.busById.get(id)).filter(Boolean) };
+      focusedLayoutCache = { index: state.index, selected: state.selected, kind: state.activeKind, scoped };
+      return scoped;
+    },
+    getLayout: () => state.layout
+  });
+  function singlePositions() { return overviewScope() ? focusedLayout.singlePositions() : deterministicLayout.singlePositions(); }
 
   function focusSelection() {
     const item = itemFor(state.selected); if (!item || !state.index || ["multi", "diagnostics"].includes(state.view)) return;
@@ -1661,7 +1693,7 @@
 
   function readFile(file) {
     if (file.size > MAX_FILE_BYTES) {
-      showLoadError(`The selected file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`, file.name);
+      showLoadError(`The selected file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 64 MiB are not supported in the browser prototype.`, file.name);
       return;
     }
     const reader = new FileReader();
@@ -1702,7 +1734,7 @@
 
   function readDroppedFile(file) {
     if (file.size > MAX_FILE_BYTES) {
-      const message = `The dropped file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`;
+      const message = `The dropped file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 64 MiB are not supported in the browser prototype.`;
       if (state.index) showResultError(message, file.name); else showLoadError(message, file.name);
       return;
     }
@@ -1761,7 +1793,7 @@
 
   function readResultFile(file) {
     if (file.size > MAX_FILE_BYTES) {
-      showResultError(`The selected results file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`, file.name);
+      showResultError(`The selected results file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 64 MiB are not supported in the browser prototype.`, file.name);
       return;
     }
     const reader = new FileReader();
@@ -1800,7 +1832,7 @@
 
   function readComparisonResultFile(file) {
     if (file.size > MAX_FILE_BYTES) {
-      showComparisonError(`The comparison results file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 25 MB are not supported in the browser prototype.`, file.name);
+      showComparisonError(`The comparison results file is ${(file.size / (1024 * 1024)).toFixed(1)} MB. Files larger than 64 MiB are not supported in the browser prototype.`, file.name);
       return;
     }
     const reader = new FileReader();

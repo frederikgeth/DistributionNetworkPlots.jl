@@ -13,6 +13,7 @@ const resultCaseFingerprint = JSON.parse(resultFixture).meta.case_fingerprint;
 const mismatchedResult = JSON.stringify({ ...JSON.parse(resultFixture), meta: { ...JSON.parse(resultFixture).meta, case_fingerprint: "not-the-open-case" } });
 const largeCase = {
   name: "large-browser-smoke-case",
+  meta: { padding: " ".repeat(26 * 1024 * 1024), values: Array(150000).fill(0) },
   bus: Object.fromEntries(Array.from({ length: 501 }, (_, index) => [`bus_${index}`, { terminal_names: ["1", "n"] }])),
   voltage_source: { source: { bus: "bus_0", terminal_map: ["1", "n"] } },
   line: Object.fromEntries(Array.from({ length: 500 }, (_, index) => [`line_${index}`, { bus_from: `bus_${index}`, bus_to: `bus_${index + 1}`, terminal_map_from: ["1", "n"], terminal_map_to: ["1", "n"] }]))
@@ -344,6 +345,15 @@ try {
     await page.getByRole("tab", { name: "Single-wire" }).click();
     await page.locator("#large-case-dialog").waitFor({ state: "visible" });
     assert.match(await page.locator("#large-case-dialog").innerText(), /large case/i);
+    assert.equal(await page.locator("#sld-root").evaluate(node => node.tagName), "INPUT");
+    await page.locator("#search").fill("bus_");
+    assert.equal(await page.locator("#inventory-list [data-id]").count(), 100);
+    await page.locator("#search-next").click();
+    assert.match(await page.locator(".search-meta").innerText(), /Showing 101–200/);
+    await page.locator("#search").press("ArrowUp");
+    await page.locator("#search").press("ArrowUp");
+    assert.match(await page.locator(".search-meta").innerText(), /Showing 1–100/);
+    await page.locator("#search").fill("");
     await page.locator("#large-case-bypass").check();
     await page.locator("#large-case-continue").click();
     await page.waitForTimeout(100);

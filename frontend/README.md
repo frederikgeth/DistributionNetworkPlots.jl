@@ -112,3 +112,5 @@ reported as current minus comparison; arrays and non-numeric values remain
 visible without an invented delta. The comparison case identity is checked
 against the primary result/open case and shown as matched, mismatched, or
 unverified.
+
+Large-file limits, measured Springfield performance, GPU status, and remaining work are documented in [Scalability](../docs/SCALABILITY.md).

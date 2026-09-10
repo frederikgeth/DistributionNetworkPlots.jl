@@ -129,10 +129,15 @@
     const entities = [];
     const byRef = new Map();
     const byBus = new Map();
+    const busById = new Map();
+    const byKind = new Map();
     const warnings = [];
 
     const addEntity = (item, isAsset) => {
       entities.push(item);
+      if (!byKind.has(item.ref.kind)) byKind.set(item.ref.kind, new Map());
+      // Match the historic first-record lookup for duplicate transformer IDs.
+      if (!byKind.get(item.ref.kind).has(item.ref.id)) byKind.get(item.ref.kind).set(item.ref.id, item);
       byRef.set(`${item.ref.kind}:${item.ref.id}:${item.ref.pointer}`, item);
       if (isAsset) assets.push(item);
       for (const p of item.ports) {
@@ -155,6 +160,7 @@
         support: "full"
       };
       buses.push(bus);
+      busById.set(bus.ref.id, bus);
       addEntity(bus, true);
     }
 
@@ -167,21 +173,31 @@
         addEntity(e, ASSET_KINDS.has(kind));
         for (const connection of e.connections) if (connection.warning) warnings.push(`${kind}/${item.id}: ${connection.warning}`);
         for (const p of e.ports) {
-          if (!buses.some((b) => b.ref.id === p.busId)) {
+          if (!busById.has(p.busId)) {
             warnings.push(`${kind}/${item.id} references missing bus ${p.busId}`);
           }
         }
       }
     }
 
+    // Union bus endpoints once; separate source islands must remain explicit.
+    const parent = new Map(buses.map((b) => [b.ref.id, b.ref.id]));
+    const root = (id) => { let p = id; while (parent.get(p) !== p) p = parent.get(p); while (id !== p) { const next = parent.get(id); parent.set(id, p); id = next; } return p; };
+    for (const item of assets) {
+      const ids = item.ports.map((p) => p.busId).filter((id) => parent.has(id));
+      for (const id of ids.slice(1)) parent.set(root(id), root(ids[0]));
+    }
+    const componentCount = new Set(buses.map((b) => root(b.ref.id))).size;
+    if (componentCount > 1) warnings.push(`${componentCount.toLocaleString()} separate connected networks in the supplied topology (including open or out-of-service branches).`);
     const counts = {};
     for (const item of assets) counts[item.ref.kind] = (counts[item.ref.kind] || 0) + 1;
     const coordinateCount = buses.filter((b) => b.coordinates).length;
     if (coordinateCount === 0) warnings.push("No geographic bus coordinates were found.");
     else if (coordinateCount < buses.length) warnings.push(`Coordinates found for ${coordinateCount}/${buses.length} buses.`);
-    if (!document.$schema) warnings.push("No BMOPF schema identifier was provided; semantic support is best effort.");
-    else if (!String(document.$schema).toLowerCase().includes("bmopf")) {
-      warnings.push(`Schema identifier is not recognised as BMOPF: ${String(document.$schema)}`);
+    const schema = document.$schema || document.meta?.$schema;
+    if (!schema) warnings.push("No BMOPF schema identifier was provided; semantic support is best effort.");
+    else if (!String(schema).toLowerCase().includes("bmopf")) {
+      warnings.push(`Schema identifier is not recognised as BMOPF: ${String(schema)}`);
     }
     const supportCounts = {};
     for (const item of entities) supportCounts[item.support] = (supportCounts[item.support] || 0) + 1;
@@ -194,11 +210,14 @@
       entities,
       byRef,
       byBus,
+      busById,
+      byKind,
       counts,
       warnings,
       supportCounts,
       coordinateCount,
-      schema: document.$schema || null
+      componentCount,
+      schema: schema || null
     };
   }
 

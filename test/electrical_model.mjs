@@ -128,3 +128,17 @@ test("result identity, references and radians are explicit", () => {
   assert.equal(malformed[0].comparable, false);
   assert.equal(E.unit("v_angle", "voltage_source"), "rad");
 });
+
+test("large indexes preserve lookup identity, metadata and disconnected topology", () => {
+  const count = 24000;
+  const index = build({ meta: { $schema: "https://example.org/bmopf.json", frequency: 50 },
+    bus: Object.fromEntries(Array.from({ length: count }, (_, i) => [`b${i}`, { terminal_names: ["1"] }])),
+    line: { l: { bus_from: "b0", bus_to: "b23999", terminal_map_from: ["1"], terminal_map_to: ["1"] } }
+  });
+  assert.equal(index.busById.size, count);
+  assert.equal(index.componentCount, count - 1);
+  assert.equal(index.byKind.get("bus").get("b23999"), index.busById.get("b23999"));
+  assert.equal(index.schema, "https://example.org/bmopf.json");
+  assert.equal(E.interpret(index.busById.get("b0"), index).frequency, 50);
+  assert.ok(!index.warnings.some(w => w.includes("missing bus") || w.includes("No BMOPF schema")));
+});

@@ -26,7 +26,7 @@
     let pins = [], comparisonIndex = null, comparisonName = "";
     const local = new Map();
     let instance = 0;
-    const find = (ref, index = d.getIndex()) => ref ? index?.entities.find((e) => e.ref.kind === ref.kind && e.ref.id === ref.id) : null;
+    const find = (ref, index = d.getIndex()) => ref ? index?.byKind.get(ref.kind)?.get(ref.id) : null;
     const stateFor = (item) => { const key = refKey(item.ref); if (!local.has(key)) local.set(key, { row: 0, column: 0, matrix: "series", basis: "total", representation: "rectangular", u: 1, element: 0 }); return local.get(key); };
     const link = (ref, label) => `<button type="button" class="sheet-link" data-sheet-select="${h(JSON.stringify(ref))}">${h(label || `${ref.kind} ${ref.id}`)}</button>`;
     const pinButton = (ref) => `<button type="button" data-sheet-pin="${h(JSON.stringify(ref))}" aria-label="Pin ${h(ref.kind)} ${h(ref.id)}">Pin</button>`;
@@ -221,7 +221,7 @@
     }
 
     function comparisonContext(item, index) {
-      return { frequency: index.raw.base_frequency, buses: Object.fromEntries([...new Set(item.ports.map((p) => p.busId))].map((id) => {
+      return { frequency: index.raw.meta?.frequency ?? index.raw.base_frequency, buses: Object.fromEntries([...new Set(item.ports.map((p) => p.busId))].map((id) => {
         const bus = index.buses.find((b) => b.ref.id === id);
         return [id, bus ? { terminals: bus.terminals, grounded: bus.groundedTerminals, neutral: bus.sourceRecord.neutral_terminal } : null];
       })) };
@@ -282,14 +282,14 @@
         try {
           const file = event.target.files[0];
           if (!file) return;
-          if (file.size > 25 * 1024 * 1024) throw new Error("Comparison case exceeds 25 MB.");
+          if (file.size > 64 * 1024 * 1024) throw new Error("Comparison case exceeds 64 MiB.");
           const raw = JSON.parse(await file.text());
           if (activeIndex !== d.getIndex() || !event.target.isConnected) return;
           const pending = [[raw, 0]];
           let count = 0;
           while (pending.length) {
             const [value, depth] = pending.pop();
-            if (++count > 100000 || depth > 100) throw new Error("Comparison case exceeds the 100,000-value or 100-level nesting limit.");
+            if (++count > 2000000 || depth > 100) throw new Error("Comparison case exceeds the 2,000,000-value or 100-level nesting limit.");
             if (value && typeof value === "object") Object.values(value).forEach((v) => pending.push([v, depth + 1]));
           }
           comparisonIndex = globalThis.BMOPFModel.buildCaseIndex(raw); comparisonName = file.name; refresh();

@@ -124,7 +124,7 @@
 
   function lineModel(item, index) {
     const r = item.sourceRecord || {}, path = item.ref.pointer;
-    const code = index.entities.find((e) => e.ref.kind === "linecode" && e.ref.id === r.linecode);
+    const code = index.byKind.get("linecode")?.get(r.linecode);
     const inline = Object.keys(r).some((k) => /^(R_series|X_series)(_|$)/.test(k));
     const conflict = own(r, "linecode") && inline;
     const source = code || item;
@@ -173,7 +173,7 @@
     const fields = manifest(item);
     const problems = [];
     (item.ports || []).forEach((p) => {
-      const bus = index.buses.find((b) => b.ref.id === p.busId);
+      const bus = index.busById.get(p.busId);
       if (!bus) problems.push(`${p.role}: bus ${p.busId} is unavailable.`);
       else p.terminals.forEach((t) => { if (!bus.terminals.includes(t)) problems.push(`${p.role}: terminal ${t} is absent from bus ${p.busId}.`); });
       if (new Set(p.terminals).size !== p.terminals.length) problems.push(`${p.role}: repeated terminal IDs make conductor identity ambiguous.`);
@@ -193,7 +193,7 @@
       })) problems.push(`Load ${prefix} ZIP coefficients must be nonnegative and sum to one per element; response calculation is unavailable for invalid elements.`);
     }
     windingModels.forEach((w, i) => { if (w.connection.warning) problems.push(`Winding ${i + 1}: ${w.connection.warning}`); });
-    return { version: VERSION, item, fields, problems, line, load, windings: windingModels, frequency: index.raw.base_frequency };
+    return { version: VERSION, item, fields, problems, line, load, windings: windingModels, frequency: index.raw.meta?.frequency ?? index.raw.base_frequency };
   }
 
   function diffRecords(current, previous) {
