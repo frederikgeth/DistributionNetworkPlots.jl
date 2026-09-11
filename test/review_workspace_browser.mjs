@@ -30,7 +30,7 @@ try {
  assert.equal(await page.locator('[data-summary-category="violation"]').count(),0);
  assert.doesNotMatch(await page.locator('#region-issue-summary').innerText(),/Unassessable checks/);
  const solved={objective:0,bus:{a:{p:{vm:250}},b:{p:{vm:230}}},line:{l:{loading:1.5}}};
- await upload('#result-input','scenarios.json',{objective:0,nw:{day:solved,night:solved}});
+ await upload('#result-input','scenarios.json',{objective:0,nw:{day:solved,night:{objective:0,bus:{a:{p:{vm:null}},b:{p:{vm:225}}}}}});
  assert.match(await page.locator('#region-issue-summary').innerText(),/select a scenario/);
  await page.locator('#region-scenario').selectOption('day');
  assert.match(await page.locator('#region-issue-summary').innerText(),/Violated checks: 1/);
@@ -39,6 +39,10 @@ try {
  assert.equal(await page.locator('#region-drawer').isVisible(),true);
  const positions=await page.evaluate(()=>({map:document.getElementById('region-map').getBoundingClientRect().right,drawer:document.getElementById('region-drawer').getBoundingClientRect().left}));
  assert.ok(positions.map<=positions.drawer+1);
+ await page.locator('[data-issue-entry]').first().click();
+ assert.equal(await page.locator('#region-voltage-terminal').inputValue(),JSON.stringify('p'));
+ assert.match(await page.locator('#region-issues').innerText(),/250 V.*240 V/);
+ assert.match(await page.locator('#region-issues').innerText(),/bus\/a\/v_max\/0/);
  await page.locator('[data-issue-pin]').first().click();await page.locator('#region-review-open').click();
  assert.match(await page.locator('#region-review').innerText(),/1 pinned findings/);
  const reviewDownload=page.waitForEvent('download');await page.locator('#region-review-export').click();
@@ -48,12 +52,23 @@ try {
  const svgDownload=page.waitForEvent('download');await page.locator('[data-camera="export-svg"]').click();
  const svgFile=await svgDownload;await svgFile.saveAs('/tmp/review-figure.svg');
  const svg=await readFile(await svgFile.path(),'utf8');
- assert.match(svg,/Review &lt;test&gt;/);assert.match(svg,/Scenario: day/);assert.match(svg,/unverified/);assert.match(svg,/Terminals: all declared/);assert.match(svg,/violated \/ 1 passed/);assert.match(svg,/<metadata>/);assert.match(svg,/pinned|Selection:/);
+ assert.match(svg,/Review &lt;test&gt;/);assert.match(svg,/Scenario: day/);assert.match(svg,/unverified/);assert.match(svg,/Terminals: p/);assert.match(svg,/violated \/ 1 passed/);assert.match(svg,/<metadata>/);assert.match(svg,/pinned|Selection:/);
  await page.evaluate(svg=>{const parsed=new DOMParser().parseFromString(svg,'image/svg+xml');if(parsed.querySelector('parsererror'))throw Error('Invalid exported SVG');},svg);
  const pngDownload=page.waitForEvent('download');await page.locator('[data-camera="export-png"]').click();
  const pngFile=await pngDownload;await pngFile.saveAs('/tmp/review-figure.png');
  const png=await readFile(await pngFile.path());assert.equal(png.subarray(1,4).toString(),'PNG');assert.ok(png.readUInt32BE(20)>1000);
  await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:'/tmp/review-workspace.png'});
+ await page.locator('#region-scenario').selectOption('night');
+ assert.match(await page.locator('#region-issue-summary').innerText(),/Violated checks: 0/);
+ assert.match(await page.locator('#region-issue-summary').innerText(),/Unassessable checks: 2/);
+ assert.equal(await page.locator('#region-voltage-terminal').inputValue(),JSON.stringify('p'));
+ await page.locator('#region-review-open').click();
+ assert.match(await page.locator('#region-review').innerText(),/day/);
+ await upload('#file-input','other-case.json',{...raw,name:'Second case'});
+ assert.match(await page.locator('#region-issue-summary').innerText(),/assessment not run/);
+ assert.match(await page.locator('.map-detail').innerText(),/No results attached/);
+ await page.locator('#region-review-open').click();
+ assert.match(await page.locator('#region-review').innerText(),/Review <test>/);
  await page.setViewportSize({width:390,height:844});await assertNoHorizontalOverflow(page);
  assert.deepEqual(errors,[]);
 }finally{await browser.close();}

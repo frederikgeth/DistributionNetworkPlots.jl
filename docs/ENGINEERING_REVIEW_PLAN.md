@@ -36,3 +36,13 @@ Implemented on `codex/engineering-review-workspace`:
 - Session-pinned findings with JSON export, plus SVG/PNG figures carrying context, coverage, assessment scope, colour bins and embedded drawing styles.
 
 Validation: 17 build/model tests, seven browser suites, 68 Julia assertions, and successful local probes of Springfield plus all 25 ENWL cases. Browser checks include stale results/report metadata, cross-view loading consistency, assessment lifecycle/counts, mobile overflow, pinned findings, and SVG/PNG exports. Private case/result data is not committed. Review pins are session-local until exported; check families remain the explicitly supported voltage/current constraints.
+
+## Engineering-task acceptance review
+
+- Springfield and 25 ENWL cases: no-result states, bounded rendering and geographic drilldown pass without browser errors.
+- Supplied-limit investigation: selecting the voltage violation exposes the affected terminal, measured value and exact limit path.
+- Scenario transition: switching from a violation to missing terminal results removes the violation and records two unassessable checks; terminal selection remains consistent.
+- Case transition: opening another case clears operating results. Pinned findings retain their original case, scenario, result, value and limit rather than inheriting the new context.
+- Export: downloaded SVG parses independently, PNG renders, and case/scenario/reference/coverage context accompanies the figure. Review JSON preserves the selected finding's evidence.
+
+These are automated interaction checks plus visual inspection of the generated figure, not a claim of independent user testing or solver validation.
