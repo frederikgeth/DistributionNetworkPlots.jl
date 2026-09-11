@@ -227,3 +227,19 @@ test("engineering issues separate supported violations from incomplete and ambig
  a.sourceRecord.v_min=[null];assert.ok(issues().some(i=>i.category==="ambiguity"));
  records.l={loading:1.5};assert.equal(issues().filter(i=>i.category==="violation").length,0);
 });
+
+test("assessment lifecycle distinguishes unrun checks, passed limits and unsupported mappings", () => {
+ const index=oneLine({i_max:[100]}),a=get(index,"bus","a"),b=get(index,"bus","b");
+ a.sourceRecord.v_min=[220];a.sourceRecord.v_max=[240];b.sourceRecord.v_max=[250];
+ const records={a:{x:{vm:230}},b:{y:{vm:260}},l:{x:{cm_fr:110,cm_to:null}}};
+ const run=options=>E.engineeringAssessment(index,item=>records[item.ref.id],options);
+ assert.equal(run({attached:false}).state,"not-run");
+ assert.equal(run({attached:false}).rows.length,0);
+ assert.equal(run({scenarioReady:false}).state,"scenario-required");
+ assert.equal(run({pairing:"mismatch"}).counts.violation,0);
+ const result=run({pairing:"matched"});
+ assert.equal(result.counts.passed,2);assert.equal(result.counts.violation,2);assert.equal(result.counts.incomplete,1);
+ assert.equal(result.rows.find(row=>row.category==="incomplete").resultPath,"x/cm_to");
+ a.sourceRecord.vpn_max=[240];assert.equal(run({}).counts.unsupported,1);
+ a.sourceRecord.v_min=[270];assert.ok(run({}).counts.ambiguity>0);assert.equal(run({}).counts.passed,0);
+});

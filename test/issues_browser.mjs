@@ -12,7 +12,7 @@ try {
  async function upload(selector,name,data){await page.locator(selector).setInputFiles({name,mimeType:'application/json',buffer:Buffer.from(JSON.stringify(data))});await page.locator('#import-progress').waitFor({state:'detached'});}
  await upload('#file-input','case.json',raw);await page.locator('[data-view="geo"]').click();
  await upload('#result-input','results.json',{objective:0,bus:Object.fromEntries(Object.keys(bus).map(id=>[id,{p:{vm:200}}])),line:{l:{p:{cm_fr:150,cm_to:0}}}});
- assert.match(await page.locator('#region-issue-summary').innerText(),/Limit violations: 61/);
+ assert.match(await page.locator('#region-issue-summary').innerText(),/Violated checks: 61/);
  await page.locator('[data-summary-category="violation"]').click();
  assert.equal(await page.locator('[data-issue-entry]').count(),50);
  assert.match(await page.locator('[data-issue-entry]').first().innerText(),/line l/);

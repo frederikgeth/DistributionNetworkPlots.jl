@@ -282,46 +282,72 @@
     return { rows, terminals, busIds, assetPointers, truncated, origin: { busId, terminal } };
   }
 
-  function engineeringIssues(index, getRecord, { pairing = "unverified" } = {}) {
-    const issues=[];
-    const add=(category,item,message,extra={})=>issues.push({category,ref:item.ref,message,...extra});
+  const MAGNITUDE_COLOURS = Object.freeze(["#dceaf1","#a5c9dc","#68a1c4","#dba95e","#ca6747"]);
+  function magnitudeColour(value, low, high) {
+    const t=Math.max(0,Math.min(1,(value-low)/Math.max(high-low,1e-12)));
+    return MAGNITUDE_COLOURS[Math.min(4,Math.floor(t*5))];
+  }
+
+  function engineeringAssessment(index, getRecord, { pairing = "unverified", attached = true, scenarioReady = true } = {}) {
+    const state = !attached ? "not-run" : !scenarioReady ? "scenario-required" : pairing === "mismatch" ? "pairing-mismatch" : "assessed";
+    const rows=[];
+    const add=(category,item,message,extra={})=>rows.push({category,ref:item.ref,message,...extra});
     for(const item of index.entities) {
-      if(item.ref.kind === "bus") {
-        const record=getRecord(item), metric=operatingMetric(item,record,"voltage",index);
-        if(metric.available < metric.total) add("incomplete",item,metric.reason);
-        for(const key of ["vpn_min","vpn_max","vpp_min","vpp_max","vn_max"]) if(own(item.sourceRecord,key)) add("ambiguity",item,`${key} is supplied but not assessed: neutral / phase-pair limit mapping is not supported by this check`,{path:`${item.ref.pointer}/${key}`});
-        for(const key of ["v_min","v_max"]) {
-          const limits=item.sourceRecord[key];if(limits===undefined)continue;
-          if(!Array.isArray(limits) || limits.length!==item.terminals.length || new Set(item.terminals).size!==item.terminals.length || limits.some(v=>!number(v)||v<0)) {add("ambiguity",item,`${key} cannot be aligned to finite nonnegative per-terminal limits`,{path:`${item.ref.pointer}/${key}`});continue;}
-          const reference=record?.voltage_reference;
-          if(record && (Array.isArray(record.vm) || reference) && !["phase-to-ground","global ground","BMOPFTools phase-to-ground"].includes(reference)) {add("incomplete",item,`${key} not assessed: result phase-to-ground reference is not established`);continue;}
-          if(pairing === "mismatch")continue;
-          for(const sample of metric.samples) {
-            const i=item.terminals.indexOf(sample.terminal), limit=limits[i];
-            const opposite=item.sourceRecord[key === "v_min" ? "v_max" : "v_min"];
-            if(Array.isArray(opposite) && number(opposite[i]) && (key === "v_min" ? limit>opposite[i] : limit<opposite[i])) {add("ambiguity",item,`Contradictory voltage limits at terminal ${sample.terminal}`,{terminal:sample.terminal});continue;}
-            const excess=key === "v_max" ? sample.value-limit : limit-sample.value;
-            if(excess>0) add("violation",item,`${key === "v_max" ? "Overvoltage" : "Undervoltage"} at terminal ${sample.terminal}`,{terminal:sample.terminal,value:sample.value,limit,unit:"V",excess,score:limit>0 ? excess/limit : Infinity,path:`${item.ref.pointer}/${key}/${i}`,resultPath:sample.path});
-          }
-        }
-      } else if(["line","switch","transformer"].includes(item.ref.kind)) {
-        const record=getRecord(item);
-        // Reported loading alone does not prove which supplied rating was used.
-        const currents=record ? {...record} : null;if(currents)delete currents.loading;
-        const metric=operatingMetric(item,currents,"loading",index);
-        if(metric.available<metric.total) add("incomplete",item,metric.reason || "Missing result record");
-        const validPorts=(item.ports || []).every(port=>{const bus=index.busById.get(port.busId);return bus && port.terminals.every(t=>bus.terminals.includes(t)) && new Set(port.terminals).size===port.terminals.length;});
-        if(pairing !== "mismatch" && validPorts)for(const sample of metric.samples) if(sample.value>1) add("violation",item,`Current limit exceeded at ${sample.path}`,{terminal:sample.terminal,value:sample.current,limit:sample.rating,unit:"A",excess:sample.current-sample.rating,score:sample.value-1,path:sample.ratingPath,resultPath:sample.path});
-      }
-      if(item.ref.kind === "line" && own(item.sourceRecord,"linecode") && !index.byKind.get("linecode")?.has(String(item.sourceRecord.linecode))) add("ambiguity",item,`Linecode ${item.sourceRecord.linecode} is unavailable`);
-      for(const port of item.ports || []) {
-        const bus=index.busById.get(port.busId);
-        if(!bus || port.terminals.some(t=>!bus.terminals.includes(t)) || new Set(port.terminals).size!==port.terminals.length) add("ambiguity",item,`Port ${port.id}: missing bus, undeclared terminal or duplicate mapping`);
-      }
+      const source=item.sourceRecord;
+      const validPorts=(item.ports || []).every(port=>{const bus=index.busById.get(port.busId);return bus && port.terminals.every(t=>bus.terminals.includes(t)) && new Set(port.terminals).size===port.terminals.length;});
+      if(!validPorts) add("ambiguity",item,"Missing bus, undeclared terminal or duplicate port mapping");
       for(const connection of item.connections || []) if(connection.warning) add("ambiguity",item,connection.warning);
+      if(item.ref.kind === "line" && own(source,"linecode") && !index.byKind.get("linecode")?.has(String(source.linecode))) add("ambiguity",item,`Linecode ${source.linecode} is unavailable`);
+      if(item.ref.kind === "bus") {
+        const terminals=item.terminals;
+        const validTerminals=terminals.length && new Set(terminals).size===terminals.length;
+        if(!validTerminals)add("ambiguity",item,"Terminal identities are missing or duplicated");
+        const record=state === "assessed" ? getRecord(item) : null;
+        const metric=record ? operatingMetric(item,record,"voltage",index) : null;
+        const samples=new Map((metric?.samples || []).map(sample=>[sample.terminal,sample]));
+        for(const key of ["vpn_min","vpn_max","vpp_min","vpp_max","vn_max"]) if(own(source,key)) add("unsupported",item,`${key}: neutral / phase-pair mapping is not implemented`,{path:`${item.ref.pointer}/${key}`});
+        if(state === "assessed" && !own(source,"v_min") && !own(source,"v_max"))add("unsupported",item,"No supported phase-to-ground voltage limits supplied");
+        for(const key of ["v_min","v_max"]) {
+          const limits=source[key];if(limits===undefined)continue;
+          const path=`${item.ref.pointer}/${key}`;
+          if(!validTerminals || !Array.isArray(limits) || limits.length!==terminals.length || limits.some(v=>!number(v)||v<0)) {add("ambiguity",item,`${key} cannot be aligned to finite nonnegative per-terminal limits`,{path});if(state === "assessed")add("unsupported",item,`${key}: invalid limit mapping`,{path});continue;}
+          terminals.forEach((terminal,i)=>{
+            const limit=limits[i],opposite=source[key === "v_min" ? "v_max" : "v_min"];
+            const extra={terminal,limit,unit:"V",path:`${path}/${i}`};
+            if(Array.isArray(opposite) && number(opposite[i]) && (key === "v_min" ? limit>opposite[i] : limit<opposite[i])) {add("ambiguity",item,`Contradictory voltage limits at terminal ${terminal}`,extra);if(state === "assessed")add("incomplete",item,"Contradictory voltage limits prevent assessment",extra);return;}
+            if(state !== "assessed")return;
+            const reference=record?.voltage_reference;
+            const referenceValid=record && (!(Array.isArray(record.vm) || reference) || ["phase-to-ground","global ground","BMOPFTools phase-to-ground"].includes(reference));
+            const sample=samples.get(terminal);
+            if(!referenceValid || !sample){add("incomplete",item,!record ? "No result record in selected scenario" : !referenceValid ? "Result phase-to-ground reference is not established" : metric?.reason || "Missing terminal voltage",extra);return;}
+            const excess=key === "v_max" ? sample.value-limit : limit-sample.value;
+            add(excess>0 ? "violation" : "passed",item,`${key} at terminal ${terminal}`,{...extra,value:sample.value,excess:Math.max(0,excess),score:excess>0 ? limit>0 ? excess/limit : Infinity : 0,resultPath:sample.path});
+          });
+        }
+      } else if(state === "assessed" && ["line","switch","transformer"].includes(item.ref.kind)) {
+        if(item.ref.kind !== "line"){add("unsupported",item,"Current/rating constraint checks are implemented for lines only");continue;}
+        const code=index.byKind.get("linecode")?.get(String(source.linecode)),ratingSource=own(source,"i_max") ? item : code;
+        const ratings=ratingSource?.sourceRecord.i_max,from=item.ports[0]?.terminals || [],to=item.ports[1]?.terminals || [];
+        if(!validPorts || !from.length || from.length!==to.length || !Array.isArray(ratings) || ratings.length!==from.length) {add("unsupported",item,"Current ratings and terminal maps are unavailable or incompatible");continue;}
+        const record=getRecord(item);
+        from.forEach((terminal,i)=>["fr","to"].forEach(end=>{
+          const limit=ratings[i],resultPath=`${terminal}/cm_${end}`;
+          const extra={terminal,limit,unit:"A",path:`${ratingSource.ref.pointer}/i_max/${i}`,resultPath};
+          if(!number(limit)||limit<=0){add("unsupported",item,`Positive finite current rating required at ${resultPath}`,extra);return;}
+          const value=record?.[terminal]?.[`cm_${end}`];
+          if(!number(value)||value<0 || record?.current_unit && record.current_unit!=="A"){add("incomplete",item,`Missing or incompatible end current at ${resultPath}`,extra);return;}
+          const excess=value-limit;
+          add(excess>0 ? "violation" : "passed",item,`Current limit at ${resultPath}`,{...extra,value,excess:Math.max(0,excess),score:excess>0 ? excess/limit : 0});
+        }));
+      }
     }
-    issues.sort((a,b)=>a.category === "violation" && b.category === "violation" ? b.score-a.score : a.category.localeCompare(b.category));
-    return issues;
+    rows.sort((a,b)=>a.category === "violation" && b.category === "violation" ? (b.score>a.score ? 1 : b.score<a.score ? -1 : 0) : a.category.localeCompare(b.category));
+    const counts={passed:0,violation:0,incomplete:0,unsupported:0,ambiguity:0};rows.forEach(row=>counts[row.category]++);
+    return {state,pairing,rows,counts};
+  }
+
+  function engineeringIssues(index,getRecord,options) {
+    return engineeringAssessment(index,getRecord,options).rows.filter(row=>row.category!=="passed");
   }
 
   // Map values retain their evidence and denominator. Zero is data; null is not.
@@ -381,5 +407,5 @@
     return { value: samples.length ? samples.reduce((max,s)=>Math.max(max,s.value),-Infinity) : null, minimum: samples.length ? samples.reduce((min,s)=>Math.min(min,s.value),Infinity) : null, reference: base ? { terminal: reference, value: Math.hypot(...base), basis: record.voltage_reference || "BMOPFTools phase-to-ground" } : null, samples, available: samples.length, total: chosen.length, reason: "Missing or invalid terminal voltage magnitudes / complex components" };
   }
 
-  globalThis.BMOPFElectrical = Object.freeze({ VERSION, engineeringIssues, operatingMetric, traceTerminal, interpret, topology, loadModel, loadResponse, lineModel, manifest, flatten, unit, number, diffRecords, componentValue, resultFields, voltagePhasors });
+  globalThis.BMOPFElectrical = Object.freeze({ VERSION, MAGNITUDE_COLOURS, magnitudeColour, engineeringAssessment, engineeringIssues, operatingMetric, traceTerminal, interpret, topology, loadModel, loadResponse, lineModel, manifest, flatten, unit, number, diffRecords, componentValue, resultFields, voltagePhasors });
 })();

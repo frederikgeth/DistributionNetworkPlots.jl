@@ -14,6 +14,7 @@ try {
  await page.locator('[data-view="geo"]').click();
  assert.match(await page.locator('#region-evidence').innerText(), /600 buses in viewport/);
  assert.match(await page.locator('#region-evidence').innerText(), /1 without coordinates/);
+ await page.getByText('Coordinates, symbols & assessment scope',{exact:true}).click();
  assert.match(await page.locator('.region-provenance').innerText(), /Derived local XY.*Example anchor/);
  assert.equal(await page.locator('#large-case-dialog').count(),0);
  assert.equal(await page.locator('[data-region-cell]').count(),2);
@@ -36,6 +37,7 @@ try {
  const equipment={name:'equipment-review',bus:{a:{terminal_names:['1'],longitude:-2.60,latitude:53.48},b:{terminal_names:['1'],perfectly_grounded_terminals:['1'],longitude:-2.61,latitude:53.49},c:{terminal_names:['1'],longitude:-2.62,latitude:53.48}},voltage_source:{grid:{bus:'a',terminal_map:['1'],v_magnitude:[230],v_angle:[0],extra_model_field:7}},transformer:{t:{bus_from:'a',bus_to:'b',terminal_map_from:['1'],terminal_map_to:['1']}},switch:{sw:{bus_from:'b',bus_to:'c',terminal_map_from:['1'],terminal_map_to:['1'],open_switch:true}}};
  await page.locator('#file-input').setInputFiles({name:'equipment.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(equipment))});await page.locator('#import-progress').waitFor({state:'detached'});
  await page.locator('#region-reset').click();
+ await page.getByText('Equipment landmarks',{exact:true}).click();
  for(const type of ['source','transformer','open switch','ground'])assert.match(await page.locator(`[data-landmark-type="${type}"]`).innerText(),/: 1/);
  assert.ok(await page.locator('[data-landmark-symbol]').count()>0);
  assert.equal(await page.locator('#region-landmark-legend svg').first().evaluate(el=>el.getBoundingClientRect().height),20);
@@ -57,7 +59,7 @@ try {
  await page.setViewportSize({width:1440,height:1000});
  const tracing={name:'trace-review',bus:{a:{terminal_names:['x'],longitude:-2.60,latitude:53.48},b:{terminal_names:['y'],longitude:-2.61,latitude:53.49},c:{terminal_names:['z'],perfectly_grounded_terminals:['z'],longitude:-2.62,latitude:53.48}},line:{ab:{bus_from:'a',bus_to:'b',terminal_map_from:['x'],terminal_map_to:['y']}},switch:{sw:{bus_from:'b',bus_to:'c',terminal_map_from:['y'],terminal_map_to:['z'],open_switch:true}}};
  await page.locator('#file-input').setInputFiles({name:'trace.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(tracing))});await page.locator('#import-progress').waitFor({state:'detached'});
- await page.locator('#search').fill('a');await page.locator('#search').press('Enter');
+ await page.locator('#region-find').fill('a');await page.locator('[data-found-item]').filter({hasText:'bus a'}).click();
  await page.locator('[data-trace-start]').first().click();
  assert.match(await page.locator('.terminal-trace').innerText(),/Terminal renamed x → y/);
  assert.match(await page.locator('.terminal-trace').innerText(),/Open switch/);
@@ -73,7 +75,7 @@ try {
  const chain={name:'long-trace',bus:Object.fromEntries(Array.from({length:65},(_,i)=>['u'+i,{terminal_names:['p'],longitude:-2.6+i*.0001,latitude:53.48}])),line:Object.fromEntries(Array.from({length:64},(_,i)=>['l'+i,{bus_from:'u'+i,bus_to:'u'+(i+1),terminal_map_from:['p'],terminal_map_to:['p']}]))};
  await page.locator('#file-input').setInputFiles({name:'chain.json',mimeType:'application/json',buffer:Buffer.from(JSON.stringify(chain))});await page.locator('#import-progress').waitFor({state:'detached'});
  assert.equal(await page.locator('[data-trace-clear]').count(),0);
- await page.locator('#search').fill('u0');await page.locator('#search').press('Enter');await page.locator('[data-trace-start]').first().click();
+ await page.locator('#region-find').fill('u0');await page.locator('[data-found-item]').filter({hasText:'bus u0'}).click();await page.locator('[data-trace-start]').first().click();
  assert.equal(await page.locator('.terminal-trace li').count(),50);await page.locator('[data-trace-next]').click();assert.equal(await page.locator('.terminal-trace ol').getAttribute('start'),'51');
  assert.deepEqual(errors,[]);
 } finally { await browser.close(); }

@@ -393,6 +393,9 @@
     const requestedSelection = state.selected;
     try {
       state.index = preparedIndex || globalThis.BMOPFModel.buildCaseIndex(caseDocument);
+      // Result identities belong to the opened case, never to a later import.
+      state.result = null; state.resultLabel = ""; state.resultError = ""; state.resultScenario = null;
+      state.resultCompare = null; state.resultCompareLabel = ""; state.resultCompareError = "";
       modelSheets.reset();
       state.cameras.geo = { scale: 1, x: 0, y: 0 };
       state.layout = loadLayout();
@@ -726,14 +729,14 @@
       [index.buses.length, "buses"],
       [index.assets.length - index.buses.length, "devices"],
       [index.coordinateCount, "mapped buses"],
-      [index.componentCount, "connected networks"]
+      [index.componentCount, "structural components"]
     ];
     const warningHtml = index.warnings.length
       ? `<ul class="warnings">${index.warnings.map((w) => `<li>${escapeHtml(w)}</li>`).join("")}</ul>` : "";
-    const report = globalThis.__BMOPF_REPORT_META__;
+    const report = state.index?.raw === globalThis.__BMOPF_CASE__ ? globalThis.__BMOPF_REPORT_META__ : null;
     const reportHtml = report ? `<p class="report-meta">Report ${escapeHtml(report.app_version || "unknown")} · layout ${escapeHtml(report.layout_engine || "unknown")} · fingerprint <code>${escapeHtml(String(report.case_fingerprint || "").slice(0, 12))}</code></p>` : "";
     const support = index.supportCounts || {};
-    const supportHtml = `<p class="support-meta">Support: ${support.full || 0} full · ${support.focused || 0} focused · ${support["raw-only"] || 0} raw-only</p>`;
+    const supportHtml = `<details class="support-meta"><summary>Technical renderer coverage</summary>${support.full || 0} full · ${support.focused || 0} focused · ${support["raw-only"] || 0} raw-only. These describe display support, not model validation.</details>`;
     const coordinateProvenance = index.raw?.meta?.coordinate_provenance;
     const coordinateHtml = coordinateProvenance ? `<p class="report-meta">Coordinate provenance: ${escapeHtml(coordinateProvenance)}</p>` : "";
     const budget = overviewBudget();
@@ -783,14 +786,12 @@
       return min === max ? formatValue(min) : `${formatValue(min)}–${formatValue(max)}`;
     };
     const rows = [...groups.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([kind, items]) => {
-      const support = { full: 0, focused: 0, "raw-only": 0 };
-      items.forEach((item) => { support[item.support] = (support[item.support] || 0) + 1; });
       const loading = items.map((item) => resultScalar(item, "loading"));
       const voltage = items.map((item) => resultVoltageDeviation(item));
-      const resultRange = state.result ? `load ${range(loading)} · ΔV ${range(voltage)}` : "—";
-      return `<tr><th><button class="class-filter ${state.activeKind === kind ? "selected" : ""}" data-kind-filter="${escapeHtml(kind)}">${escapeHtml(kind.replaceAll("_", " "))}</button></th><td>${items.length}</td><td>${support.full || 0}/${support.focused || 0}/${support["raw-only"] || 0}</td><td>${escapeHtml(resultRange)}</td></tr>`;
+      const resultRange = state.result ? `loading ${range(loading)} p.u. · |ΔV| ${range(voltage)} p.u.` : "—";
+      return `<tr><th><button class="class-filter ${state.activeKind === kind ? "selected" : ""}" data-kind-filter="${escapeHtml(kind)}">${escapeHtml(kind.replaceAll("_", " "))}</button></th><td>${items.length}</td><td>${escapeHtml(resultRange)}</td></tr>`;
     }).join("");
-    panel.innerHTML = `<div class="panel-heading"><h2>Class overview</h2><span class="muted">full / focused / raw</span></div><p class="support-meta">Support counts renderer coverage in this view: <strong>full</strong> = overview and focused, <strong>focused</strong> = selected-detail view, <strong>partial</strong> = some semantics, <strong>raw-only</strong> = inspector only.</p><table class="property-table class-overview-table resizable-table" data-resizable-table="class-overview"><thead><tr><th>class</th><th>count</th><th title="Renderer coverage: full / focused / partial / raw-only">support</th><th>result ranges</th></tr></thead><tbody>${rows}</tbody></table>`;
+    panel.innerHTML = `<div class="panel-heading"><h2>Class overview</h2></div><table class="property-table class-overview-table resizable-table" data-resizable-table="class-overview"><thead><tr><th>class</th><th>count</th><th>result ranges</th></tr></thead><tbody>${rows}</tbody></table>`;
     bindResizableTable(panel.querySelector(".resizable-table"));
     panel.querySelectorAll("[data-kind-filter]").forEach((button) => button.addEventListener("click", () => {
       state.activeKind = state.activeKind === button.dataset.kindFilter ? null : button.dataset.kindFilter;
@@ -840,7 +841,8 @@
   }
 
   function openCaseFingerprint() {
-    return globalThis.__BMOPF_REPORT_META__?.case_fingerprint ?? state.index?.raw?.meta?.case_fingerprint ?? null;
+    const reportFingerprint = state.index?.raw === globalThis.__BMOPF_CASE__ ? globalThis.__BMOPF_REPORT_META__?.case_fingerprint : null;
+    return reportFingerprint ?? state.index?.raw?.meta?.case_fingerprint ?? null;
   }
 
   function resultRecordFor(item) {
@@ -852,11 +854,12 @@
   }
 
   function scalarResultValue(value) {
-    if (Array.isArray(value)) {
-      const numbers = value.map(Number).filter(Number.isFinite);
-      return numbers.length === 1 ? numbers[0] : null;
-    }
-    return Number.isFinite(Number(value)) ? Number(value) : null;
+    const candidate = Array.isArray(value) && value.length === 1 ? value[0] : value;
+    return globalThis.BMOPFElectrical.number(candidate) ? candidate : null;
+  }
+
+  function operatingMetricFor(item, layer) {
+    return globalThis.BMOPFElectrical.operatingMetric(item, resultRecordFor(item), layer, state.index);
   }
 
   function comparisonDelta(current, comparison) {
@@ -877,24 +880,13 @@
   }
 
   function resultVoltageDeviation(item) {
-    const record = resultRecordFor(item);
-    if (!record || typeof record !== "object" || Array.isArray(record)) return null;
-    const explicit = ["voltage_deviation", "vm_deviation", "v_deviation", "voltage_error"]
-      .map((key) => Number(record[key])).find(Number.isFinite);
-    if (explicit !== undefined) return Math.abs(explicit);
-    const values = [record.vm, record.v_magnitude, record.voltage_magnitude]
-      .flatMap((value) => Array.isArray(value) ? value : [value])
-      .map(Number).filter((value) => Number.isFinite(value) && value > 0);
-    if (!values.length || values.some((value) => value > 2.5)) return null;
-    return Math.max(...values.map((value) => Math.abs(value - 1)));
+    return operatingMetricFor(item, "deviation").value;
   }
 
   function resultVoltageVisual(item, selected, fallback) {
     const deviation = resultVoltageDeviation(item);
-    if (deviation === null) return { colour: fallback, width: selected ? 4 : 2, dash: "", deviation: null, level: null };
-    const level = deviation >= .05 ? "high" : deviation >= .02 ? "moderate" : "nominal";
-    const colour = level === "high" ? "#b64035" : level === "moderate" ? "#c28a26" : "#4a8f5f";
-    return { colour, width: selected ? 4 : 2, dash: level === "high" ? "6 3" : level === "moderate" ? "2 3" : "", deviation, level };
+    if (deviation === null || resultPairingStatus().kind === "mismatch") return { colour: fallback, width: selected ? 4 : 2, dash: "", deviation: null, level: null };
+    return { colour: globalThis.BMOPFElectrical.magnitudeColour(deviation,0,.1), width: selected ? 4 : 2, dash: "", deviation, level: null };
   }
 
   function resultPairingStatus() {
@@ -965,33 +957,21 @@
   }
 
   function resultScalar(item, key) {
-    if (!state.result) return null;
-    const record = resultRecordFor(item);
-    const value = record && typeof record === "object" ? record[key] : null;
-    if (Array.isArray(value)) {
-      const numbers = value.map(Number).filter(Number.isFinite);
-      return numbers.length ? Math.max(...numbers) : null;
-    }
-    return Number.isFinite(Number(value)) ? Number(value) : null;
+    if (key === "loading") return operatingMetricFor(item,"loading").value;
+    const record = resultRecordFor(item), value = record?.[key];
+    const numbers = (Array.isArray(value) ? value : [value]).filter(globalThis.BMOPFElectrical.number);
+    return numbers.length ? numbers.reduce((max,n)=>Math.max(max,n),-Infinity) : null;
   }
 
   function resultVisual(item, selected, fallback) {
-    const loading = ["line", "transformer"].includes(item.ref.kind) ? resultScalar(item, "loading") : null;
-    if (loading === null || loading < 0 || loading > 1) return { colour: fallback, width: selected ? 6 : 3, loading: null };
-    const colour = loading >= .9 ? "#b64035" : loading >= .7 ? "#c28a26" : "#4a8f5f";
-    return { colour, width: selected ? 7 : 3 + loading * 3, loading };
+    const loading = ["line","switch","transformer"].includes(item.ref.kind) ? resultScalar(item, "loading") : null;
+    if (loading === null || resultPairingStatus().kind === "mismatch") return { colour: fallback, width: selected ? 6 : 3, loading: null };
+    return { colour: globalThis.BMOPFElectrical.magnitudeColour(loading,0,1.2), width: selected ? 7 : 3, loading };
   }
 
   function resultLegend() {
-    const hasLoading = state.result && visibleAssets().some((item) => resultScalar(item, "loading") !== null);
-    const hasVoltage = state.result && state.index.buses.some((item) => resultVoltageDeviation(item) !== null);
-    const hasState = state.result && visibleAssets().some((item) => resultStatus(item) !== item.status || ["open", "out_of_service"].includes(item.status));
-    if (!hasLoading && !hasVoltage && !hasState) return "";
-    const rows = [];
-    if (hasLoading) rows.push(`<text x="0" y="0" fill="#70695f" font-size="11">Result loading (normalised)</text><line x1="0" y1="13" x2="28" y2="13" stroke="#4a8f5f" stroke-width="3"/><text x="36" y="17" fill="#70695f" font-size="10">&lt; 0.70</text><line x1="92" y1="13" x2="120" y2="13" stroke="#c28a26" stroke-width="5"/><text x="128" y="17" fill="#70695f" font-size="10">0.70–0.90</text><line x1="205" y1="13" x2="233" y2="13" stroke="#b64035" stroke-width="6"/><text x="241" y="17" fill="#70695f" font-size="10">&gt; 0.90</text>`);
-    if (hasVoltage) rows.push(`<text x="0" y="42" fill="#70695f" font-size="11">Bus voltage deviation</text><circle cx="9" cy="55" r="6" fill="#fffdf9" stroke="#4a8f5f" stroke-width="2"/><text x="21" y="59" fill="#70695f" font-size="10">nominal</text><circle cx="92" cy="55" r="6" fill="#fffdf9" stroke="#c28a26" stroke-width="2" stroke-dasharray="2 3"/><text x="104" y="59" fill="#70695f" font-size="10">moderate</text><circle cx="205" cy="55" r="6" fill="#fffdf9" stroke="#b64035" stroke-width="2" stroke-dasharray="6 3"/><text x="217" y="59" fill="#70695f" font-size="10">high</text>`);
-    if (hasState) rows.push(`<text x="0" y="84" fill="#70695f" font-size="11">Operating state</text><line x1="0" y1="97" x2="28" y2="97" stroke="#70695f" stroke-width="3" stroke-dasharray="8 6"/><text x="36" y="101" fill="#70695f" font-size="10">open</text><line x1="92" y1="97" x2="120" y2="97" stroke="#70695f" stroke-width="3" opacity=".35"/><text x="128" y="101" fill="#70695f" font-size="10">out of service</text>`);
-    return `<g transform="translate(20 18)" aria-label="Result visualisation legend">${rows.join("")}</g>`;
+    if (!state.result) return "";
+    return `<g transform="translate(20 18)" aria-label="Result visualisation legend"><text font-size="11" fill="#403830">${escapeHtml(resultPairingStatus().kind === "mismatch" ? "Pairing mismatch: numeric colours suppressed" : "Magnitude colours: loading 0–1.2 p.u.; reported |ΔV| 0–0.1 p.u. · not acceptance limits")}</text></g>`;
   }
 
   function floatingLegendHtml() {
@@ -999,11 +979,9 @@
       ? `<span class="legend-line busbar"></span><span>busbar</span>`
       : `<span class="legend-bus-dot"></span><span>bus</span>`;
     const symbols = `<div class="floating-legend-section"><strong>Symbols</strong><div class="floating-legend-row">${busSymbol}</div><div class="floating-legend-row"><span>○</span><span>source or generator</span></div><div class="floating-legend-row"><span>paired coils</span><span>transformer</span></div><div class="floating-legend-row"><span>□</span><span>load</span></div><div class="floating-legend-row"><span>║</span><span>capacitor</span></div><div class="floating-legend-row"><span>⏚</span><span>shunt / grounding</span></div><div class="floating-legend-row"><span class="legend-line open"></span><span>open switch or interrupted path</span></div><p class="legend-note">A dashed leader marks a manually moved symbol. Hover or select an asset for its full tooltip.</p></div>`;
-    const hasLoading = state.result && visibleAssets().some((item) => resultScalar(item, "loading") !== null);
-    const hasVoltage = state.result && state.index.buses.some((item) => resultVoltageDeviation(item) !== null);
-    const hasState = state.result && visibleAssets().some((item) => resultStatus(item) !== item.status || ["open", "out_of_service"].includes(item.status));
-    if (!hasLoading && !hasVoltage && !hasState) return symbols;
-    const result = `<div class="floating-legend-section"><strong>Result overlays</strong>${hasLoading ? `<div class="floating-legend-row"><span class="legend-line result-nominal"></span><span>loading &lt; 0.70</span></div><div class="floating-legend-row"><span class="legend-line result-moderate"></span><span>loading 0.70–0.90</span></div><div class="floating-legend-row"><span class="legend-line result-high"></span><span>loading &gt; 0.90</span></div>` : ""}${hasVoltage ? `<div class="floating-legend-row"><span class="legend-dot"></span><span>nominal voltage</span></div><div class="floating-legend-row"><span class="legend-dot moderate"></span><span>moderate voltage deviation</span></div><div class="floating-legend-row"><span class="legend-dot high"></span><span>high voltage deviation</span></div>` : ""}${hasState ? `<div class="floating-legend-row"><span class="legend-line open"></span><span>open</span></div><div class="floating-legend-row"><span class="legend-line" style="opacity:.35"></span><span>out of service</span></div>` : ""}</div>`;
+    if (!state.result) return symbols;
+    const colours = globalThis.BMOPFElectrical.MAGNITUDE_COLOURS;
+    const result = `<div class="floating-legend-section"><strong>Result magnitudes · ${escapeHtml(resultPairingStatus().kind)} pairing</strong><p>Loading: 0–1.2 p.u. · reported |ΔV|: 0–0.1 p.u. Five equal intervals, upper values saturate. These are display ranges, not acceptance limits.</p><div class="magnitude-bins">${colours.map(colour=>`<span style="background:${colour}"></span>`).join("")}</div><p>Unknown values retain the equipment colour. Missing data is not zero. Case mismatch suppresses numeric colours.</p></div>`;
     return symbols + result;
   }
 
@@ -1329,10 +1307,44 @@
     bindLayoutControls();
   }
 
+  function exportFigure() {
+    const diagram=$("canvas")?.querySelector("svg");if(!diagram)return null;
+    const ns="http://www.w3.org/2000/svg", make=(tag,attributes={})=>{
+      const node=document.createElementNS(ns,tag);for(const [key,value] of Object.entries(attributes))node.setAttribute(key,String(value));return node;
+    };
+    const viewBox=(diagram.getAttribute("viewBox") || "0 0 760 500").trim().split(/\s+/).map(Number);
+    const width=Math.max(1000,viewBox[2] || 760),diagramHeight=(viewBox[3] || 500)*width/(viewBox[2] || 760);
+    const context=state.view === "geo" && geospatialRenderer.isRegional() ? geospatialRenderer.exportContext() : {lines:[state.view === "single" ? "Single-wire overview: structural connections, not an energisation assessment." : state.view === "geo" ? "Schematic geographic fallback: no geographic coordinates available." : "Electrical model diagram: supplied model data; consult its sheet for parameters and result fields.","Loading: 0–1.2 p.u.; reported |voltage deviation|: 0–0.1 p.u. Five equal magnitude bins; higher values saturate.","Display colours are not acceptance criteria. Unknown values retain equipment colour; mismatch suppresses numeric colours."],bins:state.view !== "multi" && state.result && resultPairingStatus().kind!=="mismatch" ? globalThis.BMOPFElectrical.MAGNITUDE_COLOURS.map((colour,i)=>({colour,label:`Bin ${i+1} of 5`})) : []};
+    const scenarios=state.result ? globalThis.BMOPFModel.resultScenarios(state.result) : [];
+    const lines=[`Case: ${state.index.name}`,`Result: ${state.resultLabel || "none"} · Scenario: ${state.resultScenario || (scenarios.length>1 ? "not selected" : "single scenario")} · Pairing: ${state.result ? resultPairingStatus().kind : "no results"}`,`Selection: ${state.selected ? `${state.selected.kind} ${state.selected.id}` : "none"}`,...context.lines];
+    const wrapped=lines.flatMap(line=>String(line).match(/.{1,125}(?:\s|$)|.{1,125}/g) || [""]);
+    const headerHeight=30+wrapped.length*18+(context.bins.length ? 34 : 0);
+    const root=make("svg",{xmlns:ns,width,height:headerHeight+diagramHeight,viewBox:`0 0 ${width} ${headerHeight+diagramHeight}`});
+    root.append(make("rect",{width:"100%",height:"100%",fill:"#fffdf9"}));
+    const metadata=make("metadata");metadata.textContent=JSON.stringify({case:state.index.name,result:state.resultLabel || null,scenario:state.resultScenario,pairing:state.result ? resultPairingStatus().kind : "no results",selection:state.selected,context});root.append(metadata);
+    wrapped.forEach((line,i)=>{const text=make("text",{x:18,y:25+i*18,fill:"#25231f","font-family":"sans-serif","font-size":12});text.textContent=line.trim();root.append(text);});
+    context.bins.forEach((bin,i)=>{
+      const x=18+i*190,y=headerHeight-24;root.append(make("rect",{x,y,width:18,height:12,fill:bin.colour}));
+      const text=make("text",{x:x+23,y:y+10,"font-family":"sans-serif","font-size":10,fill:"#25231f"});text.textContent=bin.label;root.append(text);
+    });
+    const clone=diagram.cloneNode(true);
+    // Inline paint/text styles so figures do not depend on the application's CSS.
+    const originals=[diagram,...diagram.querySelectorAll("*")],copies=[clone,...clone.querySelectorAll("*")];
+    originals.forEach((element,i)=>{
+      const style=getComputedStyle(element);
+      for(const property of ["fill","stroke","stroke-width","stroke-dasharray","opacity","font-family","font-size","font-weight","text-anchor","display"]) {
+        const value=style.getPropertyValue(property).replace(/url\(["']?[^)]*#([^"')]+)["']?\)/g,"url(#$1)");
+        copies[i].style.setProperty(property,value);
+      }
+    });
+    clone.setAttribute("x","0");clone.setAttribute("y",String(headerHeight));clone.setAttribute("width",String(width));clone.setAttribute("height",String(diagramHeight));root.append(clone);
+    return root;
+  }
+
   function exportCurrentSvg() {
-    const svg = $("canvas")?.querySelector("svg");
+    const svg = exportFigure();
     if (!svg) return;
-    const clone = svg.cloneNode(true);
+    const clone = svg;
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
     const source = `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(clone)}`;
@@ -1346,9 +1358,9 @@
   }
 
   function exportCurrentPng() {
-    const svg = $("canvas")?.querySelector("svg");
+    const svg = exportFigure();
     if (!svg) return;
-    const clone = svg.cloneNode(true);
+    const clone = svg;
     clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
     clone.setAttribute("xmlns:xlink", "http://www.w3.org/1999/xlink");
     const source = new XMLSerializer().serializeToString(clone);
@@ -1486,6 +1498,7 @@
     resultVoltageVisual,
     resultRecordFor,
     resultPairingStatus,
+    selectScenario: scenario => { state.resultScenario = scenario; render(); },
     resultLegend,
     select
   });
@@ -1721,6 +1734,7 @@
   }
 
   function renderView() {
+    document.body.classList.remove("regional-workspace");
     if (!state.index) { $("canvas").innerHTML = `<div class="message">Open a BMOPF JSON case to see its views.</div>`; return; }
     const budget = overviewBudget();
     if (budget.over && state.largeCaseDecision !== "full" && state.view === "single" && !state.selected) {

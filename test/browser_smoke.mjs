@@ -117,6 +117,7 @@ try {
     await page.getByRole("tab", { name: "Single-wire" }).click();
     await page.getByRole("tab", { name: "Geospatial" }).click();
     assert.match(await page.locator("#view-status").textContent(), /Regional map · 4 placed buses/);
+    await page.getByRole("tab", { name: "Single-wire" }).click();
     const helpPanel = page.locator(".help-panel");
     await helpPanel.locator("summary").first().click();
     assert.match(await helpPanel.innerText(), /Quick start/);
@@ -215,8 +216,8 @@ try {
     await page.locator("#case-summary h2").waitFor({ state: "visible" });
     assert.equal(await page.locator("#case-summary h2").textContent(), "micro-bmopf");
     const overviewTable = page.locator('table[data-resizable-table="class-overview"]');
-    assert.equal(await overviewTable.locator(".column-resizer").count(), 3);
-    const resultRangeHandle = overviewTable.locator(".column-resizer").nth(2);
+    assert.equal(await overviewTable.locator(".column-resizer").count(), 2);
+    const resultRangeHandle = overviewTable.locator(".column-resizer").nth(1);
     await resultRangeHandle.focus();
     const overviewWidthBefore = Number(await resultRangeHandle.getAttribute("aria-valuenow"));
     await resultRangeHandle.press("ArrowRight");

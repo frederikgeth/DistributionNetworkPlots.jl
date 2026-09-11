@@ -202,7 +202,7 @@
     }
     const components = [...componentMap.values()].sort((a, b) => b.busIds.length - a.busIds.length || a.id.localeCompare(b.id));
     const componentCount = components.length;
-    if (componentCount > 1) warnings.push(`${componentCount.toLocaleString()} separate connected networks in the supplied topology (including open or out-of-service branches).`);
+    if (componentCount > 1) warnings.push(`${componentCount.toLocaleString()} structural components in the supplied topology (including open or out-of-service branches; not an energisation assessment).`);
     const counts = {};
     for (const item of assets) counts[item.ref.kind] = (counts[item.ref.kind] || 0) + 1;
     const coordinateCount = buses.filter((b) => b.coordinates).length;

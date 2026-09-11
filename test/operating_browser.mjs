@@ -46,9 +46,9 @@ try {
  await upload('#result-input','scenarios.json',{objective:0,nw:{day:results,night:{bus:{b0:{vm:[220,0]}}}}});
  assert.match(await page.locator('#region-operating-legend').innerText(),/Choose a scenario/);
  assert.match(await page.locator('#region-operating-legend').innerText(),/0\/600/);
- await page.locator('#result-scenario').selectOption('day');
+ await page.locator('#region-scenario').selectOption('day');
  assert.match(await page.locator('#region-operating-legend').innerText(),/2\/600/);
- await page.locator('#result-scenario').selectOption('night');
+ await page.locator('#region-scenario').selectOption('night');
  assert.match(await page.locator('#region-operating-legend').innerText(),/1\/600/);
  const complexResults={objective:0,bus:{b0:{a:{vm:230,vr:230,vi:0},n:{vm:5,vr:3,vi:4}},b1:{a:{vm:210,vr:210,vi:0},n:{vm:0,vr:0,vi:0}}}};
  await upload('#result-input','complex.json',complexResults);
