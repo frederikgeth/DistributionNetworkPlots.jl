@@ -343,3 +343,44 @@ pre.raw { max-height: 190px; overflow: auto; margin: 12px 0 0; padding: 9px; bor
 #region-operating-evidence article { padding: 10px 0; border-bottom: 1px solid #ddd8cf; font-size: 12px; overflow-wrap: anywhere; }
 #region-issue-summary { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 0; }
 #region-issues article { border-bottom: 1px solid #ddd8cf; padding: 8px 0; overflow-wrap: anywhere; font-size: 12px; }
+
+/* The diagram is the investigation surface; evidence stays beside it. */
+.regional-workspace .layout { grid-template-columns: minmax(0,1fr); }
+.regional-workspace .sidebar, .regional-workspace .sidebar-resizer, .regional-workspace #drop-zone { display: none; }
+.regional-workspace .workspace { padding-top: 12px; }
+.region-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 10px 14px !important; }
+.region-header span { font-size: 12px; color: var(--muted); }
+.region-header h2 { margin: 0 0 3px !important; }
+.investigation-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 8px 14px; }
+.investigation-controls label, .region-layer-control label { min-width: 0; max-width: 100%; }
+.investigation-controls select, .region-layer-control select { max-width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: 4px; }
+#region-issue-summary { padding: 6px 14px; font-size: 12px; border-top: 1px solid var(--line); }
+.assessment-state { flex: 1 0 100%; font-weight: 600; }
+#region-voltage-controls, #region-operating-legend { padding: 0 14px; }
+.region-layer-control { margin: 4px 0; font-size: 12px; }
+.measurement-context { font-size: 12px; margin: 4px 0; }
+#region-workarea { display: grid; grid-template-columns: minmax(0,1fr); border-top: 1px solid var(--line); }
+#region-workarea.has-drawer { grid-template-columns: minmax(0,1fr) minmax(260px,340px); }
+.region-map-stage { min-width: 0; }
+#region-map svg { height: clamp(360px,52vh,640px); }
+#region-evidence { font-size: 11px; padding: 6px 12px; margin: 0; }
+#region-drawer { border-left: 1px solid var(--line); min-width: 0; background: var(--panel); }
+#region-drawer > header { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 8px; }
+#region-drawer h3 { font-size: 14px; margin: 0; }
+.region-drawer-body { max-height: 52vh; overflow: auto; padding: 10px; overflow-wrap: anywhere; }
+.region-drawer-body [hidden] { display: none !important; }
+.region-drawer-body p { font-size: 12px; }
+.region-method { padding: 8px 14px; border-top: 1px solid var(--line); font-size: 12px; }
+.region-method summary { cursor: pointer; color: var(--muted); }
+.region-method p { margin: 8px 0; }
+.operating-scale { gap: 4px; margin: 4px 0; }
+.operating-scale > span { display: inline-flex; gap: 4px; align-items: center; font-size: 10px; }
+.operating-scale i { width: 18px; height: 12px; display: inline-block; }
+.magnitude-bins { display: flex; }.magnitude-bins span { width: 25px; height: 12px; }
+#region-review article { border-bottom: 1px solid var(--line); padding: 8px 0; font-size: 12px; }
+@media (max-width: 880px) { #region-workarea.has-drawer { grid-template-columns: minmax(0,1fr); } #region-drawer { border-left: 0; border-top: 1px solid var(--line); } }
+/* Author display rules must not override semantic hidden state. */
+[hidden] { display: none !important; }
+#region-issue-location:empty { display: none; }
+.regional-workspace .topbar { padding-top: 12px; padding-bottom: 12px; }
+#region-map svg { height: clamp(320px,calc(100vh - 520px),640px); }
