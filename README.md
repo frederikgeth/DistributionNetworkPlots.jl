@@ -1,200 +1,55 @@
-# DistributionNetworkPlots.jl
+# DistributionNetworkPlots.jl — discontinued
 
-[![CI](https://github.com/frederikgeth/DistributionNetworkPlots.jl/actions/workflows/ci.yml/badge.svg)](https://github.com/frederikgeth/DistributionNetworkPlots.jl/actions/workflows/ci.yml)
-[![CD](https://github.com/frederikgeth/DistributionNetworkPlots.jl/actions/workflows/pages.yml/badge.svg)](https://github.com/frederikgeth/DistributionNetworkPlots.jl/actions/workflows/pages.yml)
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-2ea44f)](https://frederikgeth.github.io/DistributionNetworkPlots.jl/)
+> [!WARNING]
+> **This project is no longer developed or maintained. It has been superseded by
+> [Tellegen](https://tellegen.dev/).**
+>
+> For new work, use **[tellegen.dev](https://tellegen.dev/)**. This repository is
+> retained for historical reference, not as an actively supported tool.
 
-Browser-native exploration of BMOPF distribution-network JSON cases, with Julia-generated static reports.
+## The successor: Tellegen
 
-> **Rapidly evolving initiative:** this project is an early, actively changing
-> release. APIs, visual semantics, supported BMOPF records, and result adapters
-> may change without notice. Validate important engineering conclusions against
-> the source case, BMOPFTools diagnostics, and your own domain review before
-> relying on the viewer in production.
+[Tellegen](https://tellegen.dev/) is an open-source framework for interactive
+power flow (PF) and optimal power flow (OPF) studies in the browser. It goes
+beyond inspecting network cases and precomputed results: users can change
+nodal demands or line ratings, preview their effects using sensitivities, and
+then recompute the solution. Its numerical tools run through WebAssembly,
+keeping local case files and results on the user's device.
 
-The repository contains a dependency-free static explorer. The GitHub Pages
-deployment is built from `dist/` by GitHub Actions; local case files are still
-read in the browser and are never uploaded by the application.
+The framework includes a numerical engine, reusable browser components and
+saved studies. Its approach and evaluation are described in the preprint
+[*Interactive Power Flow in the Browser*](https://arxiv.org/abs/2610.01922),
+by Samuel Talkington, Frederik Geth, Qian Zhang, Le Xie and Skyler Liu (2026).
 
-## Relationship to the BMOPF ecosystem
+- **Use Tellegen:** [tellegen.dev](https://tellegen.dev/)
+- **Documentation and supported workflows:** [Tellegen documentation](https://eigenergy.github.io/tellegen/)
+- **Source code and development:** [eigenergy/tellegen](https://github.com/eigenergy/tellegen)
+- **Preprint:** [arXiv:2610.01922](https://arxiv.org/abs/2610.01922)
 
-DistributionNetworkPlots.jl is the visual exploration companion to
-[BMOPFTools.jl](https://github.com/frederikgeth/BMOPFTools.jl). BMOPFTools is
-the Julia toolkit for parsing, validating, analysing, preparing, and profiling
-BMOPF cases and result dictionaries; this project focuses on making those
-cases and results inspectable in a browser through coordinated geospatial,
-single-wire, and multi-wire views.
+## About this legacy repository
 
-The case and result conventions follow the [IEEE Task Force mathematical and
-data-model specifications](https://github.com/distribution-system-opt/math-and-data-model-specifications).
-When the specification or BMOPFTools changes, this viewer may need an adapter
-update. Please report compatibility findings with a small case/result example
-and identify the relevant specification revision where possible.
+DistributionNetworkPlots.jl explored browser-based inspection of BMOPF
+distribution-network JSON cases and results, with Julia-generated static HTML
+reports. It provided geographic and single-wire views, electrical model sheets,
+terminal tracing and source-data inspection alongside
+[BMOPFTools.jl](https://github.com/frederikgeth/BMOPFTools.jl).
 
-## Try the browser prototype locally
+The code, fixtures and documentation remain available for understanding and
+reproducing that work. The documentation below describes the discontinued
+prototype; the roadmap is historical, not a commitment to future development.
 
-From the repository root:
-
-```sh
-python3 -m http.server 8765 --directory frontend
-```
-
-Open <http://127.0.0.1:8765/> and drop [`fixtures/micro/micro_bmopf.json`](fixtures/micro/micro_bmopf.json) onto the page.
-
-The browser also starts with two built-in authored examples. Both use clearly
-labelled synthetic coordinates spread across a broad illustrative area so the
-geospatial view is useful immediately; the sparse/DC case deliberately leaves
-one bus unplaced to exercise missing-coordinate diagnostics. The complete AC
-feeder covers the supported device classes.
-
-To inspect solved values, use **Attach results JSON** and choose
-[`fixtures/micro/micro_bmopf_result.json`](fixtures/micro/micro_bmopf_result.json)
-after opening the case. Raw BMOPFTools-style result dictionaries are accepted;
-the current adapter shows run metadata and recognised metrics for the selected
-asset while preserving the complete result record for inspection.
-
-Use **Compare results** to attach a second operating point. The inspector then
-shows current, comparison, and numeric delta values for the selected asset;
-[`fixtures/micro/micro_bmopf_result_comparison.json`](fixtures/micro/micro_bmopf_result_comparison.json)
-provides an authored example.
-
-The prototype supports:
-
-- Asset-class inventory and search.
-- Bus, device, and reusable-record inspection.
-- Links between devices, buses, and linecodes.
-- Geospatial schematic and single-wire projections.
-- Single-line rendering with source-to-load layering, compact bus dots or
-  optional heavy busbars, orthogonal branch routing, labeled equipment, and
-  IEEE/IEC-inspired symbols.
-- Electrical model sheets with conductor permutations, contact states, load-element laws, winding connections, and explicit missing-data diagnostics.
-- Local-only case loading with no runtime backend.
-- Browser-side guardrails for invalid JSON and oversized case files.
-- Optional BMOPFTools-style result JSON sidecars with objective/status summary and asset-level metrics.
-- Result JSON sidecars can be dropped onto an open case; pairing mismatches are surfaced as warnings while metrics remain available for best-effort inspection.
-- Diagnostics view for filterable result validation/profile findings, clickable linked assets, and explicit case/result pairing status.
-- Result-aware overview cues for loading, explicit bus voltage deviation, and open/out-of-service state, with non-colour legend guidance.
-- Built-in example cases that can be loaded directly from the frontend for repeatable demonstrations and semantic smoke tests.
-- Side-by-side comparison of two result sidecars while retaining stable source-asset identity.
-- Ranked inventory search across asset IDs, bus links, and result field names, with keyboard jump-to-match.
-- Back/Forward navigation through selected assets and view changes, including multi-wire drill-down paths.
-- Resizable desktop details panel with keyboard-accessible divider and a remembered width preference.
-- Resizable class-overview and inventory columns, with keyboard-accessible separators and remembered widths for long result ranges and asset names.
-- Draggable single-wire buses and device symbols with locally persisted layout overrides and dashed leaders for moved symbols.
-- Coupled line matrices with source/segment units, exact provenance, and both shunt sections; missing and supplied-zero values remain distinct.
-- An explicit **Overview** control in the single-line view clears the focused selection; oversized cases re-show the full-render confirmation before expanding.
-- Built-in accessible help and conventions guide covering views, symbols, conductor cues, units, interactions, performance, and provenance.
-- Export of the active geospatial or single-line SVG for reports and issue attachments.
-- Export of the active view as a 2× PNG, plus a print stylesheet for clean diagram output.
-- Locally persisted single-line bus adjustments with per-bus nudge, lock/unlock, and reset controls.
-- Configurable single-line direction and feeder-root selection, also persisted per case.
-- Optional worker-backed, vendored ELK Layered layout enhancement with fixed-root preference and orthogonal edge routing; deterministic offline fallback remains available and generated reports embed the pinned bundle.
-- Topology-aware deterministic Single-wire layout: radial feeders are drawn as a tidy hierarchical tree (Buchheim) and meshed networks as barycentric layered ranks.
-- Deterministic stress (PivotMDS + SMACOF) Single-wire layout option for dense or highly meshed networks.
-- Class overview with asset counts, support-level breakdowns, and result ranges; class links filter the explorer.
-- Explicit overview SVG budgets with a focused one-hop fallback for oversized cases.
-- Large cases can be opened after a browser confirmation; the warning can be bypassed for the current page, or the focused neighbourhood view can be retained.
-
-## Build a distributable static site
-
-The source-mode prototype is convenient for development. To assemble a
-publishable, dependency-free site, run:
-
-```sh
-npm install
-npm run build
-python3 -m http.server 8765 --directory dist
-```
-
-The generated `dist/` directory contains an `index.html`, one ordered browser
-bundle, the stylesheet, the pinned offline ELK worker bundle, and a
-`build-manifest.json` describing the bundle contents. The output is ignored by
-Git because it is reproducible; copy or publish `dist/` as a complete
-directory. The site has no runtime Node.js requirement.
-
-Julia-generated reports remain a separate self-contained distribution format:
-`render_case` embeds the source modules and vendor assets directly in one HTML
-file, so the static assembler is not required for reports.
-
-## Publish with GitHub Pages
-
-The [`Deploy GitHub Pages`](.github/workflows/pages.yml) workflow runs on pushes
-to `main` and can also be started manually from the Actions tab. It verifies the
-static bundle, builds `dist/`, uploads it as a Pages artifact, and publishes it
-to the repository's `github-pages` environment. After enabling the workflow,
-set **Settings → Pages → Build and deployment → Source** to **GitHub Actions**;
-the workflow will expose the published URL on each successful run.
-
-## Generate a static Julia report
-
-```julia
-using DistributionNetworkPlots
-render_case("fixtures/micro/micro_bmopf.json", "micro-report.html")
-```
-
-The generated report embeds the case and frontend runtime. It does not require Node.js or an application server.
-Generated reports also expose a case fingerprint, schema identifier, application version, and layout-engine identifier for reproducibility.
-When a result includes the optional matching `case_fingerprint` and
-`case_fingerprint_algorithm` metadata, the report verifies that pairing
-cryptographically; otherwise it retains the identity-based fallback and marks
-the result unverified when necessary.
+- [Frontend prototype notes](frontend/README.md)
+- [Architecture](ARCHITECTURE.md)
+- [Historical roadmap](ROADMAP.md)
+- [Fixture provenance](fixtures/README.md)
 
 ## Licensing and case provenance
 
-The library source code is released under the [BSD 3-Clause License](LICENSE). Original BMOPF case files authored in this repository, including the micro fixture, are released under [CC BY 4.0](LICENSE-DATA). Their `meta.license`, `meta.attribution`, and `meta.source` fields are part of the case provenance.
+The source code remains available under the [BSD 3-Clause License](LICENSE).
+Original BMOPF case files authored in this repository, including the micro
+fixture, are released under [CC BY 4.0](LICENSE-DATA). Their `meta.license`,
+`meta.attribution` and `meta.source` fields are part of the case provenance.
 
-Cases reused from another initiative are not relicensed by this project. Keep each reused case in an isolated fixture directory with its exact source license, attribution, citation or URL, and a provenance note as described in [`fixtures/README.md`](fixtures/README.md).
-
-## Test
-
-```sh
-julia --project=. -e 'using Pkg; Pkg.test()'
-```
-
-Optional browser end-to-end smoke test (requires Node.js and Playwright):
-
-```bash
-npm install
-npx playwright install chromium
-npm run test:browser
-```
-
-The static assembler has a fast smoke test that checks bundle ordering,
-asset references, and the offline vendor path:
-
-```bash
-npm run test:build
-```
-
-GitHub Actions runs both the Julia suite and this browser smoke test on pushes
-and pull requests.
-
-## Project references
-
-- [Architecture](ARCHITECTURE.md)
-- [Roadmap](ROADMAP.md)
-- [Frontend prototype notes](frontend/README.md)
-
-The architecture and roadmap describe the intended production boundaries, supported behaviours, and staged path from this prototype to a stable viewer.
-
-### Electrical model sheets and atlas
-
-Select a device in Single-wire to open its model sheet, or use **Electrical detail** for the full atlas. Connections, model parameters, operating values,
-unknowns, and unrepresented fields are visible together. Legacy `#/multi/...`
-links still resolve. Network zoom does not resize sheet text.
-
-- Select matrix terms or load elements to highlight the corresponding paths.
-- Pin buses or devices, then arrange pinned sheets in a route's reading order.
-- Capture a case baseline or load **Compare model JSON** to inspect parameter,
-  terminal-map, grounding and referenced-linecode differences. Result scenario
-  comparisons remain separate.
-- Export individual drawings as SVG or complete sheets/atlases as standalone,
-  printable HTML. Exports preserve tables, units, provenance and available results.
-- Terminal-keyed BMOPFTools results expose per-terminal quantities and voltage
-  phasors from rectangular voltages. Ambiguous arrays or incompatible references
-  are preserved without fabricated deltas.
-
-The model adapter follows the contracts documented in
-[the implementation ADR](docs/adr/0005-electrical-model-sheets.md). Unsupported
-internal circuitry, unresolved result references, and invalid configuration
-arity remain explicit; these sheets do not solve a power flow.
+Cases reused from other projects retain their own licences and attribution
+requirements; they are not relicensed by this project. See
+[fixture provenance guidance](fixtures/README.md).
